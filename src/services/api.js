@@ -23,7 +23,7 @@ export async function apiFetch(
 
 	/* attach JWT if authenticated route */
 	if (auth) {
-		const token = await SecureStore.getItemAsync("token");
+		const token = await SecureStore.getItemAsync("auth-token");
 		if (token) headers["Authorization"] = `Bearer ${token}`;
 	}
 
@@ -44,8 +44,16 @@ export async function apiFetch(
 /* ------------------------------------------------------------------ *
  * typed helpers for upcoming screens
  * ------------------------------------------------------------------ */
-export const getFeedTrips = (page = 1) =>
-	apiFetch(`/trips/feed?page=${page}`, { method: "GET" });
+export const getFeedTrips = async (page = 1, pageSize = 10) => {
+	const data = await apiFetch(`/trips/feed?page=${page}&limit=${pageSize}`, {
+		method: "GET",
+	});
+	// Server sends an array directly; normalize to { items }
+	return { items: Array.isArray(data) ? data : data.items || [] };
+};
 
 export const getUserTrips = (userId, page = 1) =>
 	apiFetch(`/users/${userId}/trips?page=${page}`, { method: "GET" });
+
+export const getMyTrips = (page = 1) =>
+	apiFetch(`/users/${userId}/trips/me?page=${page}`, { method: "GET" });

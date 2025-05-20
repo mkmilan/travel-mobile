@@ -3,6 +3,7 @@ export const theme = {
 		background: "#F5F7FA",
 		text: "#333",
 		primary: "#0077cc", // Travel-themed calm blue
+		textMuted: "#555",
 		secondary: "#4A90E2",
 		inputBackground: "#fff",
 		inputBorder: "#ccc",

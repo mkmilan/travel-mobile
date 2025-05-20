@@ -1,72 +1,72 @@
+import * as authService from "@/src/services/auth";
 import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
-import * as authService from "../services/auth";
 
 const STORAGE_KEYS = {
 	user: "user-data",
+	token: "auth-token",
 };
 
 export const useAuthStore = create((set, get) => ({
 	user: null,
+	token: null,
 	theme: "system",
 	language: "en",
 	loading: false,
 	isAuthenticated: false,
 
+	/* ─────────────────── LOGIN ─────────────────── */
 	login: async (userData) => {
+		// Persist
 		await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(userData));
-		console.log("AuthStore: login userData, token stores/auth.js", userData);
+		await SecureStore.setItemAsync(STORAGE_KEYS.token, userData.token);
 
+		// State
 		set({
 			user: userData,
+			token: userData.token,
 			isAuthenticated: true,
 			theme: userData.settings?.themePreference || "system",
 			language: userData.settings?.language || "en",
 		});
 	},
 
+	/* ─────────────────── REGISTER ─────────────────── */
 	register: async (username, email, password) => {
 		set({ loading: true });
-		console.log("AuthStore: register", username, email, password);
 		try {
-			// The backend's registerUser sends a success message and an email for verification.
-			// It does not log the user in or return user data at this stage.
-			const response = await authService.registerRequest(
-				username,
-				email,
-				password
-			);
-			// You might want to return the response message to the UI to inform the user.
-			// No user state is set here as login happens after email verification.
+			const res = await authService.registerRequest(username, email, password);
+			return res; // { success, message }
+		} finally {
 			set({ loading: false });
-			return response; // e.g., { success: true, message: "Verification email sent." }
-		} catch (error) {
-			console.error("AuthStore: register failed", error);
-			set({ loading: false });
-			throw error; // Re-throw the error to be caught by the calling component
 		}
 	},
 
+	/* ─────────────────── LOGOUT ─────────────────── */
 	logout: async () => {
 		await SecureStore.deleteItemAsync(STORAGE_KEYS.user);
+		await SecureStore.deleteItemAsync(STORAGE_KEYS.token);
 		set({
 			user: null,
+			token: null,
 			isAuthenticated: false,
 			theme: "system",
 			language: "en",
 		});
 	},
 
+	/* ─────────────────── HYDRATE ─────────────────── */
 	syncFromStorage: async () => {
 		set({ loading: true });
-
 		try {
 			const userStr = await SecureStore.getItemAsync(STORAGE_KEYS.user);
+			const token = await SecureStore.getItemAsync(STORAGE_KEYS.token);
 			const user = userStr ? JSON.parse(userStr) : null;
 
-			if (user) {
+			if (user && token) {
 				set({
 					user,
+					token,
 					isAuthenticated: true,
 					theme: user.settings?.themePreference || "system",
 					language: user.settings?.language || "en",
@@ -79,8 +79,7 @@ export const useAuthStore = create((set, get) => ({
 		}
 	},
 
-	setTheme: (newTheme) => {
-		set({ theme: newTheme });
-	},
-	setLanguage: (language) => set({ language }),
+	/* ─────────────────── SETTERS ─────────────────── */
+	setTheme: (t) => set({ theme: t }),
+	setLanguage: (l) => set({ language: l }),
 }));
