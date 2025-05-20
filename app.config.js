@@ -12,12 +12,18 @@ export default {
 		newArchEnabled: true,
 		ios: {
 			supportsTablet: true,
+			infoPlist: {
+				NSAppTransportSecurity: {
+					NSAllowsArbitraryLoads: true,
+				},
+			},
 		},
 		android: {
 			adaptiveIcon: {
 				foregroundImage: "./assets/images/adaptive-icon.png",
 				backgroundColor: "#ffffff",
 			},
+			usesCleartextTraffic: true,
 			edgeToEdgeEnabled: true,
 		},
 		web: {

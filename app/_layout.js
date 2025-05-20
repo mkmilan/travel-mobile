@@ -1,29 +1,40 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { useAuthStore } from "@/src/stores/auth"; // Make sure alias `@` works
+import { SplashScreen, Stack } from "expo-router";
+import { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
+import FlashMessage from "react-native-flash-message";
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+	const { isAuthenticated, loading, syncFromStorage } = useAuthStore();
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
+	// Hydrate auth state from SecureStore
+	useEffect(() => {
+		syncFromStorage().finally(() => SplashScreen.hideAsync());
+	}, []);
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+	// While loading the user from storage
+	if (loading) {
+		return (
+			<View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+				<ActivityIndicator size="large" />
+			</View>
+		);
+	}
+
+	return (
+		<>
+			<Stack screenOptions={{ headerShown: false }}>
+				{!isAuthenticated ? (
+					// This will only show login.js in (auth) stack
+					<Stack.Screen name="(auth)" />
+				) : (
+					// This will show the full tabbed app
+					<Stack.Screen name="(tabs)" />
+				)}
+			</Stack>
+			<FlashMessage position="top" />
+		</>
+	);
 }

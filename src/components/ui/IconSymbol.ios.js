@@ -2,7 +2,7 @@ import { SymbolView } from "expo-symbols";
 
 export function IconSymbol({
 	name,
-	size = 24,
+	size = 32,
 	color,
 	style,
 	weight = "regular",

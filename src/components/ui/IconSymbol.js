@@ -7,6 +7,9 @@ const MAPPING = {
 	"paperplane.fill": "send",
 	"chevron.left.forwardslash.chevron.right": "code",
 	"chevron.right": "chevron-right",
+	"map.fill": "map",
+	circle: "circle",
+	"person.fill": "person",
 };
 
 /**
@@ -14,7 +17,7 @@ const MAPPING = {
  * This ensures a consistent look across platforms, and optimal resource usage.
  * Icon `name`s are based on SF Symbols and require manual mapping to Material Icons.
  */
-export function IconSymbol({ name, size = 24, color, style }) {
+export function IconSymbol({ name, size = 32, color, style }) {
 	return (
 		<MaterialIcons
 			color={color}
