@@ -74,3 +74,37 @@ export async function registerRequest(username, email, password) {
 		}
 	}
 }
+
+// ...existing imports & login/register functions
+
+export async function forgotPasswordRequest(email) {
+	const csrfToken = await getCsrfToken();
+	const res = await fetch(`${API_URL}/auth/forgotpassword`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"X-CSRF-Token": csrfToken,
+		},
+		body: JSON.stringify({ email }),
+	});
+	const data = await res.json();
+	console.log("forgotPasswordRequest", data);
+
+	if (!res.ok) throw new Error(data.message || "Request failed");
+	return data; // { success:true, message:"Email sent" }
+}
+
+export async function resetPasswordRequest(token, password) {
+	const csrfToken = await getCsrfToken();
+	const res = await fetch(`${API_URL}/auth/resetpassword/${token}`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"X-CSRF-Token": csrfToken,
+		},
+		body: JSON.stringify({ password }),
+	});
+	const data = await res.json();
+	if (!res.ok) throw new Error(data.message || "Reset failed");
+	return data; // { success:true, message:"Password updated" }
+}
