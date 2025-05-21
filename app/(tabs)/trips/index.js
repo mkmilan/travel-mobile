@@ -8,18 +8,26 @@ import {
 	msToDuration,
 } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
-import { useEffect, useState } from "react";
-import { FlatList, View } from "react-native";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { FlatList, RefreshControl, View } from "react-native";
 
 export default function MyTrips() {
 	const [items, setItems] = useState([]);
+	const [refreshing, setRefreshing] = useState(false);
 
-	useEffect(() => {
-		(async () => {
-			const res = await getMyTrips();
-			setItems(res.items || res); // supports array response
-		})();
+	const fetchTrips = useCallback(async () => {
+		setRefreshing(true);
+		const { items } = await getMyTrips();
+		setItems(items);
+		setRefreshing(false);
 	}, []);
+
+	useFocusEffect(
+		useCallback(() => {
+			fetchTrips();
+		}, [fetchTrips])
+	);
 
 	return (
 		<View
@@ -31,7 +39,7 @@ export default function MyTrips() {
 		>
 			<FlatList
 				data={items}
-				keyExtractor={(t) => t._id}
+				keyExtractor={(t, i) => (t._id ? String(t._id) : `idx-${i}`)}
 				renderItem={({ item }) => (
 					<TripCard
 						title={item.title}
@@ -46,6 +54,13 @@ export default function MyTrips() {
 						coords={lineStringToCoords(item.simplifiedRoute)}
 					/>
 				)}
+				refreshControl={
+					<RefreshControl
+						refreshing={refreshing}
+						onRefresh={fetchTrips}
+						tintColor={theme.colors.primary} /* optional */
+					/>
+				}
 			/>
 		</View>
 	);

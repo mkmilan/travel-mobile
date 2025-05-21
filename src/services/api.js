@@ -52,8 +52,19 @@ export const getFeedTrips = async (page = 1, pageSize = 10) => {
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
 
-export const getUserTrips = (userId, page = 1) =>
-	apiFetch(`/users/${userId}/trips?page=${page}`, { method: "GET" });
+// ───────────────── getMyTrips  ✅ ─────────────────
+export const getMyTrips = async (page = 1, pageSize = 10) => {
+	const data = await apiFetch(`/trips/me?page=${page}&limit=${pageSize}`, {
+		method: "GET",
+	});
+	return { items: Array.isArray(data) ? data : data.items || [] };
+};
 
-export const getMyTrips = (page = 1) =>
-	apiFetch(`/users/${userId}/trips/me?page=${page}`, { method: "GET" });
+// ───────────────── uploadTripJson ✅ ─────────────────
+export const uploadTripJson = async (payload, csrf = true) => {
+	return await apiFetch(`/v2/trips/json`, {
+		method: "POST",
+		csrf,
+		body: JSON.stringify(payload),
+	});
+};

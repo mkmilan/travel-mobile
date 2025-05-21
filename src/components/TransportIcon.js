@@ -1,22 +1,29 @@
-import { Feather, FontAwesome5 } from "@expo/vector-icons";
+import { theme } from "@/src/theme";
+import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
 
-const iconMap = {
-	motorhome: { lib: FontAwesome5, name: "caravan" },
-	campervan: { lib: FontAwesome5, name: "campground" },
-	car: { lib: Feather, name: "truck" },
-	motorcycle: { lib: Feather, name: "activity" },
-	bicycle: { lib: Feather, name: "map-pin" },
-	walking: { lib: Feather, name: "navigation" },
+const map = {
+	motorhome: { lib: MaterialCommunityIcons, name: "rv-truck" }, // front-view RV
+	campervan: { lib: FontAwesome5, name: "caravan" },
+	car: { lib: FontAwesome5, name: "car" },
+	motorcycle: { lib: FontAwesome5, name: "motorcycle" },
+	bicycle: { lib: FontAwesome5, name: "bicycle" },
+	walking: { lib: FontAwesome5, name: "walking" },
 };
 
-export default function TransportIcon({ mode, color = "#666", size = 16 }) {
-	const cfg = iconMap[mode] || iconMap.motorhome;
+export default function TransportIcon({
+	mode = "motorhome",
+	size = 18,
+	color = theme.colors.textMuted,
+	style = {},
+}) {
+	const cfg = map[mode] || map.motorhome;
 	const Icon = cfg.lib;
 	return (
 		<Icon
 			name={cfg.name}
-			color={color}
 			size={size}
+			color={color}
+			style={style}
 		/>
 	);
 }
