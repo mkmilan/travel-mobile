@@ -80,7 +80,14 @@ export const startTrip = async (userId) => {
 
 export const finishTrip = async (
 	tripId,
-	{ endTime, title, startName, endName, defaultTransportMode = "car" }
+	{
+		endTime,
+		title,
+		startName,
+		endName,
+		defaultTransportMode = "car",
+		defaultTripVisibility = "public",
+	}
 ) => {
 	const db = await openDatabase();
 	await db.runAsync(
@@ -90,9 +97,18 @@ export const finishTrip = async (
            title = ?,
            start_name = ?,
            end_name = ?,
-           default_transport_mode = ?
+           default_transport_mode = ?,
+           default_trip_visibility = ?
      WHERE id = ?`,
-		[endTime, title, startName, endName, defaultTransportMode, tripId]
+		[
+			endTime,
+			title,
+			startName,
+			endName,
+			defaultTransportMode,
+			defaultTripVisibility,
+			tripId,
+		]
 	);
 };
 

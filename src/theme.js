@@ -9,6 +9,8 @@ export const theme = {
 		inputBorder: "#ccc",
 		link: "#0077cc",
 		error: "#D14343",
+		warning: "#FFA500", // Orange for warnings
+		info: "#17A2B8", // Light blue for infor
 	},
 	space: {
 		sm: 8,
