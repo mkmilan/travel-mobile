@@ -1,3 +1,7 @@
+// eslint-disable-next-line import/order
+// prettier-ignore
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+
 import { useAuthStore } from "@/src/stores/auth"; // Make sure alias `@` works
 import { SplashScreen, Stack } from "expo-router";
 import { useEffect } from "react";
@@ -9,7 +13,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
 	const { isAuthenticated, loading, syncFromStorage } = useAuthStore();
 
-	// Hydrate auth state from SecureStore
+	// Hydrate auth state from SecureStorei want to save _layout.js as it is but when i pres save it move import
 	useEffect(() => {
 		syncFromStorage().finally(() => SplashScreen.hideAsync());
 	}, []);
@@ -24,7 +28,7 @@ export default function RootLayout() {
 	}
 
 	return (
-		<>
+		<GestureHandlerRootView style={{ flex: 1 }}>
 			<Stack screenOptions={{ headerShown: false }}>
 				{!isAuthenticated ? (
 					// This will only show login.js in (auth) stack
@@ -35,6 +39,6 @@ export default function RootLayout() {
 				)}
 			</Stack>
 			<FlashMessage position="top" />
-		</>
+		</GestureHandlerRootView>
 	);
 }
