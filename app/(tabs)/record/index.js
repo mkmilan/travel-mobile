@@ -188,7 +188,8 @@ export default function RecordScreen() {
 	const handleUpload = async (tid = tripId) => {
 		try {
 			toast({ type: "info", title: "Packaging trip…" });
-			const payload = await buildTripJsonForUpload(tid);
+			// const payload = await buildTripJsonForUpload(tid);
+			const payload = await buildTripJsonForUpload(tid, user?.settings || {});
 			console.log("Payload:", JSON.stringify(payload, null, 2));
 
 			await uploadTripJson(payload);

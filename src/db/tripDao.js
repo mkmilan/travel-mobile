@@ -2,16 +2,18 @@ import { v4 as uuidv4 } from "uuid";
 import { openDatabase } from "./openDatabase";
 
 // ─────── helpers for upload (unchanged) ───────────────────────────────────
-export const buildTripJsonForUpload = async (tripId) => {
+// ─────── helpers for upload ───────────────────────────────────────────────
+export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 	const db = await openDatabase();
 
-	const points = await db.getAllAsync(
+	// ---- points → segments --------------------------------------------------
+	const rows = await db.getAllAsync(
 		`SELECT * FROM track_points WHERE trip_id = ? ORDER BY timestamp ASC`,
 		[tripId]
 	);
 
 	const segmentMap = {};
-	for (const p of points) {
+	for (const p of rows) {
 		if (!segmentMap[p.segment_id]) segmentMap[p.segment_id] = [];
 		segmentMap[p.segment_id].push(p);
 	}
@@ -28,18 +30,37 @@ export const buildTripJsonForUpload = async (tripId) => {
 		})),
 	}));
 
-	const trip = await db.getAllAsync(`SELECT * FROM trips WHERE id = ?`, [
+	// ---- trip row -----------------------------------------------------------
+	const [trip] = await db.getAllAsync(`SELECT * FROM trips WHERE id = ?`, [
 		tripId,
 	]);
-	if (!trip?.[0]) throw new Error("Trip not found");
+	if (!trip) throw new Error("Trip not found in local DB");
+
+	// Reliable ISO for fallbacks
+	const isoStart =
+		trip.start_time || segments[0]?.startTime || new Date().toISOString();
 
 	return {
-		tripId,
-		userId: trip[0].user_id,
-		startTime: trip[0].start_time,
+		/* fields the Node controller reads --------------------------- */
+		title: trip.title || `Trip on ${isoStart.substring(0, 10)}`,
+		description: "", // no UI yet
+		startLocationName: trip.start_name || null,
+		endLocationName: trip.end_name || null,
+		startTime: isoStart,
+
+		defaultTravelMode:
+			trip.default_transport_mode ||
+			userSettings.defaultTravelMode ||
+			"motorhome",
+
+		defaultTripVisibility:
+			trip.default_trip_visibility ||
+			userSettings.defaultTripVisibility ||
+			"public",
+
 		segments,
-		pois: [],
-		recommendations: [],
+		pois: [], // to be filled in later phases
+		recommendations: [], // idem
 	};
 };
 

@@ -9,7 +9,7 @@ export default {
 		icon: "./assets/images/icon.png",
 		scheme: "mobile",
 		userInterfaceStyle: "automatic",
-		newArchEnabled: false,
+		newArchEnabled: true,
 		ios: {
 			supportsTablet: true,
 			infoPlist: {
