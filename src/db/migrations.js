@@ -51,12 +51,18 @@ export const runMigrations = async () => {
 
 	// ─────── additive columns (ignore “duplicate column” errors) ────────────
 	const alters = [
+		// Trip table additions
 		`ALTER TABLE trips ADD COLUMN title TEXT;`,
 		`ALTER TABLE trips ADD COLUMN start_name TEXT;`,
 		`ALTER TABLE trips ADD COLUMN end_name TEXT;`,
 		`ALTER TABLE trips ADD COLUMN default_transport_mode TEXT DEFAULT 'car';`,
 		`ALTER TABLE trips ADD COLUMN default_trip_visibility TEXT DEFAULT 'public';`,
 		`ALTER TABLE trips ADD COLUMN description TEXT;`,
+		`ALTER TABLE trips ADD COLUMN end_time TEXT;`, // Add missing end_time
+
+		// Recommendations table additions - add name and description columns
+		`ALTER TABLE recommendations ADD COLUMN name TEXT;`,
+		`ALTER TABLE recommendations ADD COLUMN description TEXT;`,
 	];
 
 	for (const sql of alters) {

@@ -5,7 +5,13 @@ import { openDatabase } from "./openDatabase";
  * Creates the standardized payload structure for backend API
  * This ensures consistency between what we store and what we send
  */
-const createTripPayload = (trip, segments, userSettings = {}) => {
+const createTripPayload = (
+	trip,
+	segments,
+	pois = [],
+	recommendations = [],
+	userSettings = {}
+) => {
 	// Reliable ISO for fallbacks
 	const isoStart =
 		trip.start_time || segments[0]?.startTime || new Date().toISOString();
@@ -17,8 +23,21 @@ const createTripPayload = (trip, segments, userSettings = {}) => {
 		endLocationName: trip.end_name || null,
 		startTime: isoStart,
 		segments,
-		pois: [], // to be filled in later phases
-		recommendations: [], // to be filled in later phases
+		pois: pois.map((poi) => ({
+			lat: poi.lat,
+			lon: poi.lon,
+			timestamp: poi.timestamp,
+			note: poi.note,
+		})),
+		recommendations: recommendations.map((rec) => ({
+			lat: rec.lat,
+			lon: rec.lon,
+			category: rec.category,
+			tags: rec.tags ? rec.tags.split(",") : [],
+			rating: rec.rating,
+			name: rec.name,
+			description: rec.description,
+		})),
 		defaultTripVisibility:
 			trip.default_trip_visibility ||
 			userSettings.defaultTripVisibility ||
@@ -62,34 +81,18 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 	]);
 	if (!trip) throw new Error("Trip not found in local DB");
 
-	// // Reliable ISO for fallbacks
-	// const isoStart =
-	// 	trip.start_time || segments[0]?.startTime || new Date().toISOString();
+	// ---- pois and recommendations -------------------------------------------
+	const pois = await db.getAllAsync(
+		`SELECT * FROM pois WHERE trip_id = ? ORDER BY timestamp ASC`,
+		[tripId]
+	);
 
-	// return {
-	// 	/* fields the Node controller reads --------------------------- */
-	// 	title: trip.title || `Trip on ${isoStart.substring(0, 10)}`,
-	// 	description: "", // no UI yet
-	// 	startLocationName: trip.start_name || null,
-	// 	endLocationName: trip.end_name || null,
-	// 	startTime: isoStart,
+	const recommendations = await db.getAllAsync(
+		`SELECT * FROM recommendations WHERE trip_id = ?`,
+		[tripId]
+	);
 
-	// 	defaultTravelMode:
-	// 		trip.default_transport_mode ||
-	// 		userSettings.defaultTravelMode ||
-	// 		"motorhome",
-
-	// 	defaultTripVisibility:
-	// 		trip.default_trip_visibility ||
-	// 		userSettings.defaultTripVisibility ||
-	// 		"public",
-
-	// 	segments,
-	// 	pois: [], // to be filled in later phases
-	// 	recommendations: [], // idem
-	// };
-	// Use centralized payload creation
-	return createTripPayload(trip, segments, userSettings);
+	return createTripPayload(trip, segments, pois, recommendations, userSettings);
 };
 
 // ─────── lifecycle helpers ────────────────────────────────────────────────
@@ -161,13 +164,24 @@ export const insertTrackPoint = async (
 
 // ─────── POIs & recommendations (unchanged) ───────────────────────────────
 export const addPoi = async (tripId, { lat, lon, note }) => {
-	/* … */
+	const db = await openDatabase();
+	const timestamp = new Date().toISOString();
+	await db.runAsync(
+		`INSERT INTO pois (trip_id, lat, lon, timestamp, note)
+         VALUES (?, ?, ?, ?, ?)`,
+		[tripId, lat, lon, timestamp, note]
+	);
 };
 export const addRecommendation = async (
 	tripId,
-	{ lat, lon, category, tags, rating, note }
+	{ lat, lon, category, tags, rating, name, description }
 ) => {
-	/* … */
+	const db = await openDatabase();
+	await db.runAsync(
+		`INSERT INTO recommendations (trip_id, lat, lon, category, tags, rating, name, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		[tripId, lat, lon, category, tags, rating, name, description]
+	);
 };
 
 // ─────── queries ──────────────────────────────────────────────────────────

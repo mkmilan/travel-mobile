@@ -4,7 +4,9 @@ import AddPoiModal from "@/src/components/modals/AddPoiModal";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal";
 import TripSaveModal from "@/src/components/modals/TripSaveModal";
 import { runMigrations } from "@/src/db/migrations";
+
 import {
+	addRecommendation,
 	buildTripJsonForUpload,
 	deleteTrip,
 	finishTrip,
@@ -52,7 +54,7 @@ export default function RecordScreen() {
 	const lastPoint = useRef(null);
 	const sheetRef = useRef(null);
 	const poiModalRef = useRef(null);
-	const recModalRef = useRef(null);
+	const addRecommendationModalRef = useRef(null);
 
 	const pendingNames = useRef({ startName: "Unknown", endName: "Unknown" });
 
@@ -256,10 +258,6 @@ export default function RecordScreen() {
 		);
 	};
 
-	// secondary buttons
-	const handleAddPoi = () => poiModalRef.current?.open();
-	const handleAddRec = () => recModalRef.current?.open();
-
 	const handleSaveMeta = async ({ title, mode, visibility, description }) => {
 		const endTime = new Date().toISOString();
 
@@ -308,6 +306,58 @@ export default function RecordScreen() {
 		setSegment(null);
 		firstPoint.current = null;
 		lastPoint.current = null;
+	};
+
+	// secondary buttons
+	const handleAddPoi = () => poiModalRef.current?.open();
+
+	// Handle recommendation submission
+	const handleRecommendationSubmit = async (recommendationData) => {
+		if (!tripId || status !== "recording") {
+			toast({
+				type: "error",
+				title: "No active trip to add recommendation to",
+			});
+			return;
+		}
+
+		try {
+			await addRecommendation(tripId, recommendationData);
+			toast({
+				type: "success",
+				title: "Recommendation saved",
+				subtitle: "Added to current trip",
+			});
+		} catch (error) {
+			console.error("Failed to save recommendation:", error);
+			toast({ type: "error", title: "Failed to save recommendation" });
+		}
+	};
+
+	// When opening the recommendation modal, pass current location
+	const handleOpenRecommendationModal = () => {
+		// Check if we can add recommendations (recording or paused)
+		if (!tripId || (status !== "recording" && status !== "paused")) {
+			toast({
+				type: "error",
+				title: "No active trip to add recommendation to",
+			});
+			return;
+		}
+		// Use last known location from the location watcher
+		const locationData = lastPoint.current;
+		console.log("Last known location:", locationData);
+
+		if (!locationData) {
+			toast({
+				type: "warning",
+				title: "Location not available yet",
+				subtitle: "Please wait for GPS to initialize",
+			});
+			return;
+		}
+
+		addRecommendationModalRef.current?.open(locationData);
 	};
 
 	// ─────── UI ──────────────────────────────────────────────────────────────
@@ -370,7 +420,7 @@ export default function RecordScreen() {
 						<CircleButton
 							icon="star"
 							color={theme.colors.warning}
-							onPress={handleAddRec}
+							onPress={handleOpenRecommendationModal}
 						/>
 						{/* <Text style={styles.actionButtonText}>Add Recommendation</Text> */}
 					</View>
@@ -428,7 +478,10 @@ export default function RecordScreen() {
 				onConfirm={handleSaveMeta}
 			/>
 			<AddPoiModal ref={poiModalRef} />
-			<AddRecommendationModal ref={recModalRef} />
+			<AddRecommendationModal
+				ref={addRecommendationModalRef}
+				onSubmit={handleRecommendationSubmit}
+			/>
 		</View>
 	);
 }
