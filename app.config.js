@@ -38,6 +38,11 @@ export default {
 				backgroundColor: "#ffffff",
 			},
 			package: "com.mkmilanmilan.travelmobile",
+			config: {
+				googleMaps: {
+					apiKey: process.env.GOOGLE_MAPS_KEY, // pulled from .env.production
+				},
+			},
 			usesCleartextTraffic: true,
 			edgeToEdgeEnabled: true,
 			permissions: [
