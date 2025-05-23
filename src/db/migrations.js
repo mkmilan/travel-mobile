@@ -56,6 +56,7 @@ export const runMigrations = async () => {
 		`ALTER TABLE trips ADD COLUMN end_name TEXT;`,
 		`ALTER TABLE trips ADD COLUMN default_transport_mode TEXT DEFAULT 'car';`,
 		`ALTER TABLE trips ADD COLUMN default_trip_visibility TEXT DEFAULT 'public';`,
+		`ALTER TABLE trips ADD COLUMN description TEXT;`,
 	];
 
 	for (const sql of alters) {

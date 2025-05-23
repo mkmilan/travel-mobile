@@ -260,12 +260,13 @@ export default function RecordScreen() {
 	const handleAddPoi = () => poiModalRef.current?.open();
 	const handleAddRec = () => recModalRef.current?.open();
 
-	const handleSaveMeta = async ({ title, mode, visibility }) => {
+	const handleSaveMeta = async ({ title, mode, visibility, description }) => {
 		const endTime = new Date().toISOString();
 
 		await finishTrip(tripId, {
 			endTime,
 			title,
+			description,
 			startName: pendingNames.current.startName,
 			endName: pendingNames.current.endName,
 			defaultTransportMode: mode,

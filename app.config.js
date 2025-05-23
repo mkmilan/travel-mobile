@@ -40,7 +40,7 @@ export default {
 			package: "com.mkmilanmilan.travelmobile",
 			config: {
 				googleMaps: {
-					apiKey: process.env.GOOGLE_MAPS_KEY, // pulled from .env.production
+					apiKey: process.env.GOOGLE_MAPS_KEY,
 				},
 			},
 			usesCleartextTraffic: true,

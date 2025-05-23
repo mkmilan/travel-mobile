@@ -1,8 +1,9 @@
 import TransportIcon from "@/src/components/TransportIcon";
 import { useAuthStore } from "@/src/stores/auth";
-import { theme } from "@/src/theme"; // ← uses your theme :contentReference[oaicite:0]{index=0}
+import { theme } from "@/src/theme";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import {
+	KeyboardAvoidingView,
 	Platform,
 	Pressable,
 	ScrollView,
@@ -31,16 +32,24 @@ const Chip = ({ label, selected, onPress, children }) => (
 			alignItems: "center",
 			borderWidth: 1,
 			borderColor: theme.colors.inputBorder,
-			borderRadius: 12,
-			paddingVertical: 6,
-			paddingHorizontal: 12,
-			marginRight: 8,
-			marginBottom: 8,
-			backgroundColor: selected ? "#e0e0e0" : "transparent",
+			borderRadius: theme.radius.md,
+			paddingVertical: theme.space.sm,
+			paddingHorizontal: theme.space.md,
+			marginRight: theme.space.sm,
+			marginBottom: theme.space.sm,
+			backgroundColor: selected ? theme.colors.secondary + "20" : "transparent", // Using theme colors
 		}}
 	>
 		{children}
-		<Text style={{ marginLeft: children ? 6 : 0 }}>{label}</Text>
+		<Text
+			style={{
+				marginLeft: children ? theme.space.sm : 0,
+				color: theme.colors.text,
+				fontSize: theme.fontSize.sm,
+			}}
+		>
+			{label}
+		</Text>
 	</Pressable>
 );
 
@@ -50,14 +59,16 @@ const TripSaveModal = forwardRef(({ onConfirm }, ref) => {
 
 	const [visible, setVisible] = useState(false);
 	const [title, setTitle] = useState("");
+	const [description, setDescription] = useState(""); // Add description state
 	const [mode, setMode] = useState(defaults.defaultTravelMode || "motorhome");
 	const [visibility, setVisibility] = useState(
 		defaults.defaultTripVisibility || "public"
 	);
 
 	useImperativeHandle(ref, () => ({
-		open(initialTitle, initialMode, initialVisibility) {
-			setTitle(initialTitle);
+		open(initialTitle, initialMode, initialVisibility, initialDescription) {
+			setTitle(initialTitle || "");
+			setDescription(initialDescription || ""); // Initialize description
 			setMode(initialMode || defaults.defaultTravelMode || "motorhome");
 			setVisibility(
 				initialVisibility || defaults.defaultTripVisibility || "public"
@@ -65,6 +76,11 @@ const TripSaveModal = forwardRef(({ onConfirm }, ref) => {
 			setVisible(true);
 		},
 	}));
+
+	const handleConfirm = () => {
+		onConfirm({ title, description, mode, visibility }); // Include description
+		setVisible(false);
+	};
 
 	return (
 		<Modal
@@ -76,103 +92,177 @@ const TripSaveModal = forwardRef(({ onConfirm }, ref) => {
 			animationOut="slideOutDown"
 			style={{ margin: 0, justifyContent: "flex-end" }}
 			propagateSwipe
+			avoidKeyboard={true} // This helps with keyboard handling
 		>
-			<View
-				style={{
-					backgroundColor: theme.colors.background,
-					paddingTop: 8,
-					paddingHorizontal: 20,
-					paddingBottom: 24,
-					borderTopLeftRadius: 20,
-					borderTopRightRadius: 20,
-					maxHeight: "85%",
-				}}
+			<KeyboardAvoidingView
+				behavior={Platform.OS === "ios" ? "padding" : "height"}
+				style={{ flex: 1, justifyContent: "flex-end" }}
 			>
-				<ScrollView>
-					{/* title ----------------------------------------------------------- */}
-					<Text style={{ fontSize: 18, fontWeight: "600", marginBottom: 8 }}>
-						{`Trip title (${
-							Platform.OS === "ios" ? "return" : "enter"
-						} to save)`}
-					</Text>
-
-					<TextInput
-						value={title}
-						onChangeText={setTitle}
-						style={{
-							borderWidth: 1,
-							borderColor: theme.colors.inputBorder,
-							backgroundColor: theme.colors.inputBackground,
-							borderRadius: 12,
-							padding: 10,
-							marginBottom: 16,
-						}}
-						returnKeyType="done"
-					/>
-
-					{/* mode ------------------------------------------------------------ */}
-					<Text style={{ fontSize: 18, fontWeight: "600", marginBottom: 8 }}>
-						Transport mode
-					</Text>
-					<View
-						style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 24 }}
-					>
-						{MODES.map((m) => (
-							<Chip
-								key={m}
-								label={m}
-								selected={m === mode}
-								onPress={() => setMode(m)}
-							>
-								<TransportIcon
-									mode={m}
-									size={18}
-								/>
-							</Chip>
-						))}
-					</View>
-
-					{/* visibility ------------------------------------------------------ */}
-					<Text style={{ fontSize: 18, fontWeight: "600", marginBottom: 8 }}>
-						Visibility
-					</Text>
-					<View
-						style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 24 }}
-					>
-						{VISIBILITIES.map((v) => (
-							<Chip
-								key={v}
-								label={v.replace("_", " ")}
-								selected={v === visibility}
-								onPress={() => setVisibility(v)}
-							/>
-						))}
-					</View>
-				</ScrollView>
-
-				{/* save -------------------------------------------------------------- */}
-				<Pressable
-					onPress={() => {
-						onConfirm({ title, mode, visibility });
-						setVisible(false);
-					}}
+				<View
 					style={{
-						backgroundColor: theme.colors.primary,
-						borderRadius: 12,
-						paddingVertical: 12,
+						backgroundColor: theme.colors.background,
+						paddingTop: theme.space.sm,
+						paddingHorizontal: theme.space.lg,
+						paddingBottom: theme.space.lg,
+						borderTopLeftRadius: theme.space.lg,
+						borderTopRightRadius: theme.space.lg,
+						maxHeight: "90%", // Increase max height slightly
 					}}
 				>
-					<Text
+					<ScrollView
+						showsVerticalScrollIndicator={false}
+						keyboardShouldPersistTaps="handled" // This prevents the keyboard from dismissing when tapping other elements
+					>
+						{/* title ----------------------------------------------------------- */}
+						<Text
+							style={{
+								fontSize: theme.fontSize.lg,
+								fontWeight: "600",
+								marginBottom: theme.space.sm,
+								color: theme.colors.text,
+							}}
+						>
+							Trip Title
+						</Text>
+
+						<TextInput
+							value={title}
+							onChangeText={setTitle}
+							placeholder="Enter trip title..."
+							placeholderTextColor={theme.colors.textMuted}
+							style={{
+								borderWidth: 1,
+								borderColor: theme.colors.inputBorder,
+								backgroundColor: theme.colors.inputBackground,
+								borderRadius: theme.radius.md,
+								padding: theme.space.md,
+								marginBottom: theme.space.lg,
+								fontSize: theme.fontSize.md,
+								color: theme.colors.text,
+							}}
+							returnKeyType="next"
+							blurOnSubmit={false}
+						/>
+
+						{/* description ----------------------------------------------------- */}
+						<Text
+							style={{
+								fontSize: theme.fontSize.lg,
+								fontWeight: "600",
+								marginBottom: theme.space.sm,
+								color: theme.colors.text,
+							}}
+						>
+							Description (Optional)
+						</Text>
+
+						<TextInput
+							value={description}
+							onChangeText={setDescription}
+							placeholder="Add a description for your trip..."
+							placeholderTextColor={theme.colors.textMuted}
+							multiline={true}
+							numberOfLines={3}
+							textAlignVertical="top"
+							style={{
+								borderWidth: 1,
+								borderColor: theme.colors.inputBorder,
+								backgroundColor: theme.colors.inputBackground,
+								borderRadius: theme.radius.md,
+								padding: theme.space.md,
+								marginBottom: theme.space.lg,
+								fontSize: theme.fontSize.md,
+								color: theme.colors.text,
+								minHeight: 80, // Fixed height for multiline
+							}}
+							returnKeyType="done"
+						/>
+
+						{/* mode ------------------------------------------------------------ */}
+						<Text
+							style={{
+								fontSize: theme.fontSize.lg,
+								fontWeight: "600",
+								marginBottom: theme.space.sm,
+								color: theme.colors.text,
+							}}
+						>
+							Transport Mode
+						</Text>
+						<View
+							style={{
+								flexDirection: "row",
+								flexWrap: "wrap",
+								marginBottom: theme.space.lg,
+							}}
+						>
+							{MODES.map((m) => (
+								<Chip
+									key={m}
+									label={m}
+									selected={m === mode}
+									onPress={() => setMode(m)}
+								>
+									<TransportIcon
+										mode={m}
+										size={18}
+									/>
+								</Chip>
+							))}
+						</View>
+
+						{/* visibility ------------------------------------------------------ */}
+						<Text
+							style={{
+								fontSize: theme.fontSize.lg,
+								fontWeight: "600",
+								marginBottom: theme.space.sm,
+								color: theme.colors.text,
+							}}
+						>
+							Visibility
+						</Text>
+						<View
+							style={{
+								flexDirection: "row",
+								flexWrap: "wrap",
+								marginBottom: theme.space.lg,
+							}}
+						>
+							{VISIBILITIES.map((v) => (
+								<Chip
+									key={v}
+									label={v.replace("_", " ")}
+									selected={v === visibility}
+									onPress={() => setVisibility(v)}
+								/>
+							))}
+						</View>
+					</ScrollView>
+
+					{/* save button ---------------------------------------------------- */}
+					<Pressable
+						onPress={handleConfirm}
 						style={{
-							color: "#fff",
-							textAlign: "center",
-							fontWeight: "600",
+							backgroundColor: theme.colors.primary,
+							borderRadius: theme.radius.md,
+							paddingVertical: theme.space.md,
+							marginTop: theme.space.sm,
 						}}
 					>
-						Save trip
-					</Text>
-				</Pressable>
-			</View>
+						<Text
+							style={{
+								color: "#fff",
+								textAlign: "center",
+								fontWeight: "600",
+								fontSize: theme.fontSize.md,
+							}}
+						>
+							Save Trip
+						</Text>
+					</Pressable>
+				</View>
+			</KeyboardAvoidingView>
 		</Modal>
 	);
 });

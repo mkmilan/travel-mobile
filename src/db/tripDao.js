@@ -1,7 +1,33 @@
 import { v4 as uuidv4 } from "uuid";
 import { openDatabase } from "./openDatabase";
 
-// ─────── helpers for upload (unchanged) ───────────────────────────────────
+/**
+ * Creates the standardized payload structure for backend API
+ * This ensures consistency between what we store and what we send
+ */
+const createTripPayload = (trip, segments, userSettings = {}) => {
+	// Reliable ISO for fallbacks
+	const isoStart =
+		trip.start_time || segments[0]?.startTime || new Date().toISOString();
+
+	return {
+		title: trip.title || `Trip on ${isoStart.substring(0, 10)}`,
+		description: trip.description || "", // Now we store this in DB
+		startLocationName: trip.start_name || null,
+		endLocationName: trip.end_name || null,
+		startTime: isoStart,
+		segments,
+		pois: [], // to be filled in later phases
+		recommendations: [], // to be filled in later phases
+		defaultTripVisibility:
+			trip.default_trip_visibility ||
+			userSettings.defaultTripVisibility ||
+			"public",
+		defaultTravelMode:
+			trip.default_transport_mode || userSettings.defaultTravelMode || "car",
+	};
+};
+
 // ─────── helpers for upload ───────────────────────────────────────────────
 export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 	const db = await openDatabase();
@@ -36,32 +62,34 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 	]);
 	if (!trip) throw new Error("Trip not found in local DB");
 
-	// Reliable ISO for fallbacks
-	const isoStart =
-		trip.start_time || segments[0]?.startTime || new Date().toISOString();
+	// // Reliable ISO for fallbacks
+	// const isoStart =
+	// 	trip.start_time || segments[0]?.startTime || new Date().toISOString();
 
-	return {
-		/* fields the Node controller reads --------------------------- */
-		title: trip.title || `Trip on ${isoStart.substring(0, 10)}`,
-		description: "", // no UI yet
-		startLocationName: trip.start_name || null,
-		endLocationName: trip.end_name || null,
-		startTime: isoStart,
+	// return {
+	// 	/* fields the Node controller reads --------------------------- */
+	// 	title: trip.title || `Trip on ${isoStart.substring(0, 10)}`,
+	// 	description: "", // no UI yet
+	// 	startLocationName: trip.start_name || null,
+	// 	endLocationName: trip.end_name || null,
+	// 	startTime: isoStart,
 
-		defaultTravelMode:
-			trip.default_transport_mode ||
-			userSettings.defaultTravelMode ||
-			"motorhome",
+	// 	defaultTravelMode:
+	// 		trip.default_transport_mode ||
+	// 		userSettings.defaultTravelMode ||
+	// 		"motorhome",
 
-		defaultTripVisibility:
-			trip.default_trip_visibility ||
-			userSettings.defaultTripVisibility ||
-			"public",
+	// 	defaultTripVisibility:
+	// 		trip.default_trip_visibility ||
+	// 		userSettings.defaultTripVisibility ||
+	// 		"public",
 
-		segments,
-		pois: [], // to be filled in later phases
-		recommendations: [], // idem
-	};
+	// 	segments,
+	// 	pois: [], // to be filled in later phases
+	// 	recommendations: [], // idem
+	// };
+	// Use centralized payload creation
+	return createTripPayload(trip, segments, userSettings);
 };
 
 // ─────── lifecycle helpers ────────────────────────────────────────────────
@@ -83,6 +111,7 @@ export const finishTrip = async (
 	{
 		endTime,
 		title,
+		description = "", // Add description parameter
 		startName,
 		endName,
 		defaultTransportMode = "car",
@@ -95,6 +124,7 @@ export const finishTrip = async (
        SET status = 'stopped',
            end_time = ?,
            title = ?,
+           description = ?,
            start_name = ?,
            end_name = ?,
            default_transport_mode = ?,
@@ -103,6 +133,7 @@ export const finishTrip = async (
 		[
 			endTime,
 			title,
+			description,
 			startName,
 			endName,
 			defaultTransportMode,
