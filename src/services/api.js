@@ -1,8 +1,38 @@
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
+import * as Updates from "expo-updates";
 import { getCsrfToken } from "./csrf";
 
-const API_URL = Constants.expoConfig.extra.API_URL;
+// const API_URL = Constants.expoConfig.extra.API_URL;
+/**
+ * Expo SDK 53:
+ *  - In dev-client & production, `expoConfig` is undefined.
+ *  - In Expo Go / `expo start`, it exists.
+ * Fall back to `manifest.extra` or, in worst case, guess LAN IP.
+ */
+let API_URL =
+	Constants.expoConfig?.extra?.API_URL ||
+	Updates.manifest?.extra?.API_URL ||
+	Constants.manifest?.extra?.API_URL ||
+	"";
+console.log("[api] Using API_URL =", API_URL);
+
+// last-chance fallback for dev devices if no env var provided
+if (!API_URL) {
+	const { debuggerHost } = Constants.manifest ?? {};
+	// debuggerHost looks like "192.168.1.10:19000"
+	if (debuggerHost) {
+		const host = debuggerHost.split(":")[0];
+		API_URL = `http://${host}:5001/api`;
+	}
+}
+
+if (!API_URL) {
+	console.error(
+		"[api] API_URL is not defined in app.config.js › extra. " +
+			"Feed calls will fail."
+	);
+}
 
 /* ------------------------------------------------------------------ *
  * core fetch wrapper

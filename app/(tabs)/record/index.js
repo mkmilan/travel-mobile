@@ -1,3 +1,4 @@
+import { TASK_NAME } from "@/src/background/TripLocationTask";
 import CircleButton from "@/src/components/CircleButton";
 import AddPoiModal from "@/src/components/modals/AddPoiModal";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal";
@@ -8,7 +9,6 @@ import {
 	deleteTrip,
 	finishTrip,
 	getPendingTrips,
-	insertTrackPoint,
 	markTripUploaded,
 	startSegment,
 	startTrip,
@@ -17,9 +17,15 @@ import { uploadTripJson } from "@/src/services/api";
 import { getTripLocationNames } from "@/src/services/locationNames";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
+import {
+	clearActiveTrip,
+	getActiveTrip,
+	setActiveTrip,
+} from "@/src/utils/activeTrip";
 import { toast } from "@/src/utils/toast";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import * as TaskManager from "expo-task-manager";
 import { useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -57,6 +63,17 @@ export default function RecordScreen() {
 		(async () => {
 			await runMigrations();
 			await refreshPending();
+			// Restore background tracking state if OS relaunched the app
+			const running = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
+			if (running) {
+				const { tripId: tid, segmentId: seg } = await getActiveTrip();
+				if (tid && seg) {
+					setTripId(tid);
+					setSegment(seg);
+					setStatus("recording");
+					await startLocationWatcher();
+				}
+			}
 		})();
 	}, []);
 
@@ -66,7 +83,7 @@ export default function RecordScreen() {
 	};
 
 	// ─────── location helpers ────────────────────────────────────────────────
-	const stopLocation = async () => {
+	const stopLocationWatcher = async () => {
 		if (locationWatcher.current) {
 			await locationWatcher.current.remove();
 			locationWatcher.current = null;
@@ -109,15 +126,18 @@ export default function RecordScreen() {
 	// 		}
 	// 	);
 	// };
-	const startLocation = async (tid, seg) => {
+
+	// const startLocation = async (tid, seg) => {
+	// const startLocation = async () => {
+	const startLocationWatcher = async () => {
 		locationWatcher.current = await Location.watchPositionAsync(
 			{
 				accuracy: Location.Accuracy.High,
 				timeInterval: 1000,
 				distanceInterval: 0,
 			},
-			async (loc) => {
-				const { latitude, longitude, speed, accuracy } = loc.coords;
+			(loc) => {
+				const { latitude, longitude } = loc.coords;
 				const timestamp = new Date().toISOString();
 
 				if (!firstPoint.current) {
@@ -126,35 +146,34 @@ export default function RecordScreen() {
 				lastPoint.current = { lat: latitude, lon: longitude };
 
 				// DEV LOG – keep verbose in dev builds
-				console.log(
-					`[Rec] ${latitude.toFixed(5)},${longitude.toFixed(5)} ` +
-						`spd:${speed?.toFixed(1) ?? "?"} acc:${accuracy ?? "?"}`
-				);
+				console.log(`[Rec] ${latitude.toFixed(5)},${longitude.toFixed(5)} `);
 
 				// Call insertTrackPoint without awaiting it in the main callback flow
 				// Handle potential errors with .catch()
-				insertTrackPoint(tid, seg, {
-					lat: latitude,
-					lon: longitude,
-					timestamp,
-					speed,
-					accuracy,
-				}).catch((err) => {
-					// Log errors from the async insert operation
-					console.error("Failed to save point (async):", err);
-				});
+				// insertTrackPoint(tid, seg, { //now this should be done in TaskManager
+				// 	lat: latitude,
+				// 	lon: longitude,
+				// 	timestamp,
+				// 	speed,
+				// 	accuracy,
+				// }).catch((err) => {
+				// 	// Log errors from the async insert operation
+				// 	console.error("Failed to save point (async):", err);
+				// });
 			}
 		);
 	};
 
 	// ─────── actions ─────────────────────────────────────────────────────────
 	const handleStart = async () => {
+		// 1 — ask permission ----------------------------------------------------
 		const { status: perm } = await Location.requestForegroundPermissionsAsync();
 		if (perm !== "granted") {
 			toast({ type: "danger", title: "Location permission required" });
 			return;
 		}
 
+		// 2 — create trip & first segment ---------------------------------------
 		const uid = user?._id || "test-user";
 		const tid = await startTrip(uid);
 		const seg = startSegment();
@@ -162,21 +181,77 @@ export default function RecordScreen() {
 		setTripId(tid);
 		setSegment(seg);
 		setStatus("recording");
-		await startLocation(tid, seg);
 
-		toast({ type: "success", title: "Recording started" });
+		// 3 — persist ids so TaskManager knows where to write
+		await setActiveTrip(tid, seg);
+
+		// 4 — start foreground & background tracking ----------------------------
+		try {
+			// foreground watcher (only updates first/last point refs)
+			await startLocationWatcher();
+
+			// background updates (write points to SQLite)
+			await Location.startLocationUpdatesAsync(TASK_NAME, {
+				accuracy: Location.Accuracy.High,
+				timeInterval: 1000,
+				distanceInterval: 0,
+				showsBackgroundLocationIndicator: true,
+				foregroundService: {
+					notificationTitle: "Recording trip",
+					notificationBody: "Tracking continues when the app is closed.",
+				},
+			});
+
+			toast({ type: "success", title: "Recording started" });
+		} catch (err) {
+			// rollback if either watcher fails ------------------------------------
+			await stopLocationWatcher();
+			await Location.stopLocationUpdatesAsync(TASK_NAME).catch(() => {});
+			await clearActiveTrip();
+
+			setStatus("idle");
+			setTripId(null);
+			setSegment(null);
+
+			toast({
+				type: "danger",
+				title: "Could not start recording",
+				msg: err.message,
+			});
+		}
 	};
 
 	const handlePauseResume = async () => {
 		if (status === "recording") {
-			await stopLocation();
+			await stopLocationWatcher();
+			// stop background updates
+			await Location.stopLocationUpdatesAsync(TASK_NAME);
+			await clearActiveTrip();
+			//--------------------------------//
 			setStatus("paused");
 			toast({ type: "info", title: "Paused" });
 		} else {
+			//resuming
 			const seg = startSegment();
 			setSegment(seg);
 			setStatus("recording");
-			await startLocation(tripId, seg);
+
+			await setActiveTrip(tripId, seg);
+
+			// resume background updates
+			await Location.startLocationUpdatesAsync(TASK_NAME, {
+				accuracy: Location.Accuracy.High,
+				timeInterval: 1000,
+				distanceInterval: 0,
+				showsBackgroundLocationIndicator: true,
+				foregroundService: {
+					notificationTitle: "Recording trip",
+					notificationBody: "Tracking continues when the app is closed.",
+				},
+			});
+			// await startLocation(tripId, seg);
+			await startLocationWatcher();
+			//----------------------------------//
 			toast({ type: "success", title: "Resumed" });
 		}
 	};
@@ -191,8 +266,11 @@ export default function RecordScreen() {
 					text: "Stop",
 					style: "destructive",
 					onPress: async () => {
-						await stopLocation();
-
+						await stopLocationWatcher();
+						// stop background updates
+						await Location.stopLocationUpdatesAsync(TASK_NAME);
+						await clearActiveTrip();
+						//--------------------------------//
 						setIsResolvingLocation(true);
 						try {
 							const { startName, endName } = await getTripLocationNames({
@@ -240,8 +318,8 @@ export default function RecordScreen() {
 		await finishTrip(tripId, {
 			endTime,
 			title,
-			startLocationName: pendingNames.current.startName,
-			endLocationName: pendingNames.current.endName,
+			startName: pendingNames.current.startName,
+			endName: pendingNames.current.endName,
 			defaultTransportMode: mode,
 			defaultTripVisibility: visibility,
 		});

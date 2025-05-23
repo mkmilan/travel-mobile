@@ -13,6 +13,13 @@ export default {
 		ios: {
 			supportsTablet: true,
 			infoPlist: {
+				NSLocationWhenInUseUsageDescription:
+					"This app records your track while it is open.",
+				NSLocationAlwaysAndWhenInUseUsageDescription:
+					"Allow background location so your trip continues when the app is closed.",
+				NSLocationAlwaysUsageDescription:
+					"Allow background location so your trip continues when the app is in the background.",
+				UIBackgroundModes: ["location"],
 				NSAppTransportSecurity: {
 					NSAllowsArbitraryLoads: true,
 				},
@@ -25,6 +32,17 @@ export default {
 			},
 			usesCleartextTraffic: true,
 			edgeToEdgeEnabled: true,
+			permissions: [
+				"ACCESS_COARSE_LOCATION",
+				"ACCESS_FINE_LOCATION",
+				"ACCESS_BACKGROUND_LOCATION",
+				// "FOREGROUND_SERVICE", // Required for Android 12+ to use background location
+				// "FOREGROUND_SERVICE_LOCATION", //last two from copilot maybe old
+			],
+			foregroundService: {
+				notificationTitle: "Recording trip",
+				notificationBody: "Motorhome Mapper is tracking your route.",
+			},
 		},
 		web: {
 			bundler: "metro",

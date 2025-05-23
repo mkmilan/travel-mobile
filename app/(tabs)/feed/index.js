@@ -33,10 +33,10 @@ export default function FeedScreen() {
 			setPage((prevPage) => prevPage + 1); // use functional update for setPage
 		} catch (err) {
 			console.error("feed fetch error", err.message);
-			if (err.message.toLowerCase().includes("not authorized")) {
-				setHasMore(false);
-				return; // prevents infinite loop
-			}
+			// if (err.message.toLowerCase().includes("not authorized")) {
+			setHasMore(false);
+			return; // prevents infinite loop
+			// }
 		} finally {
 			setLoading(false);
 		}
