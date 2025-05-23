@@ -1,4 +1,11 @@
-import "dotenv/config";
+import * as dotenv from "dotenv";
+
+const isProd = process.env.APP_ENV === "production";
+
+// Load env file dynamically
+dotenv.config({
+	path: isProd ? ".env.production" : ".env.development",
+});
 
 export default {
 	expo: {
@@ -30,14 +37,13 @@ export default {
 				foregroundImage: "./assets/images/adaptive-icon.png",
 				backgroundColor: "#ffffff",
 			},
+			package: "com.mkmilanmilan.travelmobile",
 			usesCleartextTraffic: true,
 			edgeToEdgeEnabled: true,
 			permissions: [
 				"ACCESS_COARSE_LOCATION",
 				"ACCESS_FINE_LOCATION",
 				"ACCESS_BACKGROUND_LOCATION",
-				// "FOREGROUND_SERVICE", // Required for Android 12+ to use background location
-				// "FOREGROUND_SERVICE_LOCATION", //last two from copilot maybe old
 			],
 			foregroundService: {
 				notificationTitle: "Recording trip",
@@ -62,12 +68,14 @@ export default {
 			],
 		],
 		experiments: {
-			typedRoutes: false, // Changed from true to false
+			typedRoutes: false,
 		},
-
 		extra: {
 			API_URL: process.env.API_URL,
 			APP_ENV: process.env.APP_ENV,
+			eas: {
+				projectId: "0cefaf69-249a-41a9-98b4-71f6eff5d7d3",
+			},
 		},
 	},
 };

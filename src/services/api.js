@@ -3,19 +3,17 @@ import * as SecureStore from "expo-secure-store";
 import * as Updates from "expo-updates";
 import { getCsrfToken } from "./csrf";
 
-// const API_URL = Constants.expoConfig.extra.API_URL;
-/**
- * Expo SDK 53:
- *  - In dev-client & production, `expoConfig` is undefined.
- *  - In Expo Go / `expo start`, it exists.
- * Fall back to `manifest.extra` or, in worst case, guess LAN IP.
- */
-let API_URL =
-	Constants.expoConfig?.extra?.API_URL ||
-	Updates.manifest?.extra?.API_URL ||
-	Constants.manifest?.extra?.API_URL ||
-	"";
+const extra =
+	Constants.expoConfig?.extra ||
+	Updates.manifest?.extra ||
+	Constants.manifest?.extra ||
+	{};
+
+let API_URL = extra.API_URL;
+const APP_ENV = extra.APP_ENV || "unknown";
+
 console.log("[api] Using API_URL =", API_URL);
+console.log("[api] Running in environment =", APP_ENV);
 
 // last-chance fallback for dev devices if no env var provided
 if (!API_URL) {

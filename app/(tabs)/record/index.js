@@ -90,45 +90,6 @@ export default function RecordScreen() {
 		}
 	};
 
-	// const startLocation = async (tid, seg) => {
-	// 	locationWatcher.current = await Location.watchPositionAsync(
-	// 		{
-	// 			accuracy: Location.Accuracy.High,
-	// 			timeInterval: 1000,
-	// 			distanceInterval: 1,
-	// 		},
-	// 		async (loc) => {
-	// 			const { latitude, longitude, speed, accuracy } = loc.coords;
-	// 			const timestamp = new Date().toISOString();
-
-	// 			if (!firstPoint.current) {
-	// 				firstPoint.current = { lat: latitude, lon: longitude };
-	// 			}
-	// 			lastPoint.current = { lat: latitude, lon: longitude };
-
-	// 			// DEV LOG – keep verbose in dev builds
-	// 			console.log(
-	// 				`[Rec] ${latitude.toFixed(5)},${longitude.toFixed(5)} ` +
-	// 					`spd:${speed?.toFixed(1) ?? "?"} acc:${accuracy ?? "?"}`
-	// 			);
-
-	// 			try {
-	// 				await insertTrackPoint(tid, seg, {
-	// 					lat: latitude,
-	// 					lon: longitude,
-	// 					timestamp,
-	// 					speed,
-	// 					accuracy,
-	// 				});
-	// 			} catch (err) {
-	// 				console.error("Failed to save point:", err);
-	// 			}
-	// 		}
-	// 	);
-	// };
-
-	// const startLocation = async (tid, seg) => {
-	// const startLocation = async () => {
 	const startLocationWatcher = async () => {
 		locationWatcher.current = await Location.watchPositionAsync(
 			{
@@ -147,19 +108,6 @@ export default function RecordScreen() {
 
 				// DEV LOG – keep verbose in dev builds
 				console.log(`[Rec] ${latitude.toFixed(5)},${longitude.toFixed(5)} `);
-
-				// Call insertTrackPoint without awaiting it in the main callback flow
-				// Handle potential errors with .catch()
-				// insertTrackPoint(tid, seg, { //now this should be done in TaskManager
-				// 	lat: latitude,
-				// 	lon: longitude,
-				// 	timestamp,
-				// 	speed,
-				// 	accuracy,
-				// }).catch((err) => {
-				// 	// Log errors from the async insert operation
-				// 	console.error("Failed to save point (async):", err);
-				// });
 			}
 		);
 	};
@@ -531,29 +479,6 @@ const PendingRow = ({
 		</View>
 	);
 };
-
-// const PendingRow = ({ item, onUpload, onDelete }) => (
-// 	<View
-// 		style={{ flexDirection: "row", paddingVertical: 4, alignItems: "center" }}
-// 	>
-// 		<Text style={{ color: theme.colors.text, flex: 1 }}>
-// 			{new Date(item.start_time).toLocaleDateString()} · {item.pointsCount} pts
-// 		</Text>
-// 		<Ionicons
-// 			name="cloud-upload"
-// 			size={20}
-// 			color="green"
-// 			style={{ marginRight: 16 }}
-// 			onPress={onUpload}
-// 		/>
-// 		<Ionicons
-// 			name="trash"
-// 			size={20}
-// 			color="#D14343"
-// 			onPress={onDelete}
-// 		/>
-// 	</View>
-// );
 
 // ─────── styles ────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
