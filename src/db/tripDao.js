@@ -30,10 +30,12 @@ const createTripPayload = (
 			note: poi.note,
 		})),
 		recommendations: recommendations.map((rec) => ({
-			lat: rec.lat,
-			lon: rec.lon,
-			category: rec.category,
-			tags: rec.tags ? rec.tags.split(",") : [],
+			// Map from local DB column names (lat, lon, category, tags)
+			// to server-expected names (latitude, longitude, primaryCategory, attributeTags)
+			latitude: rec.lat,
+			longitude: rec.lon,
+			primaryCategory: rec.category,
+			attributeTags: rec.tags ? rec.tags.split(",") : [],
 			rating: rec.rating,
 			name: rec.name,
 			description: rec.description,
@@ -114,11 +116,11 @@ export const finishTrip = async (
 	{
 		endTime,
 		title,
-		description = "", // Add description parameter
+		description,
 		startName,
 		endName,
-		defaultTransportMode = "car",
-		defaultTripVisibility = "public",
+		defaultTransportMode,
+		defaultTripVisibility,
 	}
 ) => {
 	const db = await openDatabase();
@@ -174,13 +176,33 @@ export const addPoi = async (tripId, { lat, lon, note }) => {
 };
 export const addRecommendation = async (
 	tripId,
-	{ lat, lon, category, tags, rating, name, description }
+	{
+		latitude,
+		longitude,
+		primaryCategory,
+		attributeTags,
+		rating,
+		name,
+		description,
+	}
 ) => {
 	const db = await openDatabase();
+	const tagsString = Array.isArray(attributeTags)
+		? attributeTags.join(",")
+		: "";
 	await db.runAsync(
 		`INSERT INTO recommendations (trip_id, lat, lon, category, tags, rating, name, description)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		[tripId, lat, lon, category, tags, rating, name, description]
+		[
+			tripId,
+			latitude,
+			longitude,
+			primaryCategory,
+			tagsString,
+			rating,
+			name,
+			description,
+		]
 	);
 };
 

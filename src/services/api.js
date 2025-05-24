@@ -90,6 +90,8 @@ export const getMyTrips = async (page = 1, pageSize = 10) => {
 
 // ───────────────── uploadTripJson ✅ ─────────────────
 export const uploadTripJson = async (payload, csrf = true) => {
+	console.log("[api] uploadTripJson payload", payload);
+
 	return await apiFetch(`/v2/trips/json`, {
 		method: "POST",
 		csrf,

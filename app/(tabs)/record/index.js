@@ -231,7 +231,7 @@ export default function RecordScreen() {
 							// toast({ type: "warning", title: "Recording stopped" });
 
 							pendingNames.current = { startName, endName };
-							console.log("Pending names:", pendingNames.current);
+							// console.log("Pending names:", pendingNames.current);
 							const defaultMode = user?.settings?.defaultTransportMode || "car";
 
 							setStatus("stopped");
@@ -283,7 +283,7 @@ export default function RecordScreen() {
 			toast({ type: "info", title: "Packaging trip…" });
 			// const payload = await buildTripJsonForUpload(tid);
 			const payload = await buildTripJsonForUpload(tid, user?.settings || {});
-			console.log("Payload:", JSON.stringify(payload, null, 2));
+			// console.log("Payload:", JSON.stringify(payload, null, 2));
 
 			await uploadTripJson(payload);
 			await markTripUploaded(tid); // keeps it for history but not in pending
@@ -313,7 +313,7 @@ export default function RecordScreen() {
 
 	// Handle recommendation submission
 	const handleRecommendationSubmit = async (recommendationData) => {
-		if (!tripId || status !== "recording") {
+		if (!tripId || (status !== "recording" && status !== "paused")) {
 			toast({
 				type: "error",
 				title: "No active trip to add recommendation to",
@@ -345,7 +345,12 @@ export default function RecordScreen() {
 			return;
 		}
 		// Use last known location from the location watcher
-		const locationData = lastPoint.current;
+		const locationData = lastPoint.current
+			? {
+					lat: lastPoint.current.lat,
+					lon: lastPoint.current.lon,
+			  }
+			: null;
 		console.log("Last known location:", locationData);
 
 		if (!locationData) {

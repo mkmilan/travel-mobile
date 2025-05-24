@@ -271,20 +271,28 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			Alert.alert("Error", "Please select a category");
 			return;
 		}
+		if (formData.attributeTags.length === 0) {
+			Alert.alert("Error", "Please select at least one feature");
+			return;
+		}
 		// if (!formData.lat || !formData.lon) {
 		// 	Alert.alert("Error", "Location is required for recommendations");
 		// 	return;
 		// }
 		// Transform data to match backend expectations
 		const recommendationData = {
-			lat: formData.lat,
-			lon: formData.lon,
-			category: formData.primaryCategory,
-			tags: formData.attributeTags.join(","),
+			latitude: formData.lat,
+			longitude: formData.lon,
+			primaryCategory: formData.primaryCategory,
+			attributeTags: formData.attributeTags,
 			rating: formData.rating,
 			name: formData.name,
 			description: formData.description,
 		};
+		console.log(
+			"Submitting recommendation: AddRecommendationModal recommendationData",
+			recommendationData
+		);
 
 		onSubmit(recommendationData);
 		setVisible(false);

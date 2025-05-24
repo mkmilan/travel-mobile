@@ -42,7 +42,7 @@ export async function reverseGeocode(lat, lon) {
 		}
 
 		const data = await response.json();
-		console.log("reverseGeocode response", data);
+		// console.log("reverseGeocode response", data);
 		if (data && data.address) {
 			const { city, town, village, county, state, country } = data.address;
 			// Construct a meaningful name - prioritize more specific names
