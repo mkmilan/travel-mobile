@@ -81,7 +81,7 @@ export default function RecommendationDetailModal({
 			animationIn="slideInUp"
 			animationOut="slideOutDown"
 			style={styles.modalStyle}
-			avoidKeyboard
+			// avoidKeyboard
 		>
 			<View style={styles.modalContainer}>
 				<View style={styles.handleBar} />
@@ -118,46 +118,40 @@ export default function RecommendationDetailModal({
 						</View>
 					)}
 					{/* Gallery Section - Conditionally render or show "Add" button */}
-					{(photos && photos.length > 0) || canEdit ? (
-						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Gallery</Text>
-							{photos && photos.length > 0 ? (
-								<View style={styles.galleryPlaceholder}>
-									{/* Placeholder for actual image display */}
-									<Feather
-										name="image"
-										size={40}
-										color={theme.colors.textMuted}
-									/>
-									<Text style={styles.placeholderText}>
-										{photos.length} image(s)
-									</Text>
-								</View>
-							) : (
-								// Show if 'canEdit' is true and no photos yet
-								<Pressable
-									style={styles.addPhotosButton}
-									onPress={() => alert("Add photos - TBI")}
-								>
-									<Feather
-										name="plus-circle"
-										size={20}
-										color={theme.colors.primary}
-									/>
-									<Text style={styles.addPhotosButtonText}>Add Photos</Text>
-								</Pressable>
-							)}
-						</View>
-					) : null}
-					{/* Removed the explicit "Close" button to rely on backdrop/swipe */}
-					{/* If you want a button, make it less prominent or part of a footer bar */}
-					{/* <Pressable
-                        onPress={onClose}
-                        style={[styles.button, { backgroundColor: theme.colors.primary }]}
-                    >
-                        <Text style={styles.buttonText}>Close</Text>
-                    </Pressable> */}
-					<View style={{ height: 20 }} /> {/* Add some bottom spacing */}
+					{(photos && photos.length > 0) ||
+						(canEdit && (
+							<View style={styles.section}>
+								<Text style={styles.sectionTitle}>Gallery</Text>
+								{photos && photos.length > 0 ? (
+									<View style={styles.galleryPlaceholder}>
+										{/* Placeholder for actual image display */}
+										<Feather
+											name="image"
+											size={40}
+											color={theme.colors.textMuted}
+										/>
+										<Text style={styles.placeholderText}>
+											{photos.length} image(s)
+										</Text>
+									</View>
+								) : (
+									// Show if 'canEdit' is true and no photos yet
+									<Pressable
+										style={styles.addPhotosButton}
+										onPress={() => alert("Add photos - TBI")}
+									>
+										<Feather
+											name="plus-circle"
+											size={20}
+											color={theme.colors.primary}
+										/>
+										<Text style={styles.addPhotosButtonText}>Add Photos</Text>
+									</Pressable>
+								)}
+							</View>
+						))}
+
+					<View style={{ height: 20 }} />
 				</ScrollView>
 			</View>
 		</Modal>
@@ -175,7 +169,7 @@ const styles = StyleSheet.create({
 		borderTopRightRadius: theme.radius.lg,
 		paddingHorizontal: theme.space.lg,
 		paddingTop: theme.space.sm,
-		paddingBottom: theme.space.md, // Comma added here
+		paddingBottom: theme.space.md,
 		maxHeight: "85%",
 	},
 	handleBar: {
@@ -190,22 +184,22 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		marginBottom: theme.space.sm, // Reduced margin
+		marginBottom: theme.space.sm,
 	},
 	title: {
 		fontSize: 22,
 		fontWeight: "bold",
 		color: theme.colors.text,
-		flex: 1, // Allow title to take space
+		flex: 1,
 	},
 	editIcon: {
-		padding: theme.space.xs, // Make it easier to tap
+		padding: theme.space.xs,
 	},
 	metaContainer: {
 		flexDirection: "row",
 		justifyContent: "space-between",
-		alignItems: "center", // Align items vertically in the center
-		marginBottom: theme.space.lg, // Increased margin
+		alignItems: "center",
+		marginBottom: theme.space.lg,
 	},
 	categoryContainer: {
 		flexDirection: "row",
@@ -240,6 +234,7 @@ const styles = StyleSheet.create({
 		gap: theme.space.sm,
 	},
 	tagChip: {
+		// backgroundColor: `${theme.colors.primary}20`,
 		backgroundColor: `${theme.colors.primary}20`,
 		paddingHorizontal: theme.space.sm,
 		paddingVertical: theme.space.xs,
@@ -280,5 +275,4 @@ const styles = StyleSheet.create({
 		color: theme.colors.textMuted,
 		fontSize: theme.fontSize.sm,
 	},
-	// Removed .button and .buttonText as the explicit close button is removed
 });

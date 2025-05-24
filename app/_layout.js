@@ -11,12 +11,14 @@ import FlashMessage from "react-native-flash-message";
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-	const { isAuthenticated, loading, syncFromStorage } = useAuthStore();
+	const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+	const loading = useAuthStore((state) => state.loading);
+	const syncFromStorage = useAuthStore((state) => state.syncFromStorage);
 
-	// Hydrate auth state from SecureStorei want to save _layout.js as it is but when i pres save it move import
+	// Hydrate auth state from SecureStore
 	useEffect(() => {
 		syncFromStorage().finally(() => SplashScreen.hideAsync());
-	}, []);
+	}, [syncFromStorage]); // Added syncFromStorage to dependency array, though it should be stable from Zustand
 
 	// While loading the user from storage
 	if (loading) {

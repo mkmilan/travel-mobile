@@ -20,7 +20,6 @@ export default function MyTrips() {
 	// console.log("User data in MyTrips:", user);
 	const router = useRouter(); // Initialize router for navigation
 	const username = user?.username || "Unknown User";
-	console.log("Rendering MyTrips with username:", username);
 
 	const fetchTrips = useCallback(async () => {
 		setRefreshing(true);

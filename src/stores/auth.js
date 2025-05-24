@@ -68,7 +68,9 @@ export const useAuthStore = create((set, get) => ({
 					user,
 					token,
 					isAuthenticated: true,
-					theme: user.settings?.themePreference || "system",
+					// theme: user.settings?.themePreference || "system",
+
+					theme: "light",
 					language: user.settings?.language || "en",
 				});
 			}

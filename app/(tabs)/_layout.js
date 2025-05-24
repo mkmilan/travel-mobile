@@ -22,11 +22,7 @@ export default function TabLayout() {
 				options={{
 					title: "Feed",
 					tabBarIcon: ({ color }) => (
-						<IconSymbol
-							size={30}
-							name="house.fill"
-							color={color}
-						/>
+						<IconSymbol size={30} name="house.fill" color={color} />
 					),
 				}}
 			/>
@@ -35,11 +31,7 @@ export default function TabLayout() {
 				options={{
 					title: "Trips",
 					tabBarIcon: ({ color }) => (
-						<IconSymbol
-							size={30}
-							name="map.fill"
-							color={color}
-						/>
+						<IconSymbol size={30} name="map.fill" color={color} />
 					),
 				}}
 			/>
@@ -48,11 +40,7 @@ export default function TabLayout() {
 				options={{
 					title: "Record",
 					tabBarIcon: ({ color }) => (
-						<IconSymbol
-							size={30}
-							name="circle"
-							color={color}
-						/>
+						<IconSymbol size={30} name="circle" color={color} />
 					),
 				}}
 			/>
@@ -61,11 +49,7 @@ export default function TabLayout() {
 				options={{
 					title: "Profile",
 					tabBarIcon: ({ color }) => (
-						<IconSymbol
-							size={30}
-							name="person.fill"
-							color={color}
-						/>
+						<IconSymbol size={30} name="person.fill" color={color} />
 					),
 				}}
 			/>

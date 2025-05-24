@@ -46,6 +46,7 @@ export default {
 			usesCleartextTraffic: true,
 			edgeToEdgeEnabled: true,
 			permissions: [
+				"FOREGROUND_SERVICE",
 				"ACCESS_COARSE_LOCATION",
 				"ACCESS_FINE_LOCATION",
 				"ACCESS_BACKGROUND_LOCATION",

@@ -101,6 +101,23 @@ export const getTripById = async (tripId) => {
 	return data; // Assuming the server returns the trip object directly
 };
 
+// ───────────────── getUserById  ✅ ───────────────── old
+export const getUserById = async (userId) => {
+	const data = await apiFetch(`/users/${userId}`, {
+		method: "GET",
+	});
+	return data;
+};
+// ───────────────── updateUserById  ✅ ───────────────── old
+export const updateUserById = async (csrf = true, payload) => {
+	const data = await apiFetch(`/users/me`, {
+		method: "PUT",
+		csrf,
+		body: JSON.stringify(payload),
+	});
+	return data;
+};
+
 // ───────────────── V2 routes   ✅ ─────────────────
 
 // ───────────────── uploadTripJson ✅ ─────────────────
