@@ -5,9 +5,9 @@ import { Feather } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function TripCard({
+	userName,
 	title,
-	description,
-	date,
+	date, // Expecting a pre-formatted date string
 	distanceKm,
 	durationStr,
 	avgSpeed,
@@ -15,42 +15,92 @@ export default function TripCard({
 	comments,
 	coords,
 	travelMode,
+	visibility, // 'public', 'followers_only', 'private'
 	onPress,
 }) {
+	let visibilityIconName = "eye";
+	let visibilityTooltip = "Public"; // For accessibility or potential future use
+
+	if (visibility === "followers_only") {
+		visibilityIconName = "users";
+		visibilityTooltip = "Followers only";
+	} else if (visibility === "private") {
+		visibilityIconName = "lock";
+		visibilityTooltip = "Private";
+	}
 	return (
 		<TouchableOpacity
 			onPress={onPress}
 			style={styles.card}
+			activeOpacity={0.7}
 		>
-			{/* Header */}
-			<Text style={styles.title}>{title}</Text>
-			<Text style={styles.meta}>{date}</Text>
+			{/* Header: User, Title, Visibility */}
+			<View style={styles.headerContainer}>
+				<View style={styles.titleUserContainer}>
+					<Text
+						style={styles.userName}
+						numberOfLines={1}
+					>
+						{userName}
+					</Text>
+					<Text
+						style={styles.title}
+						numberOfLines={2}
+					>
+						{title}
+					</Text>
+				</View>
+				<View style={styles.visibilityIconContainer}>
+					<Feather
+						name={visibilityIconName}
+						size={18}
+						color={theme.colors.textMuted}
+						accessibilityLabel={visibilityTooltip}
+					/>
+				</View>
+			</View>
 
-			{/* Body */}
-			<Text
-				numberOfLines={2}
-				style={styles.desc}
-			>
-				{description}
-			</Text>
-			<TripMapThumbnail coords={coords} />
-			<View style={styles.statsRow}>
-				<TransportIcon mode={travelMode} />
-				<Stat
-					label="Km"
-					value={distanceKm}
+			{/* Date */}
+			<View style={styles.metaRow}>
+				<Feather
+					name="calendar"
+					size={14}
+					color={theme.colors.textMuted}
 				/>
-				<Stat
-					label="Dur"
+				<Text style={styles.dateText}>{date}</Text>
+			</View>
+
+			{/* Map Thumbnail */}
+			<TripMapThumbnail
+				coords={coords}
+				style={styles.mapStyle}
+			/>
+
+			{/* Stats Row */}
+			<View style={styles.statsRow}>
+				<View style={styles.transportIconContainer}>
+					<TransportIcon
+						mode={travelMode}
+						size={22}
+					/>
+				</View>
+				<IconStat
+					iconName="map-pin"
+					value={distanceKm}
+					// unit="km"
+				/>
+				<IconStat
+					iconName="clock"
 					value={durationStr}
 				/>
-				<Stat
-					label="Avg"
-					value={`${avgSpeed} km/h`}
+				<IconStat
+					iconName="activity"
+					value={avgSpeed}
+					unit="km/h"
 				/>
 			</View>
 
-			{/* Footer */}
+			{/* Footer Actions */}
 			<View style={styles.footer}>
 				<FooterIcon
 					icon="heart"
@@ -70,15 +120,27 @@ export default function TripCard({
 	);
 }
 
-/* --- sub-components --- */
-function Stat({ label, value }) {
+// New sub-component for stats with icons
+function IconStat({ iconName, value, unit = "", iconSize = 16 }) {
 	return (
-		<View style={styles.stat}>
-			<Text style={styles.statVal}>{value}</Text>
-			<Text style={styles.statLabel}>{label}</Text>
+		<View style={styles.iconStat}>
+			<Feather
+				name={iconName}
+				size={iconSize}
+				color={theme.colors.textMuted}
+			/>
+			<Text
+				style={styles.iconStatText}
+				numberOfLines={1}
+			>
+				{value}
+				{unit ? ` ${unit}` : ""}
+			</Text>
 		</View>
 	);
 }
+
+// Existing sub-component for footer icons
 function FooterIcon({ icon, value }) {
 	return (
 		<View style={styles.footerItem}>
@@ -98,41 +160,88 @@ const styles = StyleSheet.create({
 		backgroundColor: theme.colors.inputBackground,
 		borderRadius: theme.radius.md,
 		padding: theme.space.md,
-
 		marginBottom: theme.space.md,
 		shadowColor: "#000",
 		shadowOpacity: 0.05,
 		shadowRadius: 4,
 		elevation: 2,
 	},
+	headerContainer: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "flex-start",
+		marginBottom: theme.space.sm,
+	},
+	titleUserContainer: {
+		flex: 1,
+		marginRight: theme.space.sm,
+	},
+	userName: {
+		fontSize: theme.fontSize.sm,
+		color: theme.colors.textMuted,
+		fontWeight: "500",
+		marginBottom: 2,
+	},
 	title: {
 		fontSize: theme.fontSize.lg,
 		fontWeight: "600",
 		color: theme.colors.text,
 	},
-	meta: {
+	visibilityIconContainer: {
+		paddingLeft: theme.space.sm, // Space from title
+	},
+	metaRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		marginBottom: theme.space.md,
+	},
+	dateText: {
 		fontSize: 12,
 		color: theme.colors.textMuted,
-		marginBottom: theme.space.sm,
+		marginLeft: theme.space.sm,
 	},
-	desc: {
-		fontSize: theme.fontSize.md,
-		color: theme.colors.text,
+	mapStyle: {
+		height: 150, // Or your desired height
+		borderRadius: theme.radius.sm,
 		marginBottom: theme.space.md,
 	},
 	statsRow: {
 		flexDirection: "row",
-		justifyContent: "space-between",
+		justifyContent: "space-around", // Distribute items evenly
+		alignItems: "center",
 		marginBottom: theme.space.md,
 	},
-	stat: { alignItems: "center", flex: 1 },
-	statVal: { fontWeight: "600", color: theme.colors.text },
-	statLabel: { fontSize: 12, color: theme.colors.textMuted },
+	transportIconContainer: {
+		alignItems: "center", // Center the transport icon
+		flex: 0.8, // Give it a bit less space
+	},
+	iconStat: {
+		flexDirection: "row",
+		alignItems: "center",
+		flex: 1, // Allow other stats to take more space
+		justifyContent: "center", // Center content within its flex space
+	},
+	iconStatText: {
+		marginLeft: theme.space.sm,
+		fontSize: theme.fontSize.sm,
+		color: theme.colors.text,
+		fontWeight: "500",
+	},
 	footer: {
 		flexDirection: "row",
-		justifyContent: "space-between",
+		justifyContent: "space-between", // Keep space-between for footer
+		alignItems: "center",
+		borderTopWidth: 1,
+		borderTopColor: theme.colors.inputBorder, // Subtle separator
+		paddingTop: theme.space.sm,
+	},
+	footerItem: {
+		flexDirection: "row",
 		alignItems: "center",
 	},
-	footerItem: { flexDirection: "row", alignItems: "center" },
-	footerText: { marginLeft: 4, fontSize: 12, color: theme.colors.text },
+	footerText: {
+		marginLeft: 4,
+		fontSize: 12,
+		color: theme.colors.text,
+	},
 });

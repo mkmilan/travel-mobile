@@ -77,6 +77,8 @@ export const getFeedTrips = async (page = 1, pageSize = 10) => {
 		method: "GET",
 	});
 	// Server sends an array directly; normalize to { items }
+	console.log("[api] getFeedTrips data", data);
+
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
 
@@ -85,12 +87,13 @@ export const getMyTrips = async (page = 1, pageSize = 10) => {
 	const data = await apiFetch(`/trips/me?page=${page}&limit=${pageSize}`, {
 		method: "GET",
 	});
+	// console.log("[api] getMyTrips data", data);
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
 
 // ───────────────── uploadTripJson ✅ ─────────────────
 export const uploadTripJson = async (payload, csrf = true) => {
-	console.log("[api] uploadTripJson payload", payload);
+	// console.log("[api] uploadTripJson payload", payload);
 
 	return await apiFetch(`/v2/trips/json`, {
 		method: "POST",

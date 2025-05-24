@@ -1,5 +1,6 @@
 import TripCard from "@/src/components/TripCard";
 import { getMyTrips } from "@/src/services/api";
+import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import {
 	calcAvgSpeed,
@@ -15,6 +16,11 @@ import { FlatList, RefreshControl, View } from "react-native";
 export default function MyTrips() {
 	const [items, setItems] = useState([]);
 	const [refreshing, setRefreshing] = useState(false);
+	const user = useAuthStore((state) => state.user || "Unknown User");
+	// console.log("User data in MyTrips:", user);
+
+	const username = user?.username || "Unknown User";
+	console.log("Rendering MyTrips with username:", username);
 
 	const fetchTrips = useCallback(async () => {
 		setRefreshing(true);
@@ -43,6 +49,8 @@ export default function MyTrips() {
 				renderItem={({ item }) => (
 					<TripCard
 						title={item.title}
+						userName={username}
+						visibility={item.defaultTripVisibility}
 						description={item.description}
 						date={isoToDate(item.startDate)}
 						distanceKm={kmOrMiles(item.distanceMeters)}

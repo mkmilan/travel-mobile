@@ -53,6 +53,8 @@ export default function FeedScreen() {
 					<TripCard
 						{...item} // title, description, etc.
 						// coords={item.coords} // array from API
+						userName={item.user?.username || "Unknown User"}
+						visibility={item.defaultTripVisibility}
 						coords={lineStringToCoords(item.simplifiedRoute)}
 						travelMode={item.defaultTravelMode}
 						title={item.title}
