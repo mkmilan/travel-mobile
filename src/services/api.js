@@ -72,17 +72,18 @@ export async function apiFetch(
 /* ------------------------------------------------------------------ *
  * typed helpers for upcoming screens
  * ------------------------------------------------------------------ */
+// i think this is old route we need to check
 export const getFeedTrips = async (page = 1, pageSize = 10) => {
 	const data = await apiFetch(`/trips/feed?page=${page}&limit=${pageSize}`, {
 		method: "GET",
 	});
 	// Server sends an array directly; normalize to { items }
-	console.log("[api] getFeedTrips data", data);
+	// console.log("[api] getFeedTrips data", data);
 
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
 
-// ───────────────── getMyTrips  ✅ ─────────────────
+// ───────────────── getMyTrips  ✅ ───────────────── old
 export const getMyTrips = async (page = 1, pageSize = 10) => {
 	const data = await apiFetch(`/trips/me?page=${page}&limit=${pageSize}`, {
 		method: "GET",
@@ -90,6 +91,17 @@ export const getMyTrips = async (page = 1, pageSize = 10) => {
 	// console.log("[api] getMyTrips data", data);
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
+
+// ───────────────── getTripById  ✅ ───────────────── old
+export const getTripById = async (tripId) => {
+	const data = await apiFetch(`/trips/${tripId}`, {
+		method: "GET",
+	});
+	// console.log(`[api] getTripById (${tripId}) data`, data);
+	return data; // Assuming the server returns the trip object directly
+};
+
+// ───────────────── V2 routes   ✅ ─────────────────
 
 // ───────────────── uploadTripJson ✅ ─────────────────
 export const uploadTripJson = async (payload, csrf = true) => {
@@ -100,4 +112,36 @@ export const uploadTripJson = async (payload, csrf = true) => {
 		csrf,
 		body: JSON.stringify(payload),
 	});
+};
+
+// ───────────────── getMyTrips  ✅ ───────────────── old
+export const getMyJsonTrips = async (page = 1, pageSize = 10) => {
+	const data = await apiFetch(
+		`/v2/trips/json/me?page=${page}&limit=${pageSize}`,
+		{
+			method: "GET",
+		}
+	);
+	// console.log("[api] getMyJsonTrips data", data);
+	return { items: Array.isArray(data) ? data : data.items || [] };
+};
+
+// ───────────────── getTripJsonById  ✅ ─────────────────
+export const getTripJsonById = async (tripId) => {
+	const data = await apiFetch(`/v2/trips/json/${tripId}`, {
+		method: "GET",
+	});
+	// console.log(`[api] getTripJsonById (${tripId}) data`, data);
+	return data; // Assuming the server returns the trip object directly
+};
+
+// ───────────────── getFeedTripJson  ✅ ─────────────────
+export const getFeedTripJson = async (page = 1, pageSize = 10) => {
+	const data = await apiFetch(
+		`/v2/trips/json/feed?page=${page}&limit=${pageSize}`,
+		{
+			method: "GET",
+		}
+	);
+	return { items: Array.isArray(data) ? data : data.items || [] };
 };

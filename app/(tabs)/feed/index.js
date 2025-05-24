@@ -1,6 +1,6 @@
 // app/(tabs)/feed/index.js
 import TripCard from "@/src/components/TripCard";
-import { getFeedTrips } from "@/src/services/api";
+import { getFeedTripJson } from "@/src/services/api";
 import { theme } from "@/src/theme";
 import {
 	calcAvgSpeed,
@@ -9,8 +9,10 @@ import {
 	msToDuration,
 } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
+const router = useRouter();
 
 export default function FeedScreen() {
 	const [trips, setTrips] = useState([]);
@@ -26,7 +28,7 @@ export default function FeedScreen() {
 		if (loading || !hasMore) return;
 		setLoading(true);
 		try {
-			const { items } = await getFeedTrips(page);
+			const { items } = await getFeedTripJson(page);
 
 			setTrips((prev) => [...prev, ...items]); // adjust field names to API
 			setHasMore(items.length > 0);
@@ -65,7 +67,7 @@ export default function FeedScreen() {
 						avgSpeed={calcAvgSpeed(item.distanceMeters, item.durationMillis)}
 						likes={item.likesCount}
 						comments={item.commentsCount}
-						onPress={() => console.log("open", item._id)}
+						onPress={() => router.push(`/trip/${item._id}`)}
 					/>
 				)}
 				contentContainerStyle={{

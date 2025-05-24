@@ -1,5 +1,5 @@
 import TripCard from "@/src/components/TripCard";
-import { getMyTrips } from "@/src/services/api";
+import { getMyJsonTrips } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import {
@@ -9,7 +9,7 @@ import {
 	msToDuration,
 } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { FlatList, RefreshControl, View } from "react-native";
 
@@ -18,13 +18,13 @@ export default function MyTrips() {
 	const [refreshing, setRefreshing] = useState(false);
 	const user = useAuthStore((state) => state.user || "Unknown User");
 	// console.log("User data in MyTrips:", user);
-
+	const router = useRouter(); // Initialize router for navigation
 	const username = user?.username || "Unknown User";
 	console.log("Rendering MyTrips with username:", username);
 
 	const fetchTrips = useCallback(async () => {
 		setRefreshing(true);
-		const { items } = await getMyTrips();
+		const { items } = await getMyJsonTrips();
 		setItems(items);
 		setRefreshing(false);
 	}, []);
@@ -60,6 +60,7 @@ export default function MyTrips() {
 						likes={item.likesCount}
 						comments={item.commentsCount}
 						coords={lineStringToCoords(item.simplifiedRoute)}
+						onPress={() => router.push(`/trip/${item._id}`)}
 					/>
 				)}
 				refreshControl={

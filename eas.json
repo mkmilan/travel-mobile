@@ -27,6 +27,17 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "testing": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "production",
+        "API_URL": "https://travel-server-fdxh.onrender.com/api"
+      }
     }
   }
 }
