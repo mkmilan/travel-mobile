@@ -230,6 +230,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 	const [visible, setVisible] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false);
 	const [editingRecommendationId, setEditingRecommendationId] = useState(null);
+	const [associatedTrip, setAssociatedTrip] = useState(null);
 	const [formData, setFormData] = useState({
 		name: "",
 		description: "",
@@ -241,9 +242,10 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 	});
 
 	useImperativeHandle(ref, () => ({
-		open(locationData = null) {
+		open(locationData = null, tripId = null) {
 			setIsEditMode(false);
 			setEditingRecommendationId(null);
+			setAssociatedTrip(tripId);
 			setFormData({
 				name: "",
 				description: "",
@@ -252,12 +254,14 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 				attributeTags: [],
 				lat: locationData?.lat || null,
 				lon: locationData?.lon || null,
+				associatedTrip: tripId || null,
 			});
 			setVisible(true);
 		},
 		openEdit(recommendation) {
 			setIsEditMode(true);
 			setEditingRecommendationId(recommendation._id);
+			setAssociatedTrip(recommendation.associatedTrip);
 			setFormData({
 				name: recommendation.name || "",
 				description: recommendation.description || "",
@@ -293,10 +297,16 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			Alert.alert("Error", "Please select at least one feature");
 			return;
 		}
-		// if (!formData.lat || !formData.lon) {
-		// 	Alert.alert("Error", "Location is required for recommendations");
-		// 	return;
-		// }
+		if (formData.lat === null || formData.lon === null) {
+			///just for testing before coose on map
+			setFormData((prev) => ({
+				...prev,
+				lat: 4.089,
+				lon: 32.123,
+			}));
+			return;
+		}
+
 		// Transform data to match backend expectations
 		const recommendationData = {
 			latitude: formData.lat,
@@ -306,18 +316,20 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			rating: formData.rating,
 			name: formData.name,
 			description: formData.description,
+			associatedTrip: associatedTrip,
 		};
-		console.log(
-			isEditMode ? "Updating recommendation:" : "Submitting recommendation:",
-			recommendationData
-		);
 
 		// Add the ID if we're in edit mode
 		if (isEditMode && editingRecommendationId) {
 			recommendationData._id = editingRecommendationId;
 		}
 
-		onSubmit(recommendationData);
+		console.log(
+			isEditMode ? "Updating recommendation:" : "Submitting recommendation:",
+			recommendationData
+		);
+
+		onSubmit(recommendationData, isEditMode);
 		setVisible(false);
 	};
 
@@ -333,7 +345,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			swipeDirection={["down"]}
 			animationIn="slideInUp"
 			animationOut="slideOutDown"
-			style={{ margin: 0, justifyContent: "flex-end" }}
+			style={styles.modalStyle}
 			propagateSwipe
 			avoidKeyboard={true}
 		>
@@ -341,10 +353,12 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 				behavior={Platform.OS === "ios" ? "padding" : "height"}
 				style={{ flex: 1, justifyContent: "flex-end" }}
 			>
-				<View style={styles.container}>
+				<View style={styles.modalContainer}>
+					<View style={styles.handleBar} />
 					<ScrollView
 						showsVerticalScrollIndicator={false}
 						keyboardShouldPersistTaps="handled"
+						contentContainerStyle={{ paddingBottom: theme.space.xl }}
 					>
 						<Text style={styles.title}>
 							{isEditMode ? "Edit Recommendation" : "Add Recommendation"}
@@ -422,14 +436,26 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 });
 
 const styles = {
-	container: {
+	modalStyle: {
+		margin: 0,
+		justifyContent: "flex-end",
+	},
+	modalContainer: {
 		backgroundColor: theme.colors.background,
-		paddingTop: theme.space.sm,
+		borderTopLeftRadius: theme.radius.lg,
+		borderTopRightRadius: theme.radius.lg,
 		paddingHorizontal: theme.space.lg,
-		paddingBottom: theme.space.lg,
-		borderTopLeftRadius: theme.space.lg,
-		borderTopRightRadius: theme.space.lg,
-		maxHeight: "90%",
+		paddingTop: theme.space.sm,
+		paddingBottom: theme.space.md,
+		maxHeight: "85%",
+	},
+	handleBar: {
+		width: 40,
+		height: 5,
+		borderRadius: 2.5,
+		backgroundColor: theme.colors.inputBorder,
+		alignSelf: "center",
+		marginBottom: theme.space.md,
 	},
 	title: {
 		fontSize: theme.fontSize.lg,

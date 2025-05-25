@@ -170,7 +170,7 @@ export default function TripDetailScreen() {
 		setIsDropdownVisible(false);
 		// TODO: Implement add recommendation functionality
 		if (addRecommendationModalRef.current) {
-			addRecommendationModalRef.current.open();
+			addRecommendationModalRef.current.open(null, tripId);
 		} else {
 			Alert.alert(
 				"Add Recommendation",
@@ -194,7 +194,7 @@ export default function TripDetailScreen() {
 				Alert.alert("Success", "Recommendation updated successfully!");
 			} else {
 				// Add new recommendation
-				await addRecommendation(tripId, recommendationData);
+				await addRecommendation(recommendationData);
 				Alert.alert("Success", "Recommendation added successfully!");
 			}
 

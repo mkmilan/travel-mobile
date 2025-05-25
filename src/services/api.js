@@ -173,32 +173,28 @@ export const getFeedTripJson = async (page = 1, pageSize = 10) => {
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
 
-export const updateRecommendation = async (recommendationId, updatedData) => {
-	// const data = await apiFetch(`/v2/recommendations/${recommendationId}`, {
-	// 	method: "PUT",
-	// 	body: JSON.stringify(updatedData),
-	// });
-	// return data;
-	console.log("[api] updateRecommendation is not implemented yet");
-	return {
-		success: true,
-		message: "Update recommendation not implemented yet",
-	};
-};
-
-export const addRecommendation = async (
-	tripId,
-	recommendationData,
+// ───────────────── updateRecommendations  ✅ ─────────────────
+export const updateRecommendation = async (
+	recommendationId,
+	updatedData,
 	csrf = true
 ) => {
-	// const data = await apiFetch(`/v2/trips/${tripId}/recommendations`, {
-	// 	method: "POST",
-	//   csrf,
-	//   body: JSON.stringify(recommendationData),
-	// });
-	// return data;
-	console.log("[api] addRecommendation is not implemented yet");
-	return { success: true, message: "Add recommendation not implemented yet" };
+	const data = await apiFetch(`/v2/recommendations/${recommendationId}`, {
+		method: "PUT",
+		csrf,
+		body: JSON.stringify(updatedData),
+	});
+	return data;
+};
+
+// ───────────────── addRecommendations  ✅ ─────────────────
+export const addRecommendation = async (recommendationData, csrf = true) => {
+	const data = await apiFetch(`/v2/recommendations/`, {
+		method: "POST",
+		csrf,
+		body: JSON.stringify(recommendationData),
+	});
+	return data;
 };
 /**
  *
