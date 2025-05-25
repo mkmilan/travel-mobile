@@ -228,6 +228,8 @@ const TagsSelector = ({ selectedTags, onTagsChange }) => {
 
 const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 	const [visible, setVisible] = useState(false);
+	const [isEditMode, setIsEditMode] = useState(false);
+	const [editingRecommendationId, setEditingRecommendationId] = useState(null);
 	const [formData, setFormData] = useState({
 		name: "",
 		description: "",
@@ -240,6 +242,8 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 
 	useImperativeHandle(ref, () => ({
 		open(locationData = null) {
+			setIsEditMode(false);
+			setEditingRecommendationId(null);
 			setFormData({
 				name: "",
 				description: "",
@@ -248,6 +252,20 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 				attributeTags: [],
 				lat: locationData?.lat || null,
 				lon: locationData?.lon || null,
+			});
+			setVisible(true);
+		},
+		openEdit(recommendation) {
+			setIsEditMode(true);
+			setEditingRecommendationId(recommendation._id);
+			setFormData({
+				name: recommendation.name || "",
+				description: recommendation.description || "",
+				rating: recommendation.rating || 0,
+				primaryCategory: recommendation.primaryCategory || "",
+				attributeTags: recommendation.attributeTags || [],
+				lat: recommendation.location?.coordinates?.[1] || null,
+				lon: recommendation.location?.coordinates?.[0] || null,
 			});
 			setVisible(true);
 		},
@@ -290,9 +308,14 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			description: formData.description,
 		};
 		console.log(
-			"Submitting recommendation: AddRecommendationModal recommendationData",
+			isEditMode ? "Updating recommendation:" : "Submitting recommendation:",
 			recommendationData
 		);
+
+		// Add the ID if we're in edit mode
+		if (isEditMode && editingRecommendationId) {
+			recommendationData._id = editingRecommendationId;
+		}
 
 		onSubmit(recommendationData);
 		setVisible(false);
@@ -323,7 +346,9 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 						showsVerticalScrollIndicator={false}
 						keyboardShouldPersistTaps="handled"
 					>
-						<Text style={styles.title}>Add Recommendation</Text>
+						<Text style={styles.title}>
+							{isEditMode ? "Edit Recommendation" : "Add Recommendation"}
+						</Text>
 
 						{/* Name */}
 						<View style={styles.fieldContainer}>
@@ -385,7 +410,9 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 							onPress={handleSubmit}
 							style={[styles.button, { backgroundColor: theme.colors.primary }]}
 						>
-							<Text style={styles.buttonText}>Save Recommendation</Text>
+							<Text style={styles.buttonText}>
+								{isEditMode ? "Update Recommendation" : "Save Recommendation"}
+							</Text>
 						</Pressable>
 					</ScrollView>
 				</View>

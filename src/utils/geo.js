@@ -60,3 +60,37 @@ export async function reverseGeocode(lat, lon) {
 		return null;
 	}
 }
+
+/**
+ * Compute a MapView region that fits all coordinates with padding.
+ * coords: [{ lat, lon }]
+ * returns { latitude, longitude, latitudeDelta, longitudeDelta }
+ */
+export function getFitRegion(points, pad = 1.35) {
+	if (points.length === 0) {
+		return {
+			latitude: 0,
+			longitude: 0,
+			latitudeDelta: 0.2,
+			longitudeDelta: 0.2,
+		};
+	}
+	let minLat = points[0].lat,
+		maxLat = points[0].lat,
+		minLon = points[0].lon,
+		maxLon = points[0].lon;
+
+	points.forEach((p) => {
+		if (p.lat < minLat) minLat = p.lat;
+		if (p.lat > maxLat) maxLat = p.lat;
+		if (p.lon < minLon) minLon = p.lon;
+		if (p.lon > maxLon) maxLon = p.lon;
+	});
+
+	const latitude = (minLat + maxLat) / 2;
+	const longitude = (minLon + maxLon) / 2;
+	const latitudeDelta = Math.max(0.002, (maxLat - minLat) * pad);
+	const longitudeDelta = Math.max(0.002, (maxLon - minLon) * pad);
+
+	return { latitude, longitude, latitudeDelta, longitudeDelta };
+}

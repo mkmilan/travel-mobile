@@ -1,7 +1,9 @@
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { Feather, Ionicons } from "@expo/vector-icons"; // Added Feather
+import { forwardRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+
 import Modal from "react-native-modal";
 
 // Reusable StarRating component (can be moved to a shared file if not already)
@@ -27,136 +29,152 @@ const TagChip = ({ label }) => (
 	</View>
 );
 
-export default function RecommendationDetailModal({
-	isVisible,
-	onClose,
-	recommendation,
-	tripUserId,
-}) {
-	const { user: currentUser } = useAuthStore();
-	if (!recommendation) {
-		return null;
-	}
+// export default function RecommendationDetailModal({
+// 	isVisible,
+// 	onClose,
+// 	recommendation,
+// 	tripUserId,
+// }) {
+const RecommendationDetailModal = forwardRef(
+	(
+		{
+			isVisible,
+			onClose,
+			recommendation,
+			tripUserId,
+			onEdit, // Add this prop to handle edit action
+		},
+		ref
+	) => {
+		const { user: currentUser } = useAuthStore();
+		if (!recommendation) {
+			return null;
+		}
 
-	const {
-		name,
-		description,
-		rating,
-		primaryCategory,
-		attributeTags,
-		// latitude, // For future map display
-		// longitude,
-		photos, // Assuming 'photos' is an array of image URLs/objects
-	} = recommendation;
+		const {
+			name,
+			description,
+			rating,
+			primaryCategory,
+			attributeTags,
+			// latitude, // For future map display
+			// longitude,
+			photos, // Assuming 'photos' is an array of image URLs/objects
+		} = recommendation;
 
-	const canEdit = currentUser?._id === tripUserId;
-	// console.log("RecommendationDetailModal props:", {
-	// 	isVisible,
-	// 	onClose,
-	// 	recommendation,
-	// 	tripUserId,
-	// 	currentUser,
-	// });
-	// console.log("RECOMENDATION DETAIL MODAL", recommendation);
+		const canEdit = currentUser?._id === tripUserId;
+		// console.log("RecommendationDetailModal props:", {
+		// 	isVisible,
+		// 	onClose,
+		// 	recommendation,
+		// 	tripUserId,
+		// 	currentUser,
+		// });
+		// console.log("RECOMENDATION DETAIL MODAL", recommendation);
 
-	// Attempt to find a more descriptive label for the category
-	// You might need to import RECOMMENDATION_CATEGORIES from your constants
-	// For now, just capitalize
-	const categoryLabel = primaryCategory
-		? primaryCategory.charAt(0).toUpperCase() + primaryCategory.slice(1)
-		: "N/A";
+		// Attempt to find a more descriptive label for the category
+		// You might need to import RECOMMENDATION_CATEGORIES from your constants
+		// For now, just capitalize
+		const categoryLabel = primaryCategory
+			? primaryCategory.charAt(0).toUpperCase() + primaryCategory.slice(1)
+			: "N/A";
 
-	const handleEdit = () => {
-		// onClose(); // Optionally close this modal first
-		// router.push(`/recommendation/${recommendation._id}/edit`); // Or open an edit modal
-		alert("Edit recommendation: To be implemented");
-	};
+		const handleEdit = () => {
+			onClose(); // Close this modal first
+			onEdit(recommendation);
+			// alert("Edit recommendation: To be implemented");
+		};
 
-	return (
-		<Modal
-			isVisible={isVisible}
-			onBackdropPress={onClose}
-			onSwipeComplete={onClose}
-			swipeDirection={["down"]}
-			animationIn="slideInUp"
-			animationOut="slideOutDown"
-			style={styles.modalStyle}
-			// avoidKeyboard
-		>
-			<View style={styles.modalContainer}>
-				<View style={styles.handleBar} />
-				<ScrollView showsVerticalScrollIndicator={false}>
-					<View style={styles.headerRow}>
-						<Text style={styles.title}>{name || "Recommendation"}</Text>
-						{canEdit && (
-							<Pressable onPress={handleEdit} style={styles.editIcon}>
-								<Feather name="edit-2" size={22} color={theme.colors.primary} />
-							</Pressable>
-						)}
-					</View>
-					<View style={styles.metaContainer}>
-						<View style={styles.categoryContainer}>
-							<Feather name="tag" size={18} color={theme.colors.textMuted} />
-							<Text style={styles.detailText}>{categoryLabel}</Text>
+		return (
+			<Modal
+				isVisible={isVisible}
+				onBackdropPress={onClose}
+				onSwipeComplete={onClose}
+				swipeDirection={["down"]}
+				animationIn="slideInUp"
+				animationOut="slideOutDown"
+				style={styles.modalStyle}
+				// avoidKeyboard
+			>
+				<View style={styles.modalContainer}>
+					<View style={styles.handleBar} />
+					<ScrollView showsVerticalScrollIndicator={false}>
+						<View style={styles.headerRow}>
+							<Text style={styles.title}>{name || "Recommendation"}</Text>
+							{canEdit && (
+								<Pressable onPress={handleEdit} style={styles.editIcon}>
+									<Feather
+										name="edit-2"
+										size={22}
+										color={theme.colors.primary}
+									/>
+								</Pressable>
+							)}
 						</View>
-						<StarRatingDisplay rating={rating} style={styles.ratingDisplay} />
-					</View>
-					{description && (
-						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Description</Text>
-							<Text style={styles.descriptionText}>{description}</Text>
-						</View>
-					)}
-					{attributeTags && attributeTags.length > 0 && (
-						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Features / Tags</Text>
-							<View style={styles.tagsContainer}>
-								{attributeTags.map((tag, index) => (
-									<TagChip key={index} label={tag} />
-								))}
+						<View style={styles.metaContainer}>
+							<View style={styles.categoryContainer}>
+								<Feather name="tag" size={18} color={theme.colors.textMuted} />
+								<Text style={styles.detailText}>{categoryLabel}</Text>
 							</View>
+							<StarRatingDisplay rating={rating} style={styles.ratingDisplay} />
 						</View>
-					)}
-					{/* Gallery Section - Conditionally render or show "Add" button */}
-					{(photos && photos.length > 0) ||
-						(canEdit && (
+						{description && (
 							<View style={styles.section}>
-								<Text style={styles.sectionTitle}>Gallery</Text>
-								{photos && photos.length > 0 ? (
-									<View style={styles.galleryPlaceholder}>
-										{/* Placeholder for actual image display */}
-										<Feather
-											name="image"
-											size={40}
-											color={theme.colors.textMuted}
-										/>
-										<Text style={styles.placeholderText}>
-											{photos.length} image(s)
-										</Text>
-									</View>
-								) : (
-									// Show if 'canEdit' is true and no photos yet
-									<Pressable
-										style={styles.addPhotosButton}
-										onPress={() => alert("Add photos - TBI")}
-									>
-										<Feather
-											name="plus-circle"
-											size={20}
-											color={theme.colors.primary}
-										/>
-										<Text style={styles.addPhotosButtonText}>Add Photos</Text>
-									</Pressable>
-								)}
+								<Text style={styles.sectionTitle}>Description</Text>
+								<Text style={styles.descriptionText}>{description}</Text>
 							</View>
-						))}
+						)}
+						{attributeTags && attributeTags.length > 0 && (
+							<View style={styles.section}>
+								<Text style={styles.sectionTitle}>Features / Tags</Text>
+								<View style={styles.tagsContainer}>
+									{attributeTags.map((tag, index) => (
+										<TagChip key={index} label={tag} />
+									))}
+								</View>
+							</View>
+						)}
+						{/* Gallery Section - Conditionally render or show "Add" button */}
+						{(photos && photos.length > 0) ||
+							(canEdit && (
+								<View style={styles.section}>
+									<Text style={styles.sectionTitle}>Gallery</Text>
+									{photos && photos.length > 0 ? (
+										<View style={styles.galleryPlaceholder}>
+											{/* Placeholder for actual image display */}
+											<Feather
+												name="image"
+												size={40}
+												color={theme.colors.textMuted}
+											/>
+											<Text style={styles.placeholderText}>
+												{photos.length} image(s)
+											</Text>
+										</View>
+									) : (
+										// Show if 'canEdit' is true and no photos yet
+										<Pressable
+											style={styles.addPhotosButton}
+											onPress={() => alert("Add photos - TBI")}
+										>
+											<Feather
+												name="plus-circle"
+												size={20}
+												color={theme.colors.primary}
+											/>
+											<Text style={styles.addPhotosButtonText}>Add Photos</Text>
+										</Pressable>
+									)}
+								</View>
+							))}
 
-					<View style={{ height: 20 }} />
-				</ScrollView>
-			</View>
-		</Modal>
-	);
-}
+						<View style={{ height: 20 }} />
+					</ScrollView>
+				</View>
+			</Modal>
+		);
+	}
+);
 
 const styles = StyleSheet.create({
 	modalStyle: {
@@ -276,3 +294,5 @@ const styles = StyleSheet.create({
 		fontSize: theme.fontSize.sm,
 	},
 });
+
+export default RecommendationDetailModal;

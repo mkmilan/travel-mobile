@@ -61,6 +61,14 @@ export default function TabLayout() {
 					headerShown: false,
 				}}
 			/>
+			<Tabs.Screen
+				name="trip/[id]/edit"
+				options={{
+					// Hide from tab bar
+					href: null,
+					headerShown: false,
+				}}
+			/>
 		</Tabs>
 	);
 }

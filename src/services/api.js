@@ -152,6 +152,16 @@ export const getTripJsonById = async (tripId) => {
 	return data; // Assuming the server returns the trip object directly
 };
 
+// ───────────────── updateTripJson  ✅ ─────────────────
+export const updateTripJson = async (tripId, payload, csrf = true) => {
+	const data = await apiFetch(`/v2/trips/json/${tripId}`, {
+		method: "PUT",
+		csrf,
+		body: JSON.stringify(payload),
+	});
+	return data;
+};
+
 // ───────────────── getFeedTripJson  ✅ ─────────────────
 export const getFeedTripJson = async (page = 1, pageSize = 10) => {
 	const data = await apiFetch(
@@ -162,3 +172,50 @@ export const getFeedTripJson = async (page = 1, pageSize = 10) => {
 	);
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
+
+export const updateRecommendation = async (recommendationId, updatedData) => {
+	// const data = await apiFetch(`/v2/recommendations/${recommendationId}`, {
+	// 	method: "PUT",
+	// 	body: JSON.stringify(updatedData),
+	// });
+	// return data;
+	console.log("[api] updateRecommendation is not implemented yet");
+	return {
+		success: true,
+		message: "Update recommendation not implemented yet",
+	};
+};
+
+export const addRecommendation = async (
+	tripId,
+	recommendationData,
+	csrf = true
+) => {
+	// const data = await apiFetch(`/v2/trips/${tripId}/recommendations`, {
+	// 	method: "POST",
+	//   csrf,
+	//   body: JSON.stringify(recommendationData),
+	// });
+	// return data;
+	console.log("[api] addRecommendation is not implemented yet");
+	return { success: true, message: "Add recommendation not implemented yet" };
+};
+/**
+ *
+ *
+router.get("/search", protect, searchUsers);
+router.get("/settings", protect, getUserSettings);
+router.put("/settings", protect, updateUserSettings);
+router.get("/:userId", getUserProfileById);
+// --- End reorder ---
+
+/users/
+router.post("/:userId/follow", protect, followUser);
+router.delete("/:userId/follow", protect, unfollowUser);
+router.get("/:userId/recommendations", getUserRecommendations);
+router.get("/:userId/pois", getUserPois);
+router.get("/:userId/followers", getUserFollowers);
+router.get("/:userId/following", getUserFollowing);
+router.get("/:userId/photos", getUserPhotos);
+
+ */

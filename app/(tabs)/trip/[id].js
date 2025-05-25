@@ -1,10 +1,15 @@
 import TransportIcon from "@/src/components/TransportIcon";
-import TripMapThumbnail from "@/src/components/TripMapThumbnail"; // Placeholder, will be replaced by interactive map
+import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
+import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal";
 import RecommendationDetailModal from "@/src/components/modals/RecommendationDetailModal";
 import IconStatDisplay from "@/src/components/trip/IconStatDisplay";
 import Section from "@/src/components/trip/Section";
 import SocialButton from "@/src/components/trip/SocialButton";
-import { getTripJsonById } from "@/src/services/api";
+import {
+	addRecommendation,
+	getTripJsonById,
+	updateRecommendation,
+} from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import {
@@ -15,11 +20,12 @@ import {
 } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
+	Modal,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -43,6 +49,46 @@ const StarRatingDisplay = ({ rating, size = 20, style }) => {
 	);
 };
 
+const DropdownMenu = ({
+	isVisible,
+	onClose,
+	onEdit,
+	onDelete,
+	onAddRecommendation,
+}) => {
+	return (
+		<Modal
+			transparent
+			visible={isVisible}
+			onRequestClose={onClose}
+			animationType="fade"
+		>
+			<Pressable style={styles.modalOverlay} onPress={onClose}>
+				<View style={styles.dropdownMenu}>
+					<Pressable style={styles.dropdownItem} onPress={onEdit}>
+						<Feather name="edit-2" size={18} color={theme.colors.text} />
+						<Text style={styles.dropdownItemText}>Edit Trip</Text>
+					</Pressable>
+
+					<Pressable style={styles.dropdownItem} onPress={onAddRecommendation}>
+						<Feather name="star" size={18} color={theme.colors.warning} />
+						<Text style={styles.dropdownItemText}>Add Recommendation</Text>
+					</Pressable>
+
+					<Pressable style={styles.dropdownItem} onPress={onDelete}>
+						<Feather name="trash-2" size={18} color={theme.colors.error} />
+						<Text
+							style={[styles.dropdownItemText, { color: theme.colors.error }]}
+						>
+							Delete Trip
+						</Text>
+					</Pressable>
+				</View>
+			</Pressable>
+		</Modal>
+	);
+};
+
 // --- Main Screen Component ---
 export default function TripDetailScreen() {
 	const router = useRouter();
@@ -55,7 +101,10 @@ export default function TripDetailScreen() {
 
 	const [selectedRecommendation, setSelectedRecommendation] = useState(null);
 	const [isRecDetailModalVisible, setIsRecDetailModalVisible] = useState(false);
+	const [isDropdownVisible, setIsDropdownVisible] = useState(false);
 
+	const addRecommendationModalRef = useRef(null);
+	// Keep the initial useEffect for when tripId changes
 	useEffect(() => {
 		if (tripId) {
 			fetchTripDetails();
@@ -64,6 +113,15 @@ export default function TripDetailScreen() {
 			setLoading(false);
 		}
 	}, [tripId]);
+
+	// Add useFocusEffect to refresh data when screen comes into focus
+	useFocusEffect(
+		useCallback(() => {
+			if (tripId) {
+				fetchTripDetails();
+			}
+		}, [tripId])
+	);
 
 	const fetchTripDetails = async () => {
 		setLoading(true);
@@ -85,8 +143,72 @@ export default function TripDetailScreen() {
 
 	const handleEdit = () => {
 		// Navigate to an edit screen (to be created)
-		// router.push(`/trip/${tripId}/edit`);
-		Alert.alert("Edit Trip", "Edit functionality to be implemented.");
+		setIsDropdownVisible(false);
+		router.push(`/trip/${tripId}/edit`);
+	};
+
+	const handleDelete = () => {
+		setIsDropdownVisible(false);
+		Alert.alert(
+			"Delete Trip",
+			"Are you sure you want to delete this trip? This action cannot be undone.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Delete",
+					style: "destructive",
+					onPress: () => {
+						// TODO: Implement delete functionality
+						Alert.alert("Delete", "Delete functionality to be implemented.");
+					},
+				},
+			]
+		);
+	};
+
+	const handleAddRecommendation = () => {
+		setIsDropdownVisible(false);
+		// TODO: Implement add recommendation functionality
+		if (addRecommendationModalRef.current) {
+			addRecommendationModalRef.current.open();
+		} else {
+			Alert.alert(
+				"Add Recommendation",
+				"Add recommendation functionality to be implemented."
+			);
+		}
+	};
+	const handleEditRecommendation = (recommendation) => {
+		console.log("Editing recommendation:", recommendation);
+		addRecommendationModalRef.current?.openEdit(recommendation);
+	};
+
+	const handleRecommendationSubmit = async (
+		recommendationData,
+		isEditMode = false
+	) => {
+		try {
+			if (isEditMode) {
+				// Update existing recommendation
+				await updateRecommendation(recommendationData._id, recommendationData);
+				Alert.alert("Success", "Recommendation updated successfully!");
+			} else {
+				// Add new recommendation
+				await addRecommendation(tripId, recommendationData);
+				Alert.alert("Success", "Recommendation added successfully!");
+			}
+
+			// Refresh trip data to show updated recommendations
+			fetchTripDetails();
+		} catch (error) {
+			console.error("Failed to save recommendation:", error);
+			Alert.alert(
+				"Error",
+				isEditMode
+					? "Failed to update recommendation"
+					: "Failed to add recommendation"
+			);
+		}
 	};
 
 	const handleViewLikes = () =>
@@ -116,10 +238,7 @@ export default function TripDetailScreen() {
 	if (loading) {
 		return (
 			<View style={styles.centered}>
-				<ActivityIndicator
-					size="large"
-					color={theme.colors.primary}
-				/>
+				<ActivityIndicator size="large" color={theme.colors.primary} />
 			</View>
 		);
 	}
@@ -128,10 +247,7 @@ export default function TripDetailScreen() {
 		return (
 			<View style={styles.centered}>
 				<Text style={styles.errorText}>{error || "Trip not found."}</Text>
-				<Pressable
-					onPress={() => router.back()}
-					style={styles.button}
-				>
+				<Pressable onPress={() => router.back()} style={styles.button}>
 					<Text style={styles.buttonText}>Go Back</Text>
 				</Pressable>
 			</View>
@@ -166,11 +282,7 @@ export default function TripDetailScreen() {
 				<View style={styles.userInfo}>
 					{/* Placeholder for profile image */}
 					<View style={styles.profileImagePlaceholder}>
-						<Feather
-							name="user"
-							size={24}
-							color={theme.colors.textMuted}
-						/>
+						<Feather name="user" size={24} color={theme.colors.textMuted} />
 					</View>
 					<Text style={styles.userName}>
 						{tripUser.username || "Unknown User"}
@@ -178,15 +290,10 @@ export default function TripDetailScreen() {
 				</View>
 				{isOwner && (
 					<Pressable
-						onPress={handleEdit}
-						style={styles.editButton}
+						onPress={() => setIsDropdownVisible(true)}
+						style={styles.menuButton}
 					>
-						<Feather
-							name="edit-2"
-							size={20}
-							color={theme.colors.primary}
-						/>
-						<Text style={styles.editButtonText}>Edit</Text>
+						<Feather name="more-vertical" size={24} color={theme.colors.text} />
 					</Pressable>
 				)}
 			</View>
@@ -208,14 +315,20 @@ export default function TripDetailScreen() {
 			)}
 
 			{/* Interactive Map Placeholder (replace with actual interactive map later) */}
-			<Section title="Route Map">
+			{/* <Section title="Route Map">
 				<TripMapThumbnail coords={mapCoords} />
-				{/* <InteractiveTripMap routeCoords={mapCoords} pois={trip.pois} recommendations={trip.recommendations} /> */}
+				
 				<Text style={styles.placeholderText}>
 					[Interactive Map Placeholder]
 				</Text>
+			</Section> */}
+			<Section title="Route Map">
+				<InteractiveTripMap
+					routeCoords={mapCoords}
+					pois={trip.pois || []}
+					style={{ marginBottom: theme.space.md }}
+				/>
 			</Section>
-
 			{/* Stats */}
 			<View style={styles.statsGrid}>
 				<IconStatDisplay
@@ -235,16 +348,8 @@ export default function TripDetailScreen() {
 					value={visibilityText}
 					label="Visibility"
 				/>
-				<IconStatDisplay
-					iconName="map-pin"
-					value={distance}
-					label="Distance"
-				/>
-				<IconStatDisplay
-					iconName="clock"
-					value={duration}
-					label="Duration"
-				/>
+				<IconStatDisplay iconName="map-pin" value={distance} label="Distance" />
+				<IconStatDisplay iconName="clock" value={duration} label="Duration" />
 				<IconStatDisplay
 					iconName="activity"
 					value={avgSpeedDisplay}
@@ -264,10 +369,7 @@ export default function TripDetailScreen() {
 					count={trip.commentsCount || 0}
 					onPress={handleViewComments}
 				/>
-				<SocialButton
-					iconName="share-2"
-					onPress={handleShare}
-				/>
+				<SocialButton iconName="share-2" onPress={handleShare} />
 			</View>
 
 			{/* Points of Interest */}
@@ -330,15 +432,8 @@ export default function TripDetailScreen() {
 								onPress={() => handleViewRecommendationDetail(rec)}
 							>
 								<View style={styles.recommendationCardHeader}>
-									<Feather
-										name="star"
-										size={18}
-										color={theme.colors.warning}
-									/>
-									<Text
-										style={styles.recommendationName}
-										numberOfLines={1}
-									>
+									<Feather name="star" size={18} color={theme.colors.warning} />
+									<Text style={styles.recommendationName} numberOfLines={1}>
 										{rec.name || `Recommendation ${index + 1}`}
 									</Text>
 								</View>
@@ -346,10 +441,7 @@ export default function TripDetailScreen() {
 									<Text style={styles.recommendationCategory}>
 										{categoryLabel}
 									</Text>
-									<StarRatingDisplay
-										rating={rec.rating}
-										size={16}
-									/>
+									<StarRatingDisplay rating={rec.rating} size={16} />
 								</View>
 								{/* Optional: Add a short description snippet if available and desired */}
 								{/* {rec.description && <Text style={styles.recommendationDescriptionSnippet} numberOfLines={2}>{rec.description}</Text>} */}
@@ -369,11 +461,23 @@ export default function TripDetailScreen() {
 			</Section>
 
 			<View style={{ height: 50 }} />
+			<DropdownMenu
+				isVisible={isDropdownVisible}
+				onClose={() => setIsDropdownVisible(false)}
+				onEdit={handleEdit}
+				onDelete={handleDelete}
+				onAddRecommendation={handleAddRecommendation}
+			/>
+			<AddRecommendationModal
+				ref={addRecommendationModalRef}
+				onSubmit={handleRecommendationSubmit}
+			/>
 			<RecommendationDetailModal
 				isVisible={isRecDetailModalVisible}
 				onClose={() => setIsRecDetailModalVisible(false)}
 				recommendation={selectedRecommendation}
 				tripUserId={trip?.user?._id}
+				onEdit={handleEditRecommendation}
 			/>
 		</ScrollView>
 	);
@@ -614,5 +718,40 @@ const styles = StyleSheet.create({
 		borderRadius: theme.radius.sm,
 		marginRight: theme.space.md, // Add margin to separate from stars
 		alignSelf: "flex-start", // Ensure it doesn't stretch if stars are taller
+	},
+	menuButton: {
+		padding: theme.space.sm,
+		borderRadius: theme.radius.sm,
+	},
+	modalOverlay: {
+		flex: 1,
+		backgroundColor: "rgba(0, 0, 0, 0.5)",
+		justifyContent: "flex-start",
+		alignItems: "flex-end",
+		paddingTop: 80, // Adjust based on your header height
+		paddingRight: theme.space.md,
+	},
+	dropdownMenu: {
+		backgroundColor: theme.colors.background,
+		borderRadius: theme.radius.md,
+		paddingVertical: theme.space.sm,
+		minWidth: 180,
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 8,
+		elevation: 5,
+	},
+	dropdownItem: {
+		flexDirection: "row",
+		alignItems: "center",
+		paddingHorizontal: theme.space.md,
+		paddingVertical: theme.space.sm,
+	},
+	dropdownItemText: {
+		marginLeft: theme.space.sm,
+		fontSize: theme.fontSize.md,
+		color: theme.colors.text,
+		fontWeight: "500",
 	},
 });

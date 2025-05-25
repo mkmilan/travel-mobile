@@ -19,7 +19,7 @@ export default function TripCard({
 	onPress,
 }) {
 	let visibilityIconName = "eye";
-	let visibilityTooltip = "Public"; // For accessibility or potential future use
+	let visibilityTooltip = "Public";
 
 	if (visibility === "followers_only") {
 		visibilityIconName = "users";
@@ -29,24 +29,14 @@ export default function TripCard({
 		visibilityTooltip = "Private";
 	}
 	return (
-		<TouchableOpacity
-			onPress={onPress}
-			style={styles.card}
-			activeOpacity={0.7}
-		>
+		<TouchableOpacity onPress={onPress} style={styles.card} activeOpacity={0.7}>
 			{/* Header: User, Title, Visibility */}
 			<View style={styles.headerContainer}>
 				<View style={styles.titleUserContainer}>
-					<Text
-						style={styles.userName}
-						numberOfLines={1}
-					>
+					<Text style={styles.userName} numberOfLines={1}>
 						{userName}
 					</Text>
-					<Text
-						style={styles.title}
-						numberOfLines={2}
-					>
+					<Text style={styles.title} numberOfLines={2}>
 						{title}
 					</Text>
 				</View>
@@ -62,59 +52,32 @@ export default function TripCard({
 
 			{/* Date */}
 			<View style={styles.metaRow}>
-				<Feather
-					name="calendar"
-					size={14}
-					color={theme.colors.textMuted}
-				/>
+				<Feather name="calendar" size={14} color={theme.colors.textMuted} />
 				<Text style={styles.dateText}>{date}</Text>
 			</View>
 
 			{/* Map Thumbnail */}
-			<TripMapThumbnail
-				coords={coords}
-				style={styles.mapStyle}
-			/>
+			<TripMapThumbnail coords={coords} style={styles.mapStyle} />
 
 			{/* Stats Row */}
 			<View style={styles.statsRow}>
 				<View style={styles.transportIconContainer}>
-					<TransportIcon
-						mode={travelMode}
-						size={22}
-					/>
+					<TransportIcon mode={travelMode} size={22} />
 				</View>
 				<IconStat
 					iconName="map-pin"
 					value={distanceKm}
 					// unit="km"
 				/>
-				<IconStat
-					iconName="clock"
-					value={durationStr}
-				/>
-				<IconStat
-					iconName="activity"
-					value={avgSpeed}
-					unit="km/h"
-				/>
+				<IconStat iconName="clock" value={durationStr} />
+				<IconStat iconName="activity" value={avgSpeed} unit="km/h" />
 			</View>
 
 			{/* Footer Actions */}
 			<View style={styles.footer}>
-				<FooterIcon
-					icon="heart"
-					value={likes}
-				/>
-				<FooterIcon
-					icon="message-circle"
-					value={comments}
-				/>
-				<Feather
-					name="share-2"
-					size={18}
-					color={theme.colors.text}
-				/>
+				<FooterIcon icon="heart" value={likes} />
+				<FooterIcon icon="message-circle" value={comments} />
+				<Feather name="share-2" size={18} color={theme.colors.text} />
 			</View>
 		</TouchableOpacity>
 	);
@@ -124,15 +87,8 @@ export default function TripCard({
 function IconStat({ iconName, value, unit = "", iconSize = 16 }) {
 	return (
 		<View style={styles.iconStat}>
-			<Feather
-				name={iconName}
-				size={iconSize}
-				color={theme.colors.textMuted}
-			/>
-			<Text
-				style={styles.iconStatText}
-				numberOfLines={1}
-			>
+			<Feather name={iconName} size={iconSize} color={theme.colors.textMuted} />
+			<Text style={styles.iconStatText} numberOfLines={1}>
 				{value}
 				{unit ? ` ${unit}` : ""}
 			</Text>
@@ -144,11 +100,7 @@ function IconStat({ iconName, value, unit = "", iconSize = 16 }) {
 function FooterIcon({ icon, value }) {
 	return (
 		<View style={styles.footerItem}>
-			<Feather
-				name={icon}
-				size={18}
-				color={theme.colors.text}
-			/>
+			<Feather name={icon} size={18} color={theme.colors.text} />
 			<Text style={styles.footerText}>{value}</Text>
 		</View>
 	);

@@ -46,10 +46,11 @@ export default {
 			usesCleartextTraffic: true,
 			edgeToEdgeEnabled: true,
 			permissions: [
-				"FOREGROUND_SERVICE",
-				"ACCESS_COARSE_LOCATION",
-				"ACCESS_FINE_LOCATION",
-				"ACCESS_BACKGROUND_LOCATION",
+				"android.permission.FOREGROUND_SERVICE",
+				"android.permission.FOREGROUND_SERVICE_LOCATION",
+				"android.permission.ACCESS_COARSE_LOCATION",
+				"android.permission.ACCESS_FINE_LOCATION",
+				"android.permission.ACCESS_BACKGROUND_LOCATION",
 			],
 			foregroundService: {
 				notificationTitle: "Recording trip",
