@@ -1,3 +1,5 @@
+import BottomModal from "@/src/components/modals/BottomModal"; // <- shared wrapper
+import ModalHeader from "@/src/components/modals/ModalHeader";
 import {
 	RECOMMENDATION_CATEGORIES,
 	RECOMMENDATION_TAGS,
@@ -11,36 +13,18 @@ import {
 	Platform,
 	Pressable,
 	ScrollView,
+	StyleSheet,
 	Text,
 	TextInput,
 	View,
 } from "react-native";
-import Modal from "react-native-modal";
-
-// Star Rating Component
-const StarRating = ({ rating, onRatingChange }) => {
-	return (
-		<View style={{ flexDirection: "row", marginVertical: theme.space.sm }}>
-			{[1, 2, 3, 4, 5].map((star) => (
-				<Pressable
-					key={star}
-					onPress={() => onRatingChange(star)}
-					style={{ marginRight: theme.space.xs }}
-				>
-					<Ionicons
-						name={rating >= star ? "star" : "star-outline"}
-						size={24}
-						color={rating >= star ? "#FCD34D" : theme.colors.textMuted}
-					/>
-				</Pressable>
-			))}
-		</View>
-	);
-};
+import MapView, { Marker } from "react-native-maps";
+import { StarRating } from "../helpers/StarRating";
 
 // Category Selector Component
 const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 	const [showCategories, setShowCategories] = useState(false);
+	const [open, setOpen] = useState(false);
 
 	const selectedCategoryLabel =
 		RECOMMENDATION_CATEGORIES.find((cat) => cat.value === selectedCategory)
@@ -50,7 +34,8 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 		<View>
 			<Text style={styles.label}>Category</Text>
 			<Pressable
-				onPress={() => setShowCategories(true)}
+				// onPress={() => setShowCategories(true)}
+				onPress={() => setOpen(true)}
 				style={[
 					styles.input,
 					{
@@ -65,6 +50,7 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 						color: selectedCategory
 							? theme.colors.text
 							: theme.colors.textMuted,
+						fontSize: theme.fontSize.sm,
 					}}
 				>
 					{selectedCategoryLabel}
@@ -75,21 +61,17 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 					color={theme.colors.textMuted}
 				/>
 			</Pressable>
-
-			<Modal
-				isVisible={showCategories}
-				onBackdropPress={() => setShowCategories(false)}
-				style={{ margin: 0, justifyContent: "flex-end" }}
-			>
+			{/* bottom-sheet */}
+			<BottomModal visible={open} onClose={() => setOpen(false)}>
+				<ModalHeader title="Select Category" onClose={() => setOpen(false)} />
 				<View style={styles.categoryModal}>
-					<Text style={styles.categoryModalTitle}>Select Category</Text>
-					<ScrollView style={{ maxHeight: 300 }}>
+					<ScrollView style={{ maxHeight: 1000 }}>
 						{RECOMMENDATION_CATEGORIES.map((category) => (
 							<Pressable
 								key={category.value}
 								onPress={() => {
 									onCategoryChange(category.value);
-									setShowCategories(false);
+									setOpen(false);
 								}}
 								style={[
 									styles.categoryItem,
@@ -112,7 +94,7 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 								{selectedCategory === category.value && (
 									<Ionicons
 										name="checkmark"
-										size={20}
+										size={18}
 										color={theme.colors.primary}
 									/>
 								)}
@@ -120,7 +102,7 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 						))}
 					</ScrollView>
 				</View>
-			</Modal>
+			</BottomModal>
 		</View>
 	);
 };
@@ -128,6 +110,7 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 // Tags Selector Component
 const TagsSelector = ({ selectedTags, onTagsChange }) => {
 	const [showTags, setShowTags] = useState(false);
+	const [open, setOpen] = useState(false);
 
 	const toggleTag = (tagValue) => {
 		const newTags = selectedTags.includes(tagValue)
@@ -140,7 +123,7 @@ const TagsSelector = ({ selectedTags, onTagsChange }) => {
 		<View>
 			<Text style={styles.label}>Features / Tags</Text>
 			<Pressable
-				onPress={() => setShowTags(true)}
+				onPress={() => setOpen(true)}
 				style={[
 					styles.input,
 					{
@@ -155,6 +138,7 @@ const TagsSelector = ({ selectedTags, onTagsChange }) => {
 						color: selectedTags.length
 							? theme.colors.text
 							: theme.colors.textMuted,
+						fontSize: theme.fontSize.sm,
 					}}
 				>
 					{selectedTags.length > 0
@@ -163,65 +147,59 @@ const TagsSelector = ({ selectedTags, onTagsChange }) => {
 				</Text>
 				<Ionicons
 					name="chevron-down"
-					size={20}
+					size={18}
 					color={theme.colors.textMuted}
 				/>
 			</Pressable>
 
-			<Modal
-				isVisible={showTags}
-				onBackdropPress={() => setShowTags(false)}
-				style={{ margin: 0, justifyContent: "flex-end" }}
-			>
-				<View style={styles.categoryModal}>
-					<Text style={styles.categoryModalTitle}>Select Features</Text>
-					<ScrollView style={{ maxHeight: 400 }}>
-						{RECOMMENDATION_TAGS.map((tag) => (
-							<Pressable
-								key={tag.value}
-								onPress={() => toggleTag(tag.value)}
+			<BottomModal visible={open} onClose={() => setOpen(false)}>
+				<ModalHeader title="Select Features" onClose={() => setOpen(false)} />
+				<ScrollView style={{ maxHeight: 4000 }}>
+					{RECOMMENDATION_TAGS.map((tag) => (
+						<Pressable
+							key={tag.value}
+							onPress={() => toggleTag(tag.value)}
+							style={[
+								styles.categoryItem,
+								selectedTags.includes(tag.value) && {
+									backgroundColor: theme.colors.primary + "20",
+								},
+							]}
+						>
+							<Text
 								style={[
-									styles.categoryItem,
+									styles.categoryItemText,
 									selectedTags.includes(tag.value) && {
-										backgroundColor: theme.colors.primary + "20",
+										color: theme.colors.primary,
+										fontWeight: "600",
 									},
 								]}
 							>
-								<Text
-									style={[
-										styles.categoryItemText,
-										selectedTags.includes(tag.value) && {
-											color: theme.colors.primary,
-											fontWeight: "600",
-										},
-									]}
-								>
-									{tag.label}
-								</Text>
-								{selectedTags.includes(tag.value) && (
-									<Ionicons
-										name="checkmark"
-										size={20}
-										color={theme.colors.primary}
-									/>
-								)}
-							</Pressable>
-						))}
-					</ScrollView>
-					<Pressable
-						onPress={() => setShowTags(false)}
-						style={[
-							styles.button,
-							{
-								marginTop: theme.space.md,
-								backgroundColor: theme.colors.primary,
-							},
-						]}
-					>
-						<Text style={styles.buttonText}>Done</Text>
-					</Pressable>
-				</View>
-			</Modal>
+								{tag.label}
+							</Text>
+							{selectedTags.includes(tag.value) && (
+								<Ionicons
+									name="checkmark"
+									size={18}
+									color={theme.colors.primary}
+								/>
+							)}
+						</Pressable>
+					))}
+				</ScrollView>
+				<Pressable
+					onPress={() => setOpen(false)}
+					style={[
+						styles.button,
+						{
+							marginTop: theme.space.md,
+							backgroundColor: theme.colors.primary,
+						},
+					]}
+				>
+					<Text style={styles.buttonText}>Done</Text>
+				</Pressable>
+			</BottomModal>
 		</View>
 	);
 };
@@ -241,40 +219,83 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 		lon: null,
 	});
 
+	const [mapRegion, setMapRegion] = useState({
+		// Added state for map region
+		latitude: 37.78825,
+		longitude: -122.4324,
+		latitudeDelta: 0.0922,
+		longitudeDelta: 0.0421,
+	});
+
 	useImperativeHandle(ref, () => ({
 		open(locationData = null, tripId = null) {
 			setIsEditMode(false);
 			setEditingRecommendationId(null);
 			setAssociatedTrip(tripId);
+			const initialLat = locationData?.lat || null;
+			const initialLon = locationData?.lon || null;
 			setFormData({
 				name: "",
 				description: "",
 				rating: 0,
 				primaryCategory: "",
 				attributeTags: [],
-				lat: locationData?.lat || null,
-				lon: locationData?.lon || null,
+				lat: initialLat,
+				lon: initialLon,
 				associatedTrip: tripId || null,
 			});
+			if (initialLat && initialLon) {
+				setMapRegion({
+					// Set the whole region object for consistent zoom
+					latitude: initialLat,
+					longitude: initialLon,
+					latitudeDelta: 0.02, // Adjust for a reasonable default zoom
+					longitudeDelta: 0.02,
+				});
+			} else {
+				// Reset to a default region or fetch trip's region if needed
+				setMapRegion({
+					latitude: 37.78825, // Default latitude
+					longitude: -122.4324, // Default longitude
+					latitudeDelta: 0.0922,
+					longitudeDelta: 0.0421,
+				});
+			}
 			setVisible(true);
 		},
 		openEdit(recommendation) {
 			setIsEditMode(true);
 			setEditingRecommendationId(recommendation._id);
 			setAssociatedTrip(recommendation.associatedTrip);
+			const initialLat = recommendation.location?.coordinates?.[1] || null;
+			const initialLon = recommendation.location?.coordinates?.[0] || null;
 			setFormData({
 				name: recommendation.name || "",
 				description: recommendation.description || "",
 				rating: recommendation.rating || 0,
 				primaryCategory: recommendation.primaryCategory || "",
 				attributeTags: recommendation.attributeTags || [],
-				lat: recommendation.location?.coordinates?.[1] || null,
-				lon: recommendation.location?.coordinates?.[0] || null,
+				lat: initialLat,
+				lon: initialLon,
 			});
+			if (initialLat && initialLon) {
+				setMapRegion({
+					// Also set consistent zoom for edit mode
+					latitude: initialLat,
+					longitude: initialLon,
+					latitudeDelta: 0.02,
+					longitudeDelta: 0.02,
+				});
+			}
 			setVisible(true);
 		},
 	}));
 
+	const handleMapPress = (e) => {
+		const { latitude, longitude } = e.nativeEvent.coordinate;
+		updateField("lat", latitude);
+		updateField("lon", longitude);
+	};
 	const handleSubmit = () => {
 		// Validation
 		if (!formData.name.trim()) {
@@ -298,12 +319,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			return;
 		}
 		if (formData.lat === null || formData.lon === null) {
-			///just for testing before coose on map
-			setFormData((prev) => ({
-				...prev,
-				lat: 4.089,
-				lon: 32.123,
-			}));
+			Alert.alert("Error", "Please select a location on the map"); // Updated error message
 			return;
 		}
 
@@ -338,137 +354,124 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 	};
 
 	return (
-		<Modal
-			isVisible={visible}
-			onBackdropPress={() => setVisible(false)}
-			onSwipeComplete={() => setVisible(false)}
-			swipeDirection={["down"]}
-			animationIn="slideInUp"
-			animationOut="slideOutDown"
-			style={styles.modalStyle}
-			propagateSwipe
-			avoidKeyboard={true}
-		>
+		<BottomModal visible={visible} onClose={() => setVisible(false)}>
+			<ModalHeader
+				title={isEditMode ? "Edit Recommendation" : "Add Recommendation"}
+				onClose={() => setVisible(false)}
+			/>
+
+			{/* Keyboard handling */}
 			<KeyboardAvoidingView
-				behavior={Platform.OS === "ios" ? "padding" : "height"}
-				style={{ flex: 1, justifyContent: "flex-end" }}
+				behavior={Platform.OS === "ios" ? "padding" : undefined}
+				style={{ flex: 1 }}
 			>
-				<View style={styles.modalContainer}>
-					<View style={styles.handleBar} />
-					<ScrollView
-						showsVerticalScrollIndicator={false}
-						keyboardShouldPersistTaps="handled"
-						contentContainerStyle={{ paddingBottom: theme.space.xl }}
-					>
-						<Text style={styles.title}>
-							{isEditMode ? "Edit Recommendation" : "Add Recommendation"}
-						</Text>
+				<ScrollView
+					showsVerticalScrollIndicator={false}
+					contentContainerStyle={{ paddingBottom: theme.space.lg }}
+					keyboardShouldPersistTaps="handled"
+				>
+					{/* Name ------------------------------------------------ */}
+					<View style={styles.field}>
+						<Text style={styles.label}>Name / Title</Text>
+						<TextInput
+							value={formData.name}
+							onChangeText={(v) => updateField("name", v)}
+							placeholder="Enter recommendation name…"
+							placeholderTextColor={theme.colors.textMuted}
+							style={styles.input}
+							maxLength={120}
+						/>
+					</View>
 
-						{/* Name */}
-						<View style={styles.fieldContainer}>
-							<Text style={styles.label}>Name / Title</Text>
-							<TextInput
-								value={formData.name}
-								onChangeText={(value) => updateField("name", value)}
-								placeholder="Enter recommendation name..."
-								placeholderTextColor={theme.colors.textMuted}
-								style={styles.input}
-								maxLength={120}
-							/>
+					{/* Description ---------------------------------------- */}
+					<View style={styles.field}>
+						<Text style={styles.label}>Description</Text>
+						<TextInput
+							value={formData.description}
+							onChangeText={(v) => updateField("description", v)}
+							placeholder="Describe this place…"
+							placeholderTextColor={theme.colors.textMuted}
+							style={[styles.input, { minHeight: 70 }]}
+							multiline
+							textAlignVertical="top"
+							maxLength={2000}
+						/>
+					</View>
+
+					{/* Map ----------------------------------------------- */}
+					<View style={styles.field}>
+						<Text style={styles.label}>Location</Text>
+						<View style={styles.mapContainer}>
+							<MapView
+								style={StyleSheet.absoluteFill}
+								region={mapRegion}
+								onRegionChangeComplete={setMapRegion}
+								onPress={handleMapPress}
+								showsUserLocation
+							>
+								{formData.lat && formData.lon && (
+									<Marker
+										coordinate={{
+											latitude: formData.lat,
+											longitude: formData.lon,
+										}}
+										pinColor={theme.colors.primary}
+									/>
+								)}
+							</MapView>
 						</View>
-
-						{/* Description */}
-						<View style={styles.fieldContainer}>
-							<Text style={styles.label}>Description</Text>
-							<TextInput
-								value={formData.description}
-								onChangeText={(value) => updateField("description", value)}
-								placeholder="Describe this place..."
-								placeholderTextColor={theme.colors.textMuted}
-								style={[styles.input, { minHeight: 80 }]}
-								multiline
-								textAlignVertical="top"
-								maxLength={2000}
-							/>
-						</View>
-
-						{/* Rating */}
-						<View style={styles.fieldContainer}>
-							<Text style={styles.label}>Rating</Text>
-							<StarRating
-								rating={formData.rating}
-								onRatingChange={(rating) => updateField("rating", rating)}
-							/>
-						</View>
-
-						{/* Category */}
-						<View style={styles.fieldContainer}>
-							<CategorySelector
-								selectedCategory={formData.primaryCategory}
-								onCategoryChange={(category) =>
-									updateField("primaryCategory", category)
-								}
-							/>
-						</View>
-
-						{/* Tags */}
-						<View style={styles.fieldContainer}>
-							<TagsSelector
-								selectedTags={formData.attributeTags}
-								onTagsChange={(tags) => updateField("attributeTags", tags)}
-							/>
-						</View>
-
-						{/* Submit Button */}
-						<Pressable
-							onPress={handleSubmit}
-							style={[styles.button, { backgroundColor: theme.colors.primary }]}
-						>
-							<Text style={styles.buttonText}>
-								{isEditMode ? "Update Recommendation" : "Save Recommendation"}
+						{formData.lat && formData.lon && (
+							<Text style={styles.coords}>
+								Lat: {formData.lat.toFixed(4)} Lon: {formData.lon.toFixed(4)}
 							</Text>
-						</Pressable>
-					</ScrollView>
-				</View>
+						)}
+					</View>
+
+					{/* Rating -------------------------------------------- */}
+					<View style={styles.field}>
+						<Text style={styles.label}>Rating</Text>
+						<StarRating
+							rating={formData.rating}
+							onRatingChange={(r) => updateField("rating", r)}
+						/>
+					</View>
+
+					{/* Category / Tags ----------------------------------- */}
+					<View style={styles.field}>
+						<CategorySelector
+							selectedCategory={formData.primaryCategory}
+							onCategoryChange={(c) => updateField("primaryCategory", c)}
+						/>
+					</View>
+					<View style={styles.field}>
+						<TagsSelector
+							selectedTags={formData.attributeTags}
+							onTagsChange={(t) => updateField("attributeTags", t)}
+						/>
+					</View>
+
+					{/* Submit -------------------------------------------- */}
+					<Pressable
+						onPress={handleSubmit}
+						style={[styles.button, { backgroundColor: theme.colors.primary }]}
+					>
+						<Text style={styles.buttonText}>
+							{isEditMode ? "Update Recommendation" : "Save Recommendation"}
+						</Text>
+					</Pressable>
+				</ScrollView>
 			</KeyboardAvoidingView>
-		</Modal>
+		</BottomModal>
 	);
 });
 
-const styles = {
-	modalStyle: {
-		margin: 0,
-		justifyContent: "flex-end",
-	},
-	modalContainer: {
-		backgroundColor: theme.colors.background,
-		borderTopLeftRadius: theme.radius.lg,
-		borderTopRightRadius: theme.radius.lg,
-		paddingHorizontal: theme.space.lg,
-		paddingTop: theme.space.sm,
-		paddingBottom: theme.space.md,
-		maxHeight: "85%",
-	},
-	handleBar: {
-		width: 40,
-		height: 5,
-		borderRadius: 2.5,
-		backgroundColor: theme.colors.inputBorder,
-		alignSelf: "center",
-		marginBottom: theme.space.md,
-	},
-	title: {
-		fontSize: theme.fontSize.lg,
-		fontWeight: "600",
-		marginBottom: theme.space.lg,
-		color: theme.colors.text,
-		textAlign: "center",
-	},
-	fieldContainer: {
-		marginBottom: theme.space.lg,
-	},
+/* ------------------------------------------------------------------ *
+ * styles                                                             *
+ * ------------------------------------------------------------------ */
+const styles = StyleSheet.create({
+	field: { marginBottom: theme.space.md },
 	label: {
-		fontSize: theme.fontSize.md,
+		fontSize: theme.fontSize.sm,
 		fontWeight: "600",
 		marginBottom: theme.space.sm,
 		color: theme.colors.text,
@@ -478,9 +481,22 @@ const styles = {
 		borderColor: theme.colors.inputBorder,
 		backgroundColor: theme.colors.inputBackground,
 		borderRadius: theme.radius.md,
-		padding: theme.space.md,
-		fontSize: theme.fontSize.md,
+		padding: theme.space.sm,
+		fontSize: theme.fontSize.sm,
 		color: theme.colors.text,
+	},
+	mapContainer: {
+		height: 250,
+		borderRadius: theme.radius.md,
+		overflow: "hidden",
+		borderWidth: 1,
+		borderColor: theme.colors.inputBorder,
+	},
+	coords: {
+		fontSize: theme.fontSize.xs,
+		color: theme.colors.textMuted,
+		marginTop: theme.space.xs,
+		textAlign: "center",
 	},
 	button: {
 		borderRadius: theme.radius.md,
@@ -520,6 +536,6 @@ const styles = {
 		fontSize: theme.fontSize.md,
 		color: theme.colors.text,
 	},
-};
+});
 
 export default AddRecommendationModal;

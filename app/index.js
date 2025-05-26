@@ -7,7 +7,7 @@ export default function Index() {
 	const { isAuthenticated } = useAuthStore();
 
 	if (isAuthenticated) {
-		return <Redirect href="/(tabs)/feed" />;
+		return <Redirect href="/(tabs)/trips" />;
 	} else {
 		return <Redirect href="/(auth)" />;
 	}

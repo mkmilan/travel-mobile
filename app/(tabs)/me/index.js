@@ -308,6 +308,8 @@ export default function MeScreen() {
 	);
 }
 
+const base = lightTheme;
+
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -318,35 +320,34 @@ const styles = StyleSheet.create({
 	centered: {
 		justifyContent: "center",
 		alignItems: "center",
-		padding: lightTheme.space.lg,
+		padding: base.space.lg,
 		flex: 1,
 	},
 	messageText: {
-		fontSize: lightTheme.fontSize.md,
-		marginBottom: lightTheme.space.md,
+		fontSize: base.fontSize.md,
+		marginBottom: base.space.md,
 	},
 	loginButton: {
-		paddingVertical: lightTheme.space.sm,
-		paddingHorizontal: lightTheme.space.lg,
-		borderRadius: lightTheme.radius.md,
+		paddingVertical: base.space.sm,
+		paddingHorizontal: base.space.lg,
+		borderRadius: base.radius.md,
 	},
 	loginButtonText: {
 		color: "#FFFFFF",
-		fontSize: lightTheme.fontSize.md,
+		fontSize: base.fontSize.md,
 		fontWeight: "600",
 	},
 	profileHeader: {
 		alignItems: "center",
-		paddingTop:
-			lightTheme.space.lg + lightTheme.space.md + FUTURE_TOP_NAVBAR_HEIGHT,
-		paddingBottom: lightTheme.space.lg,
+		paddingTop: base.space.lg + base.space.md + FUTURE_TOP_NAVBAR_HEIGHT,
+		paddingBottom: base.space.lg,
 		borderBottomWidth: 1,
 	},
 	profilePicture: {
 		width: 100,
 		height: 100,
 		borderRadius: 50,
-		marginBottom: lightTheme.space.md,
+		marginBottom: base.space.md,
 	},
 	placeholderImage: {
 		justifyContent: "center",
@@ -358,31 +359,31 @@ const styles = StyleSheet.create({
 		fontWeight: "bold",
 	},
 	username: {
-		fontSize: lightTheme.fontSize.lg + 2,
+		fontSize: base.fontSize.lg + 2,
 		fontWeight: "bold",
-		marginBottom: lightTheme.space.sm / 2,
+		marginBottom: base.space.sm / 2,
 	},
 	bio: {
-		fontSize: lightTheme.fontSize.sm,
+		fontSize: base.fontSize.sm,
 		textAlign: "center",
-		paddingHorizontal: lightTheme.space.lg,
-		lineHeight: lightTheme.fontSize.sm + 6,
+		paddingHorizontal: base.space.lg,
+		lineHeight: base.fontSize.sm + 6,
 	},
 	statsSection: {
 		flexDirection: "row",
 		flexWrap: "wrap",
 		justifyContent: "space-around",
-		paddingVertical: lightTheme.space.md,
-		paddingHorizontal: lightTheme.space.sm,
-		marginTop: lightTheme.space.md,
+		paddingVertical: base.space.md,
+		paddingHorizontal: base.space.sm,
+		marginTop: base.space.md,
 	},
 	statItem: {
 		alignItems: "center",
 		width: "30%",
 		minWidth: 100,
-		paddingVertical: lightTheme.space.sm,
-		marginBottom: lightTheme.space.sm,
-		borderRadius: lightTheme.radius.md,
+		paddingVertical: base.space.sm,
+		marginBottom: base.space.sm,
+		borderRadius: base.radius.md,
 		shadowColor: "#000",
 		shadowOffset: { width: 0, height: 1 },
 		shadowOpacity: 0.05,
@@ -390,21 +391,21 @@ const styles = StyleSheet.create({
 		elevation: 1,
 	},
 	statValue: {
-		fontSize: lightTheme.fontSize.lg,
+		fontSize: base.fontSize.lg,
 		fontWeight: "600",
 	},
 	statLabel: {
-		fontSize: lightTheme.fontSize.sm - 2,
+		fontSize: base.fontSize.sm - 2,
 		marginTop: 2,
 	},
 	// NEW BUTTON STYLES - SIDE BY SIDE
 	buttonRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
-		paddingHorizontal: lightTheme.space.md,
-		marginTop: lightTheme.space.lg,
-		marginBottom: lightTheme.space.md,
-		gap: lightTheme.space.sm, // Space between buttons
+		paddingHorizontal: base.space.md,
+		marginTop: base.space.lg,
+		marginBottom: base.space.md,
+		gap: base.space.sm, // Space between buttons
 	},
 	editButton: {
 		flex: 1,
@@ -412,9 +413,9 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: "#4A90E2", // Light blue
-		paddingVertical: lightTheme.space.md,
-		paddingHorizontal: lightTheme.space.sm,
-		borderRadius: lightTheme.radius.md,
+		paddingVertical: base.space.md,
+		paddingHorizontal: base.space.sm,
+		borderRadius: base.radius.md,
 		shadowColor: "#000",
 		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.1,
@@ -427,9 +428,9 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: "#CCCCCC", // Light grey
-		paddingVertical: lightTheme.space.md,
-		paddingHorizontal: lightTheme.space.sm,
-		borderRadius: lightTheme.radius.md,
+		paddingVertical: base.space.md,
+		paddingHorizontal: base.space.sm,
+		borderRadius: base.radius.md,
 		shadowColor: "#000",
 		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.1,
@@ -437,33 +438,33 @@ const styles = StyleSheet.create({
 		elevation: 2,
 	},
 	buttonIcon: {
-		marginRight: lightTheme.space.sm - 2,
+		marginRight: base.space.sm - 2,
 	},
 	buttonText: {
-		fontSize: lightTheme.fontSize.sm,
+		fontSize: base.fontSize.sm,
 		fontWeight: "600",
 		color: "#FFFFFF", // Default white, overridden for settings button
 	},
 	gallerySection: {
-		marginTop: lightTheme.space.lg,
-		paddingHorizontal: lightTheme.space.md,
+		marginTop: base.space.lg,
+		paddingHorizontal: base.space.md,
 	},
 	sectionTitle: {
-		fontSize: lightTheme.fontSize.lg,
+		fontSize: base.fontSize.lg,
 		fontWeight: "600",
-		marginBottom: lightTheme.space.md,
+		marginBottom: base.space.md,
 	},
 	galleryPlaceholder: {
 		height: 150,
-		borderRadius: lightTheme.radius.md,
+		borderRadius: base.radius.md,
 		justifyContent: "center",
 		alignItems: "center",
 		borderWidth: 1,
 		borderStyle: "dashed",
 	},
 	galleryPlaceholderText: {
-		marginTop: lightTheme.space.sm,
-		fontSize: lightTheme.fontSize.sm,
+		marginTop: base.space.sm,
+		fontSize: base.fontSize.sm,
 	},
 	logoutIconContainer: {
 		position: "absolute",

@@ -27,7 +27,7 @@
       - `[x]` Implement `login`, `logout`, `checkUserStatus`, `WorkspaceCsrfToken` actions. (Conceptualized)
       - `[x]` Use `AsyncStorage` (or `expo-secure-store`) for persisting user data/session tokens.
   4.  `[ ]` **Authentication Screens:**
-      - `[ ]` Create Login and Registration screens.
+      - `[x]` Create Login and Registration screens.
       - `[ ]` Implement API calls to backend auth endpoints (using `authStore` actions).
       - `[ ]` Handle navigation based on auth state (protected routes/screens).
   5.  `[x]` **User Profile Display Screen (`app/(tabs)/profile/index.js`):** (Conceptualized)
@@ -42,21 +42,21 @@
 - **Goal:** Implement reliable GPS trip recording, local storage of track data using SQL, and preparation for upload.
 - **Tasks:**
   1.  `[ ]` **GPS Tracking Service/Hook:**
-      - `[ ]` Utilize `expo-location` for foreground GPS tracking.
-      - `[ ]` Functions to start, pause, resume, and stop tracking.
-      - `[ ]` Collect track points (`lat`, `lon`, `timestamp`, `speed`, `accuracy`).
-  2.  `[ ]` **Local SQL Database Setup (`expo-sqlite`):**
-      - `[ ]` Define schemas for trips, segments, track points, POIs, and pending recommendations locally.
-      - `[ ]` Service/utility functions to save ongoing trip data (segments, points) to the local SQL database.
-      - `[ ]` Service/utility functions to save POIs and recommendations locally, associated with the current recording session.
+      - `[x]` Utilize `expo-location` for foreground GPS tracking.
+      - `[x]` Functions to start, pause, resume, and stop tracking.
+      - `[x]` Collect track points (`lat`, `lon`, `timestamp`, `speed`, `accuracy`).
+  2.  `[x]` **Local SQL Database Setup (`expo-sqlite`):**
+      - `[x]` Define schemas for trips, segments, track points, POIs, and pending recommendations locally.
+      - `[x]` Service/utility functions to save ongoing trip data (segments, points) to the local SQL database.
+      - `[x]` Service/utility functions to save POIs and recommendations locally, associated with the current recording session.
   3.  `[ ]` **Trip Recording UI:**
-      - `[ ]` Screen to manage trip recording (Start/Stop/Pause buttons).
+      - `[x]` Screen to manage trip recording (Start/Stop/Pause buttons).
       - `[ ]` Display current trip stats (duration, distance - calculated from local data).
       - `[ ]` Interface to add POIs (mark current location, add name/note) during recording, saving them to the local SQL DB.
-      - `[ ]` Interface to add simple recommendations linked to locations during recording, saving them to the local SQL DB.
+      - `[x]` Interface to add simple recommendations linked to locations during recording, saving them to the local SQL DB.
   4.  `[ ]` **Pre-Upload Trip Review/Edit:**
       - `[ ]` Screen to review a completed (but not yet uploaded) trip from local SQL storage.
-      - `[ ]` Allow editing of trip title, description.
+      - `[x]` Allow editing of trip title, description.
       - `[ ]` Allow editing/deletion of locally saved POIs and recommendations for that trip.
 
 ---
@@ -67,9 +67,9 @@
 - **Tasks:**
   1.  `[x]` **Trip Service (`services/TripService.js`):**
       - `[x]` Implement `createTripJson` function to send structured trip data (segments, POIs, recommendations) to the backend's `/api/v2/trips/json` endpoint. (Conceptualized and code provided)
-      - `[ ]` Ensure it correctly formats data retrieved from the local SQL DB into the JSON payload expected by the backend.
+      - `[x]` Ensure it correctly formats data retrieved from the local SQL DB into the JSON payload expected by the backend.
   2.  `[ ]` **Upload Manager/Logic:**
-      - `[ ]` Logic to retrieve a completed trip and its associated POIs/recommendations from the local SQL DB.
+      - `[x]` Logic to retrieve a completed trip and its associated POIs/recommendations from the local SQL DB.
       - `[ ]` Construct the `TripJsonClientPayload` as defined.
       - `[ ]` Call `TripService.createTripJson` to upload.
       - `[ ]` Handle upload success (e.g., mark local trip as synced, potentially clear from local DB or keep as backup).
@@ -86,12 +86,12 @@
 - **Tasks:**
   1.  `[x]` **User Service (`services/UserService.js`):** (Conceptualized and code provided)
       - `[ ]` Implement `getUserProfile` (if needed for viewing other profiles, less priority for initial mobile).
-      - `[x]` Implement `updateMyProfile` (for bio, etc.).
-      - `[x]` Implement `updateMySettings` for all settings fields from `User.js` model.
+      - `[ ]` Implement `updateMyProfile` (for bio, etc.).
+      - `[ ]` Implement `updateMySettings` for all settings fields from `User.js` model.
   2.  `[x]` **Settings Options (`constants/settingsOptions.js`):** Define constants for picker values (visibility, travel mode, units, theme, date/time formats, language). (Done)
   3.  `[x]` **Edit Profile & Settings Screen (`app/(tabs)/profile/edit.js`):** (Conceptualized)
       - `[ ]` UI for editing bio.
-      - `[x]` UI for all user settings (defaultTripVisibility, defaultTravelMode, preferredUnits, themePreference, dateFormat, timeFormat, language) using appropriate input controls (Pickers, Switches).
+      - `[ ]` UI for all user settings (defaultTripVisibility, defaultTravelMode, preferredUnits, themePreference, dateFormat, timeFormat, language) using appropriate input controls (Pickers, Switches).
       - `[ ]` Load initial values from `authStore.user.settings`.
       - `[ ]` Call `UserService.updateMyProfile` and `UserService.updateMySettings` on save.
       - `[ ]` Update `authStore` on successful save.
@@ -107,9 +107,9 @@
 - **Goal:** Allow users to view their synced trips and basic details of other public trips.
 - **Tasks:**
   1.  `[ ]` **Trip Detail Screen (Mobile):**
-      - `[ ]` Fetch full trip data (including segments for map display, POIs, recommendations) from backend (`GET /api/v2/trips/json/:tripId`).
-      - `[ ]` Display trip title, description, dates, distance, duration.
-      - `[ ]` Display trip route on a map (using `react-native-maps` or a webview with Leaflet).
+      - `[x]` Fetch full trip data (including segments for map display, POIs, recommendations) from backend (`GET /api/v2/trips/json/:tripId`).
+      - `[x]` Display trip title, description, dates, distance, duration.
+      - `[x]` Display trip route on a map (using `react-native-maps` or a webview with Leaflet).
       - `[ ]` Display POIs and Recommendations associated with the trip.
   2.  `[ ]` **Feed/Explore Screen (Simplified):**
       - `[ ]` Fetch a list of public trips from the backend (new endpoint needed, e.g., `GET /api/v2/trips/json/public`).

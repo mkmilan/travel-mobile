@@ -15,23 +15,14 @@ const SCREEN_HEIGHT = Dimensions.get("window").height;
 const MAX_HEIGHT = SCREEN_HEIGHT * 0.9; // never cover full screen
 
 export default function BottomModal({ visible, onClose, children, style }) {
-	/* ---------- simple slide-up animation ---------- */
 	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
 	useEffect(() => {
-		if (visible) {
-			Animated.timing(translateY, {
-				toValue: 0,
-				duration: 250,
-				useNativeDriver: true,
-			}).start();
-		} else {
-			Animated.timing(translateY, {
-				toValue: SCREEN_HEIGHT,
-				duration: 200,
-				useNativeDriver: true,
-			}).start();
-		}
+		Animated.timing(translateY, {
+			toValue: visible ? 0 : SCREEN_HEIGHT,
+			duration: 250,
+			useNativeDriver: true,
+		}).start();
 	}, [visible]);
 
 	return (
@@ -52,12 +43,17 @@ export default function BottomModal({ visible, onClose, children, style }) {
 				style={styles.wrapper}
 			>
 				<Animated.View
-					style={[styles.container, { transform: [{ translateY }] }, style]}
+					style={[
+						styles.container,
+						{ transform: [{ translateY }] },
+						style, // allow per-modal overrides
+					]}
 				>
 					{/* drag handle */}
 					<View style={styles.handle} />
 
-					{children}
+					{/* flex-grow content so ScrollView gets space */}
+					<View style={styles.content}>{children}</View>
 				</Animated.View>
 			</KeyboardAvoidingView>
 		</Modal>
@@ -74,20 +70,24 @@ const styles = StyleSheet.create({
 		justifyContent: "flex-end",
 	},
 	container: {
+		flex: 1, // 🔑 makes modal grow to available space
 		maxHeight: MAX_HEIGHT,
 		backgroundColor: theme.colors.background,
 		paddingHorizontal: theme.space.md,
 		paddingTop: theme.space.lg,
-		paddingBottom: theme.space.lg + 10, // breathing room above home-bar
+		paddingBottom: theme.space.lg + 10,
 		borderTopLeftRadius: theme.radius.lg,
 		borderTopRightRadius: theme.radius.lg,
 	},
 	handle: {
-		width: 36,
+		width: 40,
 		height: 4,
 		borderRadius: 2,
 		backgroundColor: theme.colors.inputBorder,
 		alignSelf: "center",
 		marginBottom: theme.space.md,
+	},
+	content: {
+		flex: 1, // allows children (ScrollView) to fill
 	},
 });

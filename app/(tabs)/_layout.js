@@ -5,6 +5,7 @@ import { Platform } from "react-native";
 export default function TabLayout() {
 	return (
 		<Tabs
+			initialRouteName="trips/index"
 			screenOptions={{
 				headerShown: false,
 				tabBarActiveTintColor: "dark-blue",
@@ -13,7 +14,7 @@ export default function TabLayout() {
 					backgroundColor: "#fff",
 					height: Platform.OS === "android" ? 120 : 80, // bump up for Android
 					paddingBottom: Platform.OS === "android" ? 20 : 0,
-					paddingTop: Platform.OS === "android" ? 10 : 0,
+					paddingTop: Platform.OS === "android" ? 20 : 0,
 				},
 			}}
 		>
@@ -63,6 +64,22 @@ export default function TabLayout() {
 			/>
 			<Tabs.Screen
 				name="trip/[id]/edit"
+				options={{
+					// Hide from tab bar
+					href: null,
+					headerShown: false,
+				}}
+			/>
+			<Tabs.Screen
+				name="me/edit-profile"
+				options={{
+					// Hide from tab bar
+					href: null,
+					headerShown: false,
+				}}
+			/>
+			<Tabs.Screen
+				name="me/settings"
 				options={{
 					// Hide from tab bar
 					href: null,

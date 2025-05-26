@@ -102,6 +102,8 @@ export default function TripDetailScreen() {
 	const [selectedRecommendation, setSelectedRecommendation] = useState(null);
 	const [isRecDetailModalVisible, setIsRecDetailModalVisible] = useState(false);
 	const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+	const [showAllPois, setShowAllPois] = useState(false);
+	const [showAllRecommendations, setShowAllRecommendations] = useState(false);
 
 	const addRecommendationModalRef = useRef(null);
 	// Keep the initial useEffect for when tripId changes
@@ -168,9 +170,42 @@ export default function TripDetailScreen() {
 
 	const handleAddRecommendation = () => {
 		setIsDropdownVisible(false);
-		// TODO: Implement add recommendation functionality
 		if (addRecommendationModalRef.current) {
-			addRecommendationModalRef.current.open(null, tripId);
+			let initialMapLocation = null;
+			if (trip) {
+				// Try to get coordinates from the simplified route first
+				if (trip.simplifiedRoute) {
+					const routeCoords = lineStringToCoords(trip.simplifiedRoute);
+					if (routeCoords && routeCoords.length > 0) {
+						initialMapLocation = {
+							lat: routeCoords[0].latitude,
+							lon: routeCoords[0].longitude,
+						};
+					}
+				}
+				// Fallback to trip's start location (assuming GeoJSON Point: [lon, lat])
+				if (
+					!initialMapLocation &&
+					trip.startLocation?.coordinates?.length === 2
+				) {
+					initialMapLocation = {
+						lat: trip.startLocation.coordinates[1],
+						lon: trip.startLocation.coordinates[0],
+					};
+				}
+				// Fallback to trip's end location
+				if (
+					!initialMapLocation &&
+					trip.endLocation?.coordinates?.length === 2
+				) {
+					initialMapLocation = {
+						lat: trip.endLocation.coordinates[1],
+						lon: trip.endLocation.coordinates[0],
+					};
+				}
+			}
+
+			addRecommendationModalRef.current.open(initialMapLocation, tripId);
 		} else {
 			Alert.alert(
 				"Add Recommendation",
@@ -229,10 +264,10 @@ export default function TripDetailScreen() {
 	const handleViewRecommendationDetail = (rec) => {
 		setSelectedRecommendation(rec);
 		setIsRecDetailModalVisible(true);
-		console.log(
-			"Viewing recommendation detailfrom handleViewRecommendationDetail",
-			rec
-		);
+		// console.log(
+		// 	"Viewing recommendation detailfrom handleViewRecommendationDetail",
+		// 	rec
+		// );
 	};
 
 	if (loading) {
@@ -375,14 +410,15 @@ export default function TripDetailScreen() {
 			{/* Points of Interest */}
 			<Section
 				title="Points of Interest"
-				onSeeAll={trip.pois?.length ? handleViewPois : null}
+				onSeeAll={
+					trip.pois?.length > 3 ? () => setShowAllPois(!showAllPois) : null
+				}
+				isExpanded={showAllPois}
 			>
 				{trip.pois && trip.pois.length > 0 ? (
-					trip.pois.slice(0, 3).map(
-						(
-							poi,
-							index // Show first 3
-						) => (
+					// Conditionally render all POIs or just the first 3
+					(showAllPois ? trip.pois : trip.pois.slice(0, 3)).map(
+						(poi, index) => (
 							<Pressable
 								key={`poi-${index}`}
 								style={styles.listItem}
@@ -413,13 +449,19 @@ export default function TripDetailScreen() {
 			<Section
 				title="Recommendations"
 				onSeeAll={
-					trip.recommendations?.length ? handleViewRecommendations : null
+					trip.recommendations?.length > 3
+						? () => setShowAllRecommendations(!showAllRecommendations)
+						: null
 				}
+				isExpanded={showAllRecommendations}
 			>
 				{trip.recommendations && trip.recommendations.length > 0 ? (
-					trip.recommendations.slice(0, 3).map((rec, index) => {
-						// Attempt to find a more descriptive label for the category
-						// You might need to import RECOMMENDATION_CATEGORIES from your constants
+					// Conditionally render all recommendations or just the first 3
+					(showAllRecommendations
+						? trip.recommendations
+						: trip.recommendations.slice(0, 3)
+					).map((rec, index) => {
+						// ...existing code...
 						const categoryLabel = rec.primaryCategory
 							? rec.primaryCategory.charAt(0).toUpperCase() +
 							  rec.primaryCategory.slice(1)
@@ -478,6 +520,7 @@ export default function TripDetailScreen() {
 				recommendation={selectedRecommendation}
 				tripUserId={trip?.user?._id}
 				onEdit={handleEditRecommendation}
+				tripRouteCoordinates={mapCoords}
 			/>
 		</ScrollView>
 	);

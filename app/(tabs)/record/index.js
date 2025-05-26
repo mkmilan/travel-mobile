@@ -96,8 +96,8 @@ export default function RecordScreen() {
 		locationWatcher.current = await Location.watchPositionAsync(
 			{
 				accuracy: Location.Accuracy.High,
-				timeInterval: 1000,
-				distanceInterval: 0,
+				timeInterval: 5000,
+				distanceInterval: 10,
 			},
 			(loc) => {
 				const { latitude, longitude } = loc.coords;
@@ -143,8 +143,8 @@ export default function RecordScreen() {
 			// background updates (write points to SQLite)
 			await Location.startLocationUpdatesAsync(TASK_NAME, {
 				accuracy: Location.Accuracy.High,
-				timeInterval: 1000,
-				distanceInterval: 0,
+				timeInterval: 5000,
+				distanceInterval: 10,
 				showsBackgroundLocationIndicator: true,
 				foregroundService: {
 					notificationTitle: "Recording trip",
@@ -191,8 +191,8 @@ export default function RecordScreen() {
 			// resume background updates
 			await Location.startLocationUpdatesAsync(TASK_NAME, {
 				accuracy: Location.Accuracy.High,
-				timeInterval: 1000,
-				distanceInterval: 0,
+				timeInterval: 5000,
+				distanceInterval: 10,
 				showsBackgroundLocationIndicator: true,
 				foregroundService: {
 					notificationTitle: "Recording trip",
@@ -372,10 +372,7 @@ export default function RecordScreen() {
 
 			{isResolvingLocation && (
 				<View style={styles.loadingOverlay}>
-					<ActivityIndicator
-						size="large"
-						color={theme.colors.primary}
-					/>
+					<ActivityIndicator size="large" color={theme.colors.primary} />
 				</View>
 			)}
 
@@ -383,20 +380,13 @@ export default function RecordScreen() {
 				uploadingTripId === tripId &&
 				status === "stopped" && ( // Loader for main trip upload
 					<View style={styles.loadingOverlay}>
-						<ActivityIndicator
-							size="large"
-							color={theme.colors.primary}
-						/>
+						<ActivityIndicator size="large" color={theme.colors.primary} />
 						<Text style={styles.loadingText}>Uploading trip...</Text>
 					</View>
 				)}
 
 			{status === "idle" && (
-				<CircleButton
-					icon="play"
-					color="green"
-					onPress={handleStart}
-				/>
+				<CircleButton icon="play" color="green" onPress={handleStart} />
 			)}
 
 			{(status === "recording" || status === "paused") && (
@@ -478,10 +468,7 @@ export default function RecordScreen() {
 				</View>
 			)}
 
-			<TripSaveModal
-				ref={sheetRef}
-				onConfirm={handleSaveMeta}
-			/>
+			<TripSaveModal ref={sheetRef} onConfirm={handleSaveMeta} />
 			<AddPoiModal ref={poiModalRef} />
 			<AddRecommendationModal
 				ref={addRecommendationModalRef}
