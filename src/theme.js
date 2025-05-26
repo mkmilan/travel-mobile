@@ -38,6 +38,7 @@ export const darkTheme = {
 	colors: {
 		...theme.colors,
 		background: "#1E1E1E",
+		text3e: "#3e3e3e",
 		text: "#FFFFFF",
 		inputBackground: "#333333",
 		inputBorder: "#555555",

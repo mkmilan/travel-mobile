@@ -3,11 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import * as Updates from "expo-updates";
 import { getCsrfToken } from "./csrf";
 
-const extra =
-	Constants.expoConfig?.extra ||
-	Updates.manifest?.extra ||
-	Constants.manifest?.extra ||
-	{};
+const extra = Constants.expoConfig?.extra || Updates.manifest?.extra || Constants.manifest?.extra || {};
 
 let API_URL = extra.API_URL;
 const APP_ENV = extra.APP_ENV || "unknown";
@@ -26,19 +22,13 @@ if (!API_URL) {
 }
 
 if (!API_URL) {
-	console.error(
-		"[api] API_URL is not defined in app.config.js › extra. " +
-			"Feed calls will fail."
-	);
+	console.error("[api] API_URL is not defined in app.config.js › extra. " + "Feed calls will fail.");
 }
 
 /* ------------------------------------------------------------------ *
  * core fetch wrapper
  * ------------------------------------------------------------------ */
-export async function apiFetch(
-	path,
-	{ method = "GET", auth = true, csrf = false, ...options } = {}
-) {
+export async function apiFetch(path, { method = "GET", auth = true, csrf = false, ...options } = {}) {
 	const headers = {
 		"Content-Type": "application/json",
 		...(options.headers || {}),
@@ -106,6 +96,8 @@ export const getUserById = async (userId) => {
 	const data = await apiFetch(`/users/${userId}`, {
 		method: "GET",
 	});
+	console.log(`[api] getUserById user data`, data);
+
 	return data;
 };
 // ───────────────── updateUserById  ✅ ───────────────── old
@@ -118,6 +110,22 @@ export const updateUserById = async (csrf = true, payload) => {
 	return data;
 };
 
+// ───────────────── getUserSettings  ✅ ───────────────── old
+export const getUserSettings = async () => {
+	const data = await apiFetch(`/users/settings`, {
+		method: "GET",
+	});
+	return data;
+};
+// ───────────────── updateUserSettings  ✅ ───────────────── old
+export const updateUserSettings = async (csrf = true, payload) => {
+	const data = await apiFetch(`/users/settings`, {
+		method: "PUT",
+		csrf,
+		body: JSON.stringify(payload),
+	});
+	return data;
+};
 // ───────────────── V2 routes   ✅ ─────────────────
 
 // ───────────────── uploadTripJson ✅ ─────────────────
@@ -133,12 +141,9 @@ export const uploadTripJson = async (payload, csrf = true) => {
 
 // ───────────────── getMyTrips  ✅ ───────────────── old
 export const getMyJsonTrips = async (page = 1, pageSize = 10) => {
-	const data = await apiFetch(
-		`/v2/trips/json/me?page=${page}&limit=${pageSize}`,
-		{
-			method: "GET",
-		}
-	);
+	const data = await apiFetch(`/v2/trips/json/me?page=${page}&limit=${pageSize}`, {
+		method: "GET",
+	});
 	// console.log("[api] getMyJsonTrips data", data);
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
@@ -164,21 +169,14 @@ export const updateTripJson = async (tripId, payload, csrf = true) => {
 
 // ───────────────── getFeedTripJson  ✅ ─────────────────
 export const getFeedTripJson = async (page = 1, pageSize = 10) => {
-	const data = await apiFetch(
-		`/v2/trips/json/feed?page=${page}&limit=${pageSize}`,
-		{
-			method: "GET",
-		}
-	);
+	const data = await apiFetch(`/v2/trips/json/feed?page=${page}&limit=${pageSize}`, {
+		method: "GET",
+	});
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
 
 // ───────────────── updateRecommendations  ✅ ─────────────────
-export const updateRecommendation = async (
-	recommendationId,
-	updatedData,
-	csrf = true
-) => {
+export const updateRecommendation = async (recommendationId, updatedData, csrf = true) => {
 	const data = await apiFetch(`/v2/recommendations/${recommendationId}`, {
 		method: "PUT",
 		csrf,

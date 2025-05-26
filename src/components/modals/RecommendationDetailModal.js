@@ -35,17 +35,7 @@ const TagChip = ({ label }) => (
 /* main component                                                     */
 /* ------------------------------------------------------------------ */
 const RecommendationDetailModal = forwardRef(
-	(
-		{
-			isVisible,
-			onClose,
-			recommendation,
-			tripUserId,
-			onEdit,
-			tripRouteCoordinates,
-		},
-		ref
-	) => {
+	({ isVisible, onClose, recommendation, tripUserId, onEdit, tripRouteCoordinates }, ref) => {
 		/* run hooks unconditionally */
 		const { user: currentUser } = useAuthStore();
 
@@ -61,22 +51,11 @@ const RecommendationDetailModal = forwardRef(
 		/* ---------------------------------------------------------------- */
 		/* derived data                                                     */
 		/* ---------------------------------------------------------------- */
-		const {
-			_id,
-			name,
-			description,
-			rating,
-			primaryCategory,
-			attributeTags,
-			photos = [],
-			location,
-		} = recommendation;
+		const { _id, name, description, rating, primaryCategory, attributeTags, photos = [], location } = recommendation;
 
 		const canEdit = currentUser?._id === tripUserId;
 
-		const categoryLabel = primaryCategory
-			? primaryCategory.charAt(0).toUpperCase() + primaryCategory.slice(1)
-			: "N/A";
+		const categoryLabel = primaryCategory ? primaryCategory.charAt(0).toUpperCase() + primaryCategory.slice(1) : "N/A";
 
 		/* marker for map */
 		const recPoi =
@@ -106,10 +85,7 @@ const RecommendationDetailModal = forwardRef(
 			<BottomModal visible={isVisible} onClose={onClose}>
 				<ModalHeader title={name || "Recommendation"} onClose={onClose} />
 
-				<ScrollView
-					showsVerticalScrollIndicator={false}
-					contentContainerStyle={{ paddingBottom: theme.space.lg }}
-				>
+				<ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: theme.space.lg }}>
 					{/* header row ------------------------------------------------ */}
 					<View style={styles.headerRow}>
 						<View style={{ flex: 1 }} />
@@ -167,25 +143,12 @@ const RecommendationDetailModal = forwardRef(
 							<Text style={styles.sectionTitle}>Gallery</Text>
 							{photos.length ? (
 								<View style={styles.galleryPlaceholder}>
-									<Feather
-										name="image"
-										size={40}
-										color={theme.colors.textMuted}
-									/>
-									<Text style={styles.placeholderText}>
-										{photos.length} image(s)
-									</Text>
+									<Feather name="image" size={40} color={theme.colors.textMuted} />
+									<Text style={styles.placeholderText}>{photos.length} image(s)</Text>
 								</View>
 							) : (
-								<Pressable
-									style={styles.addPhotosButton}
-									onPress={() => alert("Add photos – TBI")}
-								>
-									<Feather
-										name="plus-circle"
-										size={20}
-										color={theme.colors.primary}
-									/>
+								<Pressable style={styles.addPhotosButton} onPress={() => alert("Add photos – TBI")}>
+									<Feather name="plus-circle" size={20} color={theme.colors.primary} />
 									<Text style={styles.addPhotosButtonText}>Add Photos</Text>
 								</Pressable>
 							)}

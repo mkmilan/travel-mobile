@@ -5,20 +5,12 @@ import { theme } from "@/src/theme";
 // import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import {
-	Alert,
-	Image,
-	ScrollView,
-	StyleSheet,
-	Text,
-	TouchableOpacity,
-	View,
-} from "react-native";
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function EditProfileScreen() {
 	const router = useRouter();
 	const user = useAuthStore((s) => s.user);
-	const setUser = useAuthStore((s) => s.setUser);
+	const updateUser = useAuthStore((s) => s.updateUser);
 
 	const [username, setUsername] = useState(user.username);
 	const [bio, setBio] = useState(user.bio || "");
@@ -39,7 +31,7 @@ export default function EditProfileScreen() {
 			setSaving(true);
 			const payload = { username, bio, profilePictureUrl: avatar };
 			const updated = await updateUserById(true, payload);
-			setUser(updated);
+			await updateUser(updated);
 			router.back();
 		} catch (e) {
 			Alert.alert("Error", e.message);
@@ -49,10 +41,7 @@ export default function EditProfileScreen() {
 	};
 
 	return (
-		<ScrollView
-			style={styles.container}
-			contentContainerStyle={{ padding: theme.space.md }}
-		>
+		<ScrollView style={styles.container} contentContainerStyle={{ padding: theme.space.md }}>
 			{/* avatar pick */}
 			<TouchableOpacity
 				style={styles.avatarWrapper}
@@ -62,9 +51,7 @@ export default function EditProfileScreen() {
 					<Image source={{ uri: avatar }} style={styles.avatar} />
 				) : (
 					<View style={[styles.avatar, styles.avatarPlaceholder]}>
-						<Text style={{ fontSize: 32, color: theme.colors.textMuted }}>
-							+
-						</Text>
+						<Text style={{ fontSize: 32, color: theme.colors.textMuted }}>+</Text>
 					</View>
 				)}
 				<Text style={styles.avatarHint}>Tap to change avatar</Text>
@@ -74,9 +61,7 @@ export default function EditProfileScreen() {
 			<FormField label="Bio" value={bio} onChange={setBio} multiline />
 
 			<TouchableOpacity style={styles.button} onPress={save} disabled={saving}>
-				<Text style={styles.buttonTxt}>
-					{saving ? "Saving…" : "Save Changes"}
-				</Text>
+				<Text style={styles.buttonTxt}>{saving ? "Saving…" : "Save Changes"}</Text>
 			</TouchableOpacity>
 		</ScrollView>
 	);

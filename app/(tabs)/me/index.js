@@ -1,3 +1,4 @@
+import { getUserById } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { darkTheme, theme as lightTheme } from "@/src/theme";
 import { Feather } from "@expo/vector-icons";
@@ -15,7 +16,6 @@ import {
 	View,
 	useColorScheme,
 } from "react-native";
-
 // Placeholder for API_URL - you'll need to import/define this
 const API_URL = "YOUR_API_BASE_URL"; // Replace with your actual API URL
 const FUTURE_TOP_NAVBAR_HEIGHT = 60;
@@ -36,17 +36,10 @@ const StatItem = ({ label, value, onPress }) => {
 	return (
 		<TouchableOpacity
 			onPress={onPress}
-			style={[
-				styles.statItem,
-				{ backgroundColor: activeTheme.colors.inputBackground },
-			]}
+			style={[styles.statItem, { backgroundColor: activeTheme.colors.inputBackground }]}
 		>
-			<Text style={[styles.statValue, { color: activeTheme.colors.text }]}>
-				{value}
-			</Text>
-			<Text style={[styles.statLabel, { color: activeTheme.colors.textMuted }]}>
-				{label}
-			</Text>
+			<Text style={[styles.statValue, { color: activeTheme.colors.text }]}>{value}</Text>
+			<Text style={[styles.statLabel, { color: activeTheme.colors.textMuted }]}>{label}</Text>
 		</TouchableOpacity>
 	);
 };
@@ -82,10 +75,38 @@ export default function MeScreen() {
 		points: 0,
 	});
 
+	// useEffect(() => {
+	// 	if (user) {
+	// 		// Example: setUserStats(prev => ({ ...prev, totalTrips: user.trips?.length || 0 }));
+	// 		console.log("user data:", user);
+
+	// 		setUserStats({
+	// 			totalDistance: user.totalDistance || 0,
+	// 			totalTrips: user.trips?.length || 0,
+	// 			recommendationCount: user.recommendations?.length || 0,
+	// 			followers: user.followers?.length || 0,
+	// 			following: user.following?.length || 0,
+	// 			points: user.points || 0,
+	// 		});
+	// 	}
+	// }, [user]);
+
 	useEffect(() => {
-		if (user) {
-			// Example: setUserStats(prev => ({ ...prev, totalTrips: user.trips?.length || 0 }));
-		}
+		const fetchUserData = async () => {
+			if (user && user._id) {
+				const fetchedUser = await getUserById(user._id);
+				console.log("Fetched user data:", fetchedUser);
+				setUserStats({
+					totalDistance: fetchedUser?.totalDistance || 0,
+					totalTrips: fetchedUser?.totalTrips || 0,
+					recommendationCount: fetchedUser?.totalRecommendations || 0,
+					followers: fetchedUser?.followersCount || 0,
+					following: fetchedUser?.followingCount || 0,
+					points: fetchedUser?.totalPois || 0,
+				});
+			}
+		};
+		fetchUserData();
 	}, [user]);
 
 	if (loading && !user) {
@@ -117,16 +138,9 @@ export default function MeScreen() {
 					styles.centered,
 				]}
 			>
-				<Text style={[styles.messageText, { color: activeTheme.colors.text }]}>
-					User not found.
-				</Text>
+				<Text style={[styles.messageText, { color: activeTheme.colors.text }]}>User not found.</Text>
 				<Link href="/(auth)/login" asChild>
-					<Pressable
-						style={[
-							styles.loginButton,
-							{ backgroundColor: activeTheme.colors.primary },
-						]}
-					>
+					<Pressable style={[styles.loginButton, { backgroundColor: activeTheme.colors.primary }]}>
 						<Text style={styles.loginButtonText}>Go to Login</Text>
 					</Pressable>
 				</Link>
@@ -135,9 +149,7 @@ export default function MeScreen() {
 	}
 
 	const profilePictureFullUrl =
-		user.profilePictureUrl && API_URL !== "YOUR_API_BASE_URL"
-			? `${API_URL}/photos/${user.profilePictureUrl}`
-			: null;
+		user.profilePictureUrl && API_URL !== "YOUR_API_BASE_URL" ? `${API_URL}/photos/${user.profilePictureUrl}` : null;
 
 	const openStatDetailModal = (statName) => {
 		alert(`Modal for ${statName} (User ID: ${user._id}) - To be implemented`);
@@ -146,25 +158,14 @@ export default function MeScreen() {
 	return (
 		<>
 			<ScrollView
-				style={[
-					styles.container,
-					{ backgroundColor: activeTheme.colors.background },
-				]}
+				style={[styles.container, { backgroundColor: activeTheme.colors.background }]}
 				contentContainerStyle={styles.contentContainer}
 				showsVerticalScrollIndicator={false}
 			>
 				{/* Profile Header */}
-				<View
-					style={[
-						styles.profileHeader,
-						{ borderBottomColor: activeTheme.colors.inputBorder },
-					]}
-				>
+				<View style={[styles.profileHeader, { borderBottomColor: activeTheme.colors.inputBorder }]}>
 					{profilePictureFullUrl ? (
-						<Image
-							source={{ uri: profilePictureFullUrl }}
-							style={styles.profilePicture}
-						/>
+						<Image source={{ uri: profilePictureFullUrl }} style={styles.profilePicture} />
 					) : (
 						<View
 							style={[
@@ -176,38 +177,19 @@ export default function MeScreen() {
 								},
 							]}
 						>
-							<Text
-								style={[
-									styles.placeholderText,
-									{ color: activeTheme.colors.textMuted },
-								]}
-							>
+							<Text style={[styles.placeholderText, { color: activeTheme.colors.textMuted }]}>
 								{user.username ? user.username.charAt(0).toUpperCase() : "U"}
 							</Text>
 						</View>
 					)}
-					<Text style={[styles.username, { color: activeTheme.colors.text }]}>
-						{user.username}
-					</Text>
-					{user.bio ? (
-						<Text style={[styles.bio, { color: activeTheme.colors.textMuted }]}>
-							{user.bio}
-						</Text>
-					) : null}
+					<Text style={[styles.username, { color: activeTheme.colors.text }]}>{user.username}</Text>
+					{user.bio ? <Text style={[styles.bio, { color: activeTheme.colors.textMuted }]}>{user.bio}</Text> : null}
 				</View>
 
 				{/* Stats Section */}
 				<View style={styles.statsSection}>
-					<StatItem
-						label="Trips"
-						value={userStats.totalTrips}
-						onPress={() => openStatDetailModal("Trips")}
-					/>
-					<StatItem
-						label="Distance"
-						value={userStats.totalDistance}
-						onPress={() => openStatDetailModal("Distance")}
-					/>
+					<StatItem label="Trips" value={userStats.totalTrips} onPress={() => openStatDetailModal("Trips")} />
+					<StatItem label="Distance" value={userStats.totalDistance} onPress={() => openStatDetailModal("Distance")} />
 					<StatItem
 						label="Followers"
 						value={user.followers?.length || 0}
@@ -223,49 +205,29 @@ export default function MeScreen() {
 						value={userStats.recommendationCount}
 						onPress={() => openStatDetailModal("Recommendations")}
 					/>
-					<StatItem
-						label="Points"
-						value={userStats.points}
-						onPress={() => openStatDetailModal("Points")}
-					/>
+					<StatItem label="Points" value={userStats.points} onPress={() => openStatDetailModal("Points")} />
 				</View>
 
 				{/* EDIT AND SETTINGS BUTTONS - SIDE BY SIDE */}
 				<View style={styles.buttonRow}>
 					<Link href="/(tabs)/me/edit-profile" asChild>
 						<TouchableOpacity style={styles.editButton}>
-							<Feather
-								name="edit-2"
-								size={18}
-								color="#FFFFFF"
-								style={styles.buttonIcon}
-							/>
+							<Feather name="edit-2" size={18} color="#FFFFFF" style={styles.buttonIcon} />
 							<Text style={styles.buttonText}>Edit Profile</Text>
 						</TouchableOpacity>
 					</Link>
 
 					<Link href="/(tabs)/me/settings" asChild>
 						<TouchableOpacity style={styles.settingsButton}>
-							<Feather
-								name="settings"
-								size={18}
-								color="#333333"
-								style={styles.buttonIcon}
-							/>
-							<Text style={[styles.buttonText, { color: "#333333" }]}>
-								Settings
-							</Text>
+							<Feather name="settings" size={18} color="#333333" style={styles.buttonIcon} />
+							<Text style={[styles.buttonText, { color: "#333333" }]}>Settings</Text>
 						</TouchableOpacity>
 					</Link>
 				</View>
 
 				{/* Gallery Section Placeholder */}
 				<View style={styles.gallerySection}>
-					<Text
-						style={[styles.sectionTitle, { color: activeTheme.colors.text }]}
-					>
-						My Gallery
-					</Text>
+					<Text style={[styles.sectionTitle, { color: activeTheme.colors.text }]}>My Gallery</Text>
 					<View
 						style={[
 							styles.galleryPlaceholder,
@@ -275,17 +237,8 @@ export default function MeScreen() {
 							},
 						]}
 					>
-						<Feather
-							name="image"
-							size={48}
-							color={activeTheme.colors.textMuted}
-						/>
-						<Text
-							style={[
-								styles.galleryPlaceholderText,
-								{ color: activeTheme.colors.textMuted },
-							]}
-						>
+						<Feather name="image" size={48} color={activeTheme.colors.textMuted} />
+						<Text style={[styles.galleryPlaceholderText, { color: activeTheme.colors.textMuted }]}>
 							Gallery coming soon
 						</Text>
 					</View>
