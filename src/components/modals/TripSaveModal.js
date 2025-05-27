@@ -2,26 +2,11 @@ import TransportIcon from "@/src/components/TransportIcon";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { forwardRef, useImperativeHandle, useState } from "react";
-import {
-	KeyboardAvoidingView,
-	Platform,
-	Pressable,
-	ScrollView,
-	Text,
-	TextInput,
-	View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Modal from "react-native-modal";
 
 /* selectable chips --------------------------------------------------------*/
-const MODES = [
-	"motorhome",
-	"campervan",
-	"car",
-	"motorcycle",
-	"bicycle",
-	"walking",
-];
+const MODES = ["motorhome", "campervan", "car", "motorcycle", "bicycle", "walking"];
 const VISIBILITIES = ["public", "followers_only", "private"];
 
 const Chip = ({ label, selected, onPress, children }) => (
@@ -56,23 +41,20 @@ const Chip = ({ label, selected, onPress, children }) => (
 const TripSaveModal = forwardRef(({ onConfirm }, ref) => {
 	const user = useAuthStore((s) => s.user) || {};
 	const defaults = user?.settings || {};
+	console.log("TripSaveModal  user.settings:", user.settings);
 
 	const [visible, setVisible] = useState(false);
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState(""); // Add description state
 	const [mode, setMode] = useState(defaults.defaultTravelMode || "motorhome");
-	const [visibility, setVisibility] = useState(
-		defaults.defaultTripVisibility || "public"
-	);
+	const [visibility, setVisibility] = useState(defaults.defaultTripVisibility || "public");
 
 	useImperativeHandle(ref, () => ({
 		open(initialTitle, initialMode, initialVisibility, initialDescription) {
 			setTitle(initialTitle || "");
 			setDescription(initialDescription || ""); // Initialize description
 			setMode(initialMode || defaults.defaultTravelMode || "motorhome");
-			setVisibility(
-				initialVisibility || defaults.defaultTripVisibility || "public"
-			);
+			setVisibility(initialVisibility || defaults.defaultTripVisibility || "public");
 			setVisible(true);
 		},
 	}));
@@ -197,16 +179,8 @@ const TripSaveModal = forwardRef(({ onConfirm }, ref) => {
 							}}
 						>
 							{MODES.map((m) => (
-								<Chip
-									key={m}
-									label={m}
-									selected={m === mode}
-									onPress={() => setMode(m)}
-								>
-									<TransportIcon
-										mode={m}
-										size={18}
-									/>
+								<Chip key={m} label={m} selected={m === mode} onPress={() => setMode(m)}>
+									<TransportIcon mode={m} size={18} />
 								</Chip>
 							))}
 						</View>

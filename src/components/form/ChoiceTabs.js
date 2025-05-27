@@ -228,8 +228,11 @@ const base = theme; // alias
 const styles = StyleSheet.create({
 	row: { flexDirection: "row", flexWrap: "wrap", gap: base.space.sm },
 	tab: {
+		height: base.space.xl + 20,
+		width: base.space.xl + 130,
 		flexDirection: "row",
 		alignItems: "center",
+		justifyContent: "center",
 		paddingHorizontal: base.space.md + 2,
 		paddingVertical: base.space.sm + 2,
 		backgroundColor: base.colors.background,

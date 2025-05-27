@@ -96,7 +96,7 @@ export const getUserById = async (userId) => {
 	const data = await apiFetch(`/users/${userId}`, {
 		method: "GET",
 	});
-	console.log(`[api] getUserById user data`, data);
+	// console.log(`[api] getUserById user data`, data);
 
 	return data;
 };
@@ -124,6 +124,8 @@ export const updateUserSettings = async (csrf = true, payload) => {
 		csrf,
 		body: JSON.stringify(payload),
 	});
+	console.log("[api] updateUserSettings data", data);
+
 	return data;
 };
 // ───────────────── V2 routes   ✅ ─────────────────

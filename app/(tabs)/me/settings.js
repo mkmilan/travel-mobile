@@ -12,7 +12,7 @@ import {
 	travelModeOptions,
 	tripVisibilityOptions,
 } from "@/src/constants/settingsOptions";
-import { updateUserById } from "@/src/services/api";
+import { updateUserSettings } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import Feather from "@expo/vector-icons/Feather";
@@ -72,7 +72,9 @@ export default function SettingsScreen() {
 
 	const save = async () => {
 		try {
-			const updated = await updateUserById(true, { settings: s });
+			// const updated = await updateUserSettings(true, { settings: s });
+			const updated = await updateUserSettings(true, s);
+			console.log("[SettingsScreen] save settings before put", s);
 			await updateUser(updated); // bullet-proof merge inside the store
 			router.back();
 		} catch (e) {
@@ -186,6 +188,7 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		color: theme.colors.text,
 		marginTop: theme.space.md,
+		marginBottom: theme.space.md,
 	},
 	button: {
 		backgroundColor: theme.colors.primary,

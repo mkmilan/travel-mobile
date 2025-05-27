@@ -75,27 +75,11 @@ export default function MeScreen() {
 		points: 0,
 	});
 
-	// useEffect(() => {
-	// 	if (user) {
-	// 		// Example: setUserStats(prev => ({ ...prev, totalTrips: user.trips?.length || 0 }));
-	// 		console.log("user data:", user);
-
-	// 		setUserStats({
-	// 			totalDistance: user.totalDistance || 0,
-	// 			totalTrips: user.trips?.length || 0,
-	// 			recommendationCount: user.recommendations?.length || 0,
-	// 			followers: user.followers?.length || 0,
-	// 			following: user.following?.length || 0,
-	// 			points: user.points || 0,
-	// 		});
-	// 	}
-	// }, [user]);
-
 	useEffect(() => {
 		const fetchUserData = async () => {
 			if (user && user._id) {
 				const fetchedUser = await getUserById(user._id);
-				console.log("Fetched user data:", fetchedUser);
+				// console.log("Fetched user data:", fetchedUser);
 				setUserStats({
 					totalDistance: fetchedUser?.totalDistance || 0,
 					totalTrips: fetchedUser?.totalTrips || 0,

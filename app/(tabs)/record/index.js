@@ -19,25 +19,13 @@ import { uploadTripJson } from "@/src/services/api";
 import { getTripLocationNames } from "@/src/services/locationNames";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
-import {
-	clearActiveTrip,
-	getActiveTrip,
-	setActiveTrip,
-} from "@/src/utils/activeTrip";
+import { clearActiveTrip, getActiveTrip, setActiveTrip } from "@/src/utils/activeTrip";
 import { toast } from "@/src/utils/toast";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import { useEffect, useRef, useState } from "react";
-import {
-	ActivityIndicator,
-	Alert,
-	FlatList,
-	StyleSheet,
-	Text,
-	TouchableOpacity,
-	View,
-} from "react-native";
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function RecordScreen() {
 	// ─────── state ────────────────────────────────────────────────────────────
@@ -59,6 +47,7 @@ export default function RecordScreen() {
 	const pendingNames = useRef({ startName: "Unknown", endName: "Unknown" });
 
 	const user = useAuthStore((s) => s.user);
+	console.log("RecordScreen user:", user);
 
 	// ─────── migrations + first load ─────────────────────────────────────────
 	useEffect(() => {
@@ -207,55 +196,48 @@ export default function RecordScreen() {
 	};
 
 	const handleStop = async () => {
-		Alert.alert(
-			"Stop recording?",
-			"Are you sure you want to finish this track?",
-			[
-				{ text: "Continue", style: "cancel" },
-				{
-					text: "Stop",
-					style: "destructive",
-					onPress: async () => {
-						await stopLocationWatcher();
-						// stop background updates
-						await Location.stopLocationUpdatesAsync(TASK_NAME);
-						await clearActiveTrip();
-						//--------------------------------//
-						setIsResolvingLocation(true);
-						try {
-							const { startName, endName } = await getTripLocationNames({
-								start: firstPoint.current ?? {},
-								end: lastPoint.current ?? {},
-							});
+		Alert.alert("Stop recording?", "Are you sure you want to finish this track?", [
+			{ text: "Continue", style: "cancel" },
+			{
+				text: "Stop",
+				style: "destructive",
+				onPress: async () => {
+					await stopLocationWatcher();
+					// stop background updates
+					await Location.stopLocationUpdatesAsync(TASK_NAME);
+					await clearActiveTrip();
+					//--------------------------------//
+					setIsResolvingLocation(true);
+					try {
+						const { startName, endName } = await getTripLocationNames({
+							start: firstPoint.current ?? {},
+							end: lastPoint.current ?? {},
+						});
 
-							// toast({ type: "warning", title: "Recording stopped" });
+						// toast({ type: "warning", title: "Recording stopped" });
 
-							pendingNames.current = { startName, endName };
-							// console.log("Pending names:", pendingNames.current);
-							const defaultMode = user?.settings?.defaultTransportMode || "car";
+						pendingNames.current = { startName, endName };
+						// console.log("Pending names:", pendingNames.current);
+						const defaultMode = user?.settings?.defaultTravelMode || "car";
 
-							setStatus("stopped");
-							setIsResolvingLocation(false);
+						setStatus("stopped");
+						setIsResolvingLocation(false);
 
-							sheetRef.current?.open(
-								`From ${startName} to ${endName}`,
-								defaultMode
-							);
-						} catch (error) {
-							console.error("Error getting location names:", error);
-							toast({
-								type: "danger",
-								title: "Error",
-								msg: "Could not resolve location names. Add it manually",
-							});
-							setIsResolvingLocation(false);
-							// Optionally, reset status if needed, e.g., setStatus("idle");
-						}
-						// await refreshPending();
-					},
+						sheetRef.current?.open(`From ${startName} to ${endName}`, defaultMode);
+					} catch (error) {
+						console.error("Error getting location names:", error);
+						toast({
+							type: "danger",
+							title: "Error",
+							msg: "Could not resolve location names. Add it manually",
+						});
+						setIsResolvingLocation(false);
+						// Optionally, reset status if needed, e.g., setStatus("idle");
+					}
+					// await refreshPending();
 				},
-			]
-		);
+			},
+		]);
 	};
 
 	const handleSaveMeta = async ({ title, mode, visibility, description }) => {
@@ -267,7 +249,7 @@ export default function RecordScreen() {
 			description,
 			startName: pendingNames.current.startName,
 			endName: pendingNames.current.endName,
-			defaultTransportMode: mode,
+			defaultTravelMode: mode,
 			defaultTripVisibility: visibility,
 		});
 
@@ -385,9 +367,7 @@ export default function RecordScreen() {
 					</View>
 				)}
 
-			{status === "idle" && (
-				<CircleButton icon="play" color="green" onPress={handleStart} />
-			)}
+			{status === "idle" && <CircleButton icon="play" color="green" onPress={handleStart} />}
 
 			{(status === "recording" || status === "paused") && (
 				<>
@@ -397,11 +377,7 @@ export default function RecordScreen() {
 							color={theme.colors.secondary}
 							onPress={handlePauseResume}
 						/>
-						<CircleButton
-							icon="stop"
-							color={theme.colors.error}
-							onPress={handleStop}
-						/>
+						<CircleButton icon="stop" color={theme.colors.error} onPress={handleStop} />
 					</View>
 					{/* ── NEW secondary buttons ───────────────── */}
 					<View style={styles.row}>
@@ -412,11 +388,7 @@ export default function RecordScreen() {
 							// style={{ marginLeft: theme.space.md }}
 						/>
 						{/* <Text style={styles.actionButtonText}>Add POI</Text> */}
-						<CircleButton
-							icon="star"
-							color={theme.colors.warning}
-							onPress={handleOpenRecommendationModal}
-						/>
+						<CircleButton icon="star" color={theme.colors.warning} onPress={handleOpenRecommendationModal} />
 						{/* <Text style={styles.actionButtonText}>Add Recommendation</Text> */}
 					</View>
 				</>
@@ -424,19 +396,9 @@ export default function RecordScreen() {
 
 			{status === "stopped" && (
 				<>
-					<CircleButton
-						icon="cloud-upload"
-						color="green"
-						onPress={() => handleUpload()}
-					/>
-					<TouchableOpacity
-						onPress={resetState}
-						style={{ marginTop: 24 }}
-						disabled={isUploading}
-					>
-						<Text style={{ color: theme.colors.link, fontSize: 16 }}>
-							Start a new trip
-						</Text>
+					<CircleButton icon="cloud-upload" color="green" onPress={() => handleUpload()} />
+					<TouchableOpacity onPress={resetState} style={{ marginTop: 24 }} disabled={isUploading}>
+						<Text style={{ color: theme.colors.link, fontSize: 16 }}>Start a new trip</Text>
 					</TouchableOpacity>
 				</>
 			)}
@@ -444,9 +406,7 @@ export default function RecordScreen() {
 			{/* local trips still on device */}
 			{pending.length > 0 && (
 				<View style={{ alignSelf: "stretch", marginTop: 32 }}>
-					<Text style={{ color: theme.colors.text, marginBottom: 6 }}>
-						Trips on device ({pending.length})
-					</Text>
+					<Text style={{ color: theme.colors.text, marginBottom: 6 }}>Trips on device ({pending.length})</Text>
 
 					<FlatList
 						data={pending}
@@ -470,43 +430,25 @@ export default function RecordScreen() {
 
 			<TripSaveModal ref={sheetRef} onConfirm={handleSaveMeta} />
 			<AddPoiModal ref={poiModalRef} />
-			<AddRecommendationModal
-				ref={addRecommendationModalRef}
-				onSubmit={handleRecommendationSubmit}
-			/>
+			<AddRecommendationModal ref={addRecommendationModalRef} onSubmit={handleRecommendationSubmit} />
 		</View>
 	);
 }
 
-const PendingRow = ({
-	item,
-	onUpload,
-	onDelete,
-	isUploading,
-	uploadingTripId,
-}) => {
-	const isCurrentlyUploadingThisItem =
-		isUploading && uploadingTripId === item.id;
-	const isAnotherItemUploading =
-		isUploading && uploadingTripId !== null && uploadingTripId !== item.id;
+const PendingRow = ({ item, onUpload, onDelete, isUploading, uploadingTripId }) => {
+	const isCurrentlyUploadingThisItem = isUploading && uploadingTripId === item.id;
+	const isAnotherItemUploading = isUploading && uploadingTripId !== null && uploadingTripId !== item.id;
 
 	const uploadButtonDisabled = isAnotherItemUploading;
 	const deleteButtonDisabled = isUploading; // Disable delete if any upload is in progress
 
 	return (
-		<View
-			style={{ flexDirection: "row", paddingVertical: 4, alignItems: "center" }}
-		>
+		<View style={{ flexDirection: "row", paddingVertical: 4, alignItems: "center" }}>
 			<Text style={{ color: theme.colors.text, flex: 1 }}>
-				{new Date(item.start_time).toLocaleDateString()} · {item.pointsCount}{" "}
-				pts
+				{new Date(item.start_time).toLocaleDateString()} · {item.pointsCount} pts
 			</Text>
 			{isCurrentlyUploadingThisItem ? (
-				<ActivityIndicator
-					size="small"
-					color="green"
-					style={{ marginRight: 16 }}
-				/>
+				<ActivityIndicator size="small" color="green" style={{ marginRight: 16 }} />
 			) : (
 				<Ionicons
 					name="cloud-upload"
