@@ -110,7 +110,6 @@ export default function TripDetailScreen() {
 	const isOwner = isAuthenticated && trip && trip.user?._id === currentUser?._id;
 
 	const handleEdit = () => {
-		// Navigate to an edit screen (to be created)
 		setIsDropdownVisible(false);
 		router.push(`/trip/${tripId}/edit`);
 	};

@@ -52,6 +52,7 @@ const RecommendationDetailModal = forwardRef(
 		/* derived data                                                     */
 		/* ---------------------------------------------------------------- */
 		const { _id, name, description, rating, primaryCategory, attributeTags, photos = [], location } = recommendation;
+		console.log("RecommendationDetailModal", { recommendation });
 
 		const canEdit = currentUser?._id === tripUserId;
 

@@ -205,40 +205,22 @@ export const addRecommendation = async (recommendationData, csrf = true) => {
 	});
 	return data;
 };
-/**
- *
- *
-router.get("/search", protect, searchUsers);
-router.get("/settings", protect, getUserSettings);
-router.put("/settings", protect, updateUserSettings);
-router.get("/:userId", getUserProfileById);
-// --- End reorder ---
 
-/users/
-router.post("/:userId/follow", protect, followUser);
-router.delete("/:userId/follow", protect, unfollowUser);
-router.get("/:userId/recommendations", getUserRecommendations);
-router.get("/:userId/pois", getUserPois);
-router.get("/:userId/followers", getUserFollowers);
-router.get("/:userId/following", getUserFollowing);
-router.get("/:userId/photos", getUserPhotos);
-
- */
 //targeted user id is userId our/user that make call is in req
 export const getTripsByUser = async (userId, page = 1, limit = 10) => {
-	const data = await apiFetch(`/v2/trips/json/user/userId=${userId}&page=${page}&limit=${limit}`, {
+	const data = await apiFetch(`/v2/trips/json/user/${userId}?page=${page}&limit=${limit}`, {
 		method: "GET",
 	});
-	console.log("[api] getTripsByUser data", data);
+	// console.log("[api] getTripsByUser data", data);
 
 	return data;
 };
 
 // Fetch recommendations roe requested user requested user id is userId
 export const getRecommendationsByUser = async (userId, page = 1, limit = 10) => {
-	const data = await apiFetch(`/v2/recommendations/user/userId=${userId}&page=${page}&limit=${limit}`, {
+	const data = await apiFetch(`/v2/recommendations/user/${userId}?page=${page}&limit=${limit}`, {
 		method: "GET",
 	});
-	console.log("[api] getRecommendationsByUser data", data);
+	// console.log("[api] getRecommendationsByUser data", data);
 	return data;
 };

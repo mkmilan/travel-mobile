@@ -1,9 +1,6 @@
 import BottomModal from "@/src/components/modals/BottomModal"; // <- shared wrapper
 import ModalHeader from "@/src/components/modals/ModalHeader";
-import {
-	RECOMMENDATION_CATEGORIES,
-	RECOMMENDATION_TAGS,
-} from "@/src/constants/recommendationConstants";
+import { RECOMMENDATION_CATEGORIES, RECOMMENDATION_TAGS } from "@/src/constants/recommendationConstants";
 import { theme } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { forwardRef, useImperativeHandle, useState } from "react";
@@ -27,8 +24,7 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 	const [open, setOpen] = useState(false);
 
 	const selectedCategoryLabel =
-		RECOMMENDATION_CATEGORIES.find((cat) => cat.value === selectedCategory)
-			?.label || "Select Category";
+		RECOMMENDATION_CATEGORIES.find((cat) => cat.value === selectedCategory)?.label || "Select Category";
 
 	return (
 		<View>
@@ -47,19 +43,13 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 			>
 				<Text
 					style={{
-						color: selectedCategory
-							? theme.colors.text
-							: theme.colors.textMuted,
+						color: selectedCategory ? theme.colors.text : theme.colors.textMuted,
 						fontSize: theme.fontSize.sm,
 					}}
 				>
 					{selectedCategoryLabel}
 				</Text>
-				<Ionicons
-					name="chevron-down"
-					size={20}
-					color={theme.colors.textMuted}
-				/>
+				<Ionicons name="chevron-down" size={20} color={theme.colors.textMuted} />
 			</Pressable>
 			{/* bottom-sheet */}
 			<BottomModal visible={open} onClose={() => setOpen(false)}>
@@ -92,11 +82,7 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 									{category.label}
 								</Text>
 								{selectedCategory === category.value && (
-									<Ionicons
-										name="checkmark"
-										size={18}
-										color={theme.colors.primary}
-									/>
+									<Ionicons name="checkmark" size={18} color={theme.colors.primary} />
 								)}
 							</Pressable>
 						))}
@@ -135,21 +121,13 @@ const TagsSelector = ({ selectedTags, onTagsChange }) => {
 			>
 				<Text
 					style={{
-						color: selectedTags.length
-							? theme.colors.text
-							: theme.colors.textMuted,
+						color: selectedTags.length ? theme.colors.text : theme.colors.textMuted,
 						fontSize: theme.fontSize.sm,
 					}}
 				>
-					{selectedTags.length > 0
-						? `${selectedTags.length} selected`
-						: "Select features"}
+					{selectedTags.length > 0 ? `${selectedTags.length} selected` : "Select features"}
 				</Text>
-				<Ionicons
-					name="chevron-down"
-					size={18}
-					color={theme.colors.textMuted}
-				/>
+				<Ionicons name="chevron-down" size={18} color={theme.colors.textMuted} />
 			</Pressable>
 
 			<BottomModal visible={open} onClose={() => setOpen(false)}>
@@ -177,13 +155,7 @@ const TagsSelector = ({ selectedTags, onTagsChange }) => {
 							>
 								{tag.label}
 							</Text>
-							{selectedTags.includes(tag.value) && (
-								<Ionicons
-									name="checkmark"
-									size={18}
-									color={theme.colors.primary}
-								/>
-							)}
+							{selectedTags.includes(tag.value) && <Ionicons name="checkmark" size={18} color={theme.colors.primary} />}
 						</Pressable>
 					))}
 				</ScrollView>
@@ -340,10 +312,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			recommendationData._id = editingRecommendationId;
 		}
 
-		console.log(
-			isEditMode ? "Updating recommendation:" : "Submitting recommendation:",
-			recommendationData
-		);
+		console.log(isEditMode ? "Updating recommendation:" : "Submitting recommendation:", recommendationData);
 
 		onSubmit(recommendationData, isEditMode);
 		setVisible(false);
@@ -361,10 +330,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			/>
 
 			{/* Keyboard handling */}
-			<KeyboardAvoidingView
-				behavior={Platform.OS === "ios" ? "padding" : undefined}
-				style={{ flex: 1 }}
-			>
+			<KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
 				<ScrollView
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={{ paddingBottom: theme.space.lg }}
@@ -430,10 +396,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 					{/* Rating -------------------------------------------- */}
 					<View style={styles.field}>
 						<Text style={styles.label}>Rating</Text>
-						<StarRating
-							rating={formData.rating}
-							onRatingChange={(r) => updateField("rating", r)}
-						/>
+						<StarRating rating={formData.rating} onRatingChange={(r) => updateField("rating", r)} />
 					</View>
 
 					{/* Category / Tags ----------------------------------- */}
@@ -444,20 +407,12 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 						/>
 					</View>
 					<View style={styles.field}>
-						<TagsSelector
-							selectedTags={formData.attributeTags}
-							onTagsChange={(t) => updateField("attributeTags", t)}
-						/>
+						<TagsSelector selectedTags={formData.attributeTags} onTagsChange={(t) => updateField("attributeTags", t)} />
 					</View>
 
 					{/* Submit -------------------------------------------- */}
-					<Pressable
-						onPress={handleSubmit}
-						style={[styles.button, { backgroundColor: theme.colors.primary }]}
-					>
-						<Text style={styles.buttonText}>
-							{isEditMode ? "Update Recommendation" : "Save Recommendation"}
-						</Text>
+					<Pressable onPress={handleSubmit} style={[styles.button, { backgroundColor: theme.colors.primary }]}>
+						<Text style={styles.buttonText}>{isEditMode ? "Update Recommendation" : "Save Recommendation"}</Text>
 					</Pressable>
 				</ScrollView>
 			</KeyboardAvoidingView>

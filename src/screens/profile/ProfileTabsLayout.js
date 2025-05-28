@@ -12,11 +12,14 @@ const TopTabs = createMaterialTopTabNavigator();
  */
 export default function ProfileTabsLayout({ isSelf = false, userId, summaryData, topOffset = 0 }) {
 	const insets = useSafeAreaInsets();
+	console.log("ProfileTabsLayout userid 2 step", { isSelf, userId });
+	// console.log("ProfileTabsLayout summaryData", summaryData);
 
 	return (
 		<TopTabs.Navigator
 			initialRouteName="Overview"
 			screenOptions={{
+				lazy: true,
 				tabBarIndicatorStyle: { backgroundColor: "#4A90E2", height: 3 },
 				tabBarActiveTintColor: "#111",
 				tabBarInactiveTintColor: "#666",
