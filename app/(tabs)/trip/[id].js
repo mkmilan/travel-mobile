@@ -5,33 +5,15 @@ import RecommendationDetailModal from "@/src/components/modals/RecommendationDet
 import IconStatDisplay from "@/src/components/trip/IconStatDisplay";
 import Section from "@/src/components/trip/Section";
 import SocialButton from "@/src/components/trip/SocialButton";
-import {
-	addRecommendation,
-	getTripJsonById,
-	updateRecommendation,
-} from "@/src/services/api";
+import { addRecommendation, getTripJsonById, updateRecommendation } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
-import {
-	calcAvgSpeed,
-	isoToDate,
-	kmOrMiles,
-	msToDuration,
-} from "@/src/utils/format";
+import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-	ActivityIndicator,
-	Alert,
-	Modal,
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 const StarRatingDisplay = ({ rating, size = 20, style }) => {
 	return (
@@ -49,20 +31,9 @@ const StarRatingDisplay = ({ rating, size = 20, style }) => {
 	);
 };
 
-const DropdownMenu = ({
-	isVisible,
-	onClose,
-	onEdit,
-	onDelete,
-	onAddRecommendation,
-}) => {
+const DropdownMenu = ({ isVisible, onClose, onEdit, onDelete, onAddRecommendation }) => {
 	return (
-		<Modal
-			transparent
-			visible={isVisible}
-			onRequestClose={onClose}
-			animationType="fade"
-		>
+		<Modal transparent visible={isVisible} onRequestClose={onClose} animationType="fade">
 			<Pressable style={styles.modalOverlay} onPress={onClose}>
 				<View style={styles.dropdownMenu}>
 					<Pressable style={styles.dropdownItem} onPress={onEdit}>
@@ -77,11 +48,7 @@ const DropdownMenu = ({
 
 					<Pressable style={styles.dropdownItem} onPress={onDelete}>
 						<Feather name="trash-2" size={18} color={theme.colors.error} />
-						<Text
-							style={[styles.dropdownItemText, { color: theme.colors.error }]}
-						>
-							Delete Trip
-						</Text>
+						<Text style={[styles.dropdownItemText, { color: theme.colors.error }]}>Delete Trip</Text>
 					</Pressable>
 				</View>
 			</Pressable>
@@ -140,8 +107,7 @@ export default function TripDetailScreen() {
 		}
 	};
 
-	const isOwner =
-		isAuthenticated && trip && trip.user?._id === currentUser?._id;
+	const isOwner = isAuthenticated && trip && trip.user?._id === currentUser?._id;
 
 	const handleEdit = () => {
 		// Navigate to an edit screen (to be created)
@@ -151,21 +117,17 @@ export default function TripDetailScreen() {
 
 	const handleDelete = () => {
 		setIsDropdownVisible(false);
-		Alert.alert(
-			"Delete Trip",
-			"Are you sure you want to delete this trip? This action cannot be undone.",
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Delete",
-					style: "destructive",
-					onPress: () => {
-						// TODO: Implement delete functionality
-						Alert.alert("Delete", "Delete functionality to be implemented.");
-					},
+		Alert.alert("Delete Trip", "Are you sure you want to delete this trip? This action cannot be undone.", [
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Delete",
+				style: "destructive",
+				onPress: () => {
+					// TODO: Implement delete functionality
+					Alert.alert("Delete", "Delete functionality to be implemented.");
 				},
-			]
-		);
+			},
+		]);
 	};
 
 	const handleAddRecommendation = () => {
@@ -184,20 +146,14 @@ export default function TripDetailScreen() {
 					}
 				}
 				// Fallback to trip's start location (assuming GeoJSON Point: [lon, lat])
-				if (
-					!initialMapLocation &&
-					trip.startLocation?.coordinates?.length === 2
-				) {
+				if (!initialMapLocation && trip.startLocation?.coordinates?.length === 2) {
 					initialMapLocation = {
 						lat: trip.startLocation.coordinates[1],
 						lon: trip.startLocation.coordinates[0],
 					};
 				}
 				// Fallback to trip's end location
-				if (
-					!initialMapLocation &&
-					trip.endLocation?.coordinates?.length === 2
-				) {
+				if (!initialMapLocation && trip.endLocation?.coordinates?.length === 2) {
 					initialMapLocation = {
 						lat: trip.endLocation.coordinates[1],
 						lon: trip.endLocation.coordinates[0],
@@ -207,10 +163,7 @@ export default function TripDetailScreen() {
 
 			addRecommendationModalRef.current.open(initialMapLocation, tripId);
 		} else {
-			Alert.alert(
-				"Add Recommendation",
-				"Add recommendation functionality to be implemented."
-			);
+			Alert.alert("Add Recommendation", "Add recommendation functionality to be implemented.");
 		}
 	};
 	const handleEditRecommendation = (recommendation) => {
@@ -218,10 +171,7 @@ export default function TripDetailScreen() {
 		addRecommendationModalRef.current?.openEdit(recommendation);
 	};
 
-	const handleRecommendationSubmit = async (
-		recommendationData,
-		isEditMode = false
-	) => {
+	const handleRecommendationSubmit = async (recommendationData, isEditMode = false) => {
 		try {
 			if (isEditMode) {
 				// Update existing recommendation
@@ -237,29 +187,17 @@ export default function TripDetailScreen() {
 			fetchTripDetails();
 		} catch (error) {
 			console.error("Failed to save recommendation:", error);
-			Alert.alert(
-				"Error",
-				isEditMode
-					? "Failed to update recommendation"
-					: "Failed to add recommendation"
-			);
+			Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
 		}
 	};
 
-	const handleViewLikes = () =>
-		Alert.alert("Likes", "View likes functionality to be implemented.");
-	const handleViewComments = () =>
-		Alert.alert("Comments", "View comments functionality to be implemented.");
-	const handleShare = () =>
-		Alert.alert("Share", "Share functionality to be implemented.");
+	const handleViewLikes = () => Alert.alert("Likes", "View likes functionality to be implemented.");
+	const handleViewComments = () => Alert.alert("Comments", "View comments functionality to be implemented.");
+	const handleShare = () => Alert.alert("Share", "Share functionality to be implemented.");
 
-	const handleViewPois = () =>
-		Alert.alert("POIs", "View all POIs functionality to be implemented.");
+	const handleViewPois = () => Alert.alert("POIs", "View all POIs functionality to be implemented.");
 	const handleViewRecommendations = () =>
-		Alert.alert(
-			"Recommendations",
-			"View all recommendations functionality to be implemented."
-		);
+		Alert.alert("Recommendations", "View all recommendations functionality to be implemented.");
 
 	const handleViewRecommendationDetail = (rec) => {
 		setSelectedRecommendation(rec);
@@ -293,10 +231,9 @@ export default function TripDetailScreen() {
 	const tripUser = trip.user || {};
 	const distance = kmOrMiles(trip.distanceMeters);
 	const duration = msToDuration(trip.durationMillis);
-	const avgSpeedDisplay = `${calcAvgSpeed(
-		trip.distanceMeters,
-		trip.durationMillis
-	)} ${kmOrMiles(1000).endsWith("km") ? "km/h" : "mph"}`; // Ensure unit matches
+	const avgSpeedDisplay = `${calcAvgSpeed(trip.distanceMeters, trip.durationMillis)} ${
+		kmOrMiles(1000).endsWith("km") ? "km/h" : "mph"
+	}`; // Ensure unit matches
 	const mapCoords = lineStringToCoords(trip.simplifiedRoute);
 	const travelMode = trip.defaultTravelMode || "car";
 
@@ -314,20 +251,15 @@ export default function TripDetailScreen() {
 		<ScrollView style={styles.container}>
 			{/* User Info and Title */}
 			<View style={styles.header}>
-				<View style={styles.userInfo}>
+				<Pressable onPress={() => router.push(`/user/${tripUser._id}`)} style={styles.userInfo}>
 					{/* Placeholder for profile image */}
 					<View style={styles.profileImagePlaceholder}>
 						<Feather name="user" size={24} color={theme.colors.textMuted} />
 					</View>
-					<Text style={styles.userName}>
-						{tripUser.username || "Unknown User"}
-					</Text>
-				</View>
+					<Text style={styles.userName}>{tripUser.username || "Unknown User"}</Text>
+				</Pressable>
 				{isOwner && (
-					<Pressable
-						onPress={() => setIsDropdownVisible(true)}
-						style={styles.menuButton}
-					>
+					<Pressable onPress={() => setIsDropdownVisible(true)} style={styles.menuButton}>
 						<Feather name="more-vertical" size={24} color={theme.colors.text} />
 					</Pressable>
 				)}
@@ -336,18 +268,13 @@ export default function TripDetailScreen() {
 			<Text style={styles.tripTitle}>{trip.title || "Untitled Trip"}</Text>
 			{(trip.startLocationName || trip.endLocationName) && (
 				<Text style={styles.routeText}>
-					From: {trip.startLocationName || "N/A"} → To:{" "}
-					{trip.endLocationName || "N/A"}
+					From: {trip.startLocationName || "N/A"} → To: {trip.endLocationName || "N/A"}
 				</Text>
 			)}
-			<Text style={styles.dateText}>
-				{isoToDate(trip.startDate || trip.createdAt)}
-			</Text>
+			<Text style={styles.dateText}>{isoToDate(trip.startDate || trip.createdAt)}</Text>
 
 			{/* Description */}
-			{trip.description && (
-				<Text style={styles.description}>{trip.description}</Text>
-			)}
+			{trip.description && <Text style={styles.description}>{trip.description}</Text>}
 
 			{/* Interactive Map Placeholder (replace with actual interactive map later) */}
 			{/* <Section title="Route Map">
@@ -358,11 +285,7 @@ export default function TripDetailScreen() {
 				</Text>
 			</Section> */}
 			<Section title="Route Map">
-				<InteractiveTripMap
-					routeCoords={mapCoords}
-					pois={trip.pois || []}
-					style={{ marginBottom: theme.space.md }}
-				/>
+				<InteractiveTripMap routeCoords={mapCoords} pois={trip.pois || []} style={{ marginBottom: theme.space.md }} />
 			</Section>
 			{/* Stats */}
 			<View style={styles.statsGrid}>
@@ -378,93 +301,54 @@ export default function TripDetailScreen() {
 					value={travelMode.charAt(0).toUpperCase() + travelMode.slice(1)}
 					label="Mode"
 				/>
-				<IconStatDisplay
-					iconName={visibilityIcon}
-					value={visibilityText}
-					label="Visibility"
-				/>
+				<IconStatDisplay iconName={visibilityIcon} value={visibilityText} label="Visibility" />
 				<IconStatDisplay iconName="map-pin" value={distance} label="Distance" />
 				<IconStatDisplay iconName="clock" value={duration} label="Duration" />
-				<IconStatDisplay
-					iconName="activity"
-					value={avgSpeedDisplay}
-					label="Avg. Speed"
-				/>
+				<IconStatDisplay iconName="activity" value={avgSpeedDisplay} label="Avg. Speed" />
 			</View>
 
 			{/* Social Interactions */}
 			<View style={styles.socialBar}>
-				<SocialButton
-					iconName="heart"
-					count={trip.likesCount || 0}
-					onPress={handleViewLikes}
-				/>
-				<SocialButton
-					iconName="message-circle"
-					count={trip.commentsCount || 0}
-					onPress={handleViewComments}
-				/>
+				<SocialButton iconName="heart" count={trip.likesCount || 0} onPress={handleViewLikes} />
+				<SocialButton iconName="message-circle" count={trip.commentsCount || 0} onPress={handleViewComments} />
 				<SocialButton iconName="share-2" onPress={handleShare} />
 			</View>
 
 			{/* Points of Interest */}
 			<Section
 				title="Points of Interest"
-				onSeeAll={
-					trip.pois?.length > 3 ? () => setShowAllPois(!showAllPois) : null
-				}
+				onSeeAll={trip.pois?.length > 3 ? () => setShowAllPois(!showAllPois) : null}
 				isExpanded={showAllPois}
 			>
 				{trip.pois && trip.pois.length > 0 ? (
 					// Conditionally render all POIs or just the first 3
-					(showAllPois ? trip.pois : trip.pois.slice(0, 3)).map(
-						(poi, index) => (
-							<Pressable
-								key={`poi-${index}`}
-								style={styles.listItem}
-								onPress={() =>
-									Alert.alert("POI Detail", poi.note || "View POI")
-								}
-							>
-								<Feather
-									name="map-pin"
-									size={16}
-									color={theme.colors.primary}
-									style={styles.listItemIcon}
-								/>
-								<Text style={styles.listItemText}>
-									{poi.note || `POI ${index + 1}`}
-								</Text>
-							</Pressable>
-						)
-					)
+					(showAllPois ? trip.pois : trip.pois.slice(0, 3)).map((poi, index) => (
+						<Pressable
+							key={`poi-${index}`}
+							style={styles.listItem}
+							onPress={() => Alert.alert("POI Detail", poi.note || "View POI")}
+						>
+							<Feather name="map-pin" size={16} color={theme.colors.primary} style={styles.listItemIcon} />
+							<Text style={styles.listItemText}>{poi.note || `POI ${index + 1}`}</Text>
+						</Pressable>
+					))
 				) : (
-					<Text style={styles.emptySectionText}>
-						No points of interest added.
-					</Text>
+					<Text style={styles.emptySectionText}>No points of interest added.</Text>
 				)}
 			</Section>
 
 			{/* Recommendations */}
 			<Section
 				title="Recommendations"
-				onSeeAll={
-					trip.recommendations?.length > 3
-						? () => setShowAllRecommendations(!showAllRecommendations)
-						: null
-				}
+				onSeeAll={trip.recommendations?.length > 3 ? () => setShowAllRecommendations(!showAllRecommendations) : null}
 				isExpanded={showAllRecommendations}
 			>
 				{trip.recommendations && trip.recommendations.length > 0 ? (
 					// Conditionally render all recommendations or just the first 3
-					(showAllRecommendations
-						? trip.recommendations
-						: trip.recommendations.slice(0, 3)
-					).map((rec, index) => {
+					(showAllRecommendations ? trip.recommendations : trip.recommendations.slice(0, 3)).map((rec, index) => {
 						// ...existing code...
 						const categoryLabel = rec.primaryCategory
-							? rec.primaryCategory.charAt(0).toUpperCase() +
-							  rec.primaryCategory.slice(1)
+							? rec.primaryCategory.charAt(0).toUpperCase() + rec.primaryCategory.slice(1)
 							: "N/A";
 
 						return (
@@ -480,9 +364,7 @@ export default function TripDetailScreen() {
 									</Text>
 								</View>
 								<View style={styles.recommendationCardDetails}>
-									<Text style={styles.recommendationCategory}>
-										{categoryLabel}
-									</Text>
+									<Text style={styles.recommendationCategory}>{categoryLabel}</Text>
 									<StarRatingDisplay rating={rec.rating} size={16} />
 								</View>
 								{/* Optional: Add a short description snippet if available and desired */}
@@ -497,9 +379,7 @@ export default function TripDetailScreen() {
 
 			{/* Gallery Placeholder */}
 			<Section title="Photo Gallery">
-				<Text style={styles.placeholderText}>
-					[Photo Gallery Placeholder - Coming Soon]
-				</Text>
+				<Text style={styles.placeholderText}>[Photo Gallery Placeholder - Coming Soon]</Text>
 			</Section>
 
 			<View style={{ height: 50 }} />
@@ -510,10 +390,7 @@ export default function TripDetailScreen() {
 				onDelete={handleDelete}
 				onAddRecommendation={handleAddRecommendation}
 			/>
-			<AddRecommendationModal
-				ref={addRecommendationModalRef}
-				onSubmit={handleRecommendationSubmit}
-			/>
+			<AddRecommendationModal ref={addRecommendationModalRef} onSubmit={handleRecommendationSubmit} />
 			<RecommendationDetailModal
 				isVisible={isRecDetailModalVisible}
 				onClose={() => setIsRecDetailModalVisible(false)}

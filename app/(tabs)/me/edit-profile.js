@@ -4,18 +4,31 @@ import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 // import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function EditProfileScreen() {
 	const router = useRouter();
 	const user = useAuthStore((s) => s.user);
 	const updateUser = useAuthStore((s) => s.updateUser);
+	const isAuth = useAuthStore((s) => s.isAuthenticated);
 
 	const [username, setUsername] = useState(user.username);
 	const [bio, setBio] = useState(user.bio || "");
 	const [avatar, setAvatar] = useState(user.profilePictureUrl || "");
 	const [saving, setSaving] = useState(false);
+
+	/* ---------- bail-out if logged out ---------- */
+	useEffect(() => {
+		if (!isAuth || !user) {
+			router.replace("/(auth)/login");
+		}
+	}, [isAuth, user, router]);
+
+	if (!isAuth || !user) {
+		// while redirecting – render nothing to avoid touching null.user
+		return <View style={styles.blank} />;
+	}
 
 	/* pick image from gallery (local uri only – upload handled server-side later) */
 	// const pickAvatar = async () => {

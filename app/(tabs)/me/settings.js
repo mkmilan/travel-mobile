@@ -17,7 +17,7 @@ import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import Feather from "@expo/vector-icons/Feather";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /* ---------------------------------------------------- *
@@ -64,6 +64,16 @@ export default function SettingsScreen() {
 	const router = useRouter();
 	const user = useAuthStore((s) => s.user);
 	const updateUser = useAuthStore((s) => s.updateUser);
+	const isAuth = useAuthStore((s) => s.isAuthenticated);
+
+	/* ---------- guard ---------- */
+	useEffect(() => {
+		if (!isAuth || !user) {
+			router.replace("/(auth)/login");
+		}
+	}, [isAuth, user, router]);
+
+	if (!isAuth || !user) return <View style={styles.blank} />;
 
 	/* local draft of the settings being edited */
 	const [s, setS] = useState({ ...user.settings });

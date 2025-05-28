@@ -47,7 +47,6 @@ export default function RecordScreen() {
 	const pendingNames = useRef({ startName: "Unknown", endName: "Unknown" });
 
 	const user = useAuthStore((s) => s.user);
-	console.log("RecordScreen user:", user);
 
 	// ─────── migrations + first load ─────────────────────────────────────────
 	useEffect(() => {
@@ -217,7 +216,6 @@ export default function RecordScreen() {
 						// toast({ type: "warning", title: "Recording stopped" });
 
 						pendingNames.current = { startName, endName };
-						// console.log("Pending names:", pendingNames.current);
 						const defaultMode = user?.settings?.defaultTravelMode || "car";
 
 						setStatus("stopped");
@@ -265,7 +263,6 @@ export default function RecordScreen() {
 			toast({ type: "info", title: "Packaging trip…" });
 			// const payload = await buildTripJsonForUpload(tid);
 			const payload = await buildTripJsonForUpload(tid, user?.settings || {});
-			// console.log("Payload:", JSON.stringify(payload, null, 2));
 
 			await uploadTripJson(payload);
 			await markTripUploaded(tid); // keeps it for history but not in pending
@@ -333,7 +330,6 @@ export default function RecordScreen() {
 					lon: lastPoint.current.lon,
 			  }
 			: null;
-		console.log("Last known location:", locationData);
 
 		if (!locationData) {
 			toast({

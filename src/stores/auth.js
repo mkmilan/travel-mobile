@@ -23,7 +23,7 @@ export const useAuthStore = create((set, get) => ({
 		// Persist
 		await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(userData));
 		await SecureStore.setItemAsync(STORAGE_KEYS.token, userData.token);
-		console.log("AuthStore: login userData", userData);
+		// console.log("AuthStore: login userData", userData);
 
 		// State
 		set({

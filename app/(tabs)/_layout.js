@@ -22,36 +22,28 @@ export default function TabLayout() {
 				name="feed/index"
 				options={{
 					title: "Feed",
-					tabBarIcon: ({ color }) => (
-						<IconSymbol size={30} name="house.fill" color={color} />
-					),
+					tabBarIcon: ({ color }) => <IconSymbol size={30} name="house.fill" color={color} />,
 				}}
 			/>
 			<Tabs.Screen
 				name="trips/index"
 				options={{
 					title: "Trips",
-					tabBarIcon: ({ color }) => (
-						<IconSymbol size={30} name="map.fill" color={color} />
-					),
+					tabBarIcon: ({ color }) => <IconSymbol size={30} name="map.fill" color={color} />,
 				}}
 			/>
 			<Tabs.Screen
 				name="record/index"
 				options={{
 					title: "Record",
-					tabBarIcon: ({ color }) => (
-						<IconSymbol size={30} name="circle" color={color} />
-					),
+					tabBarIcon: ({ color }) => <IconSymbol size={30} name="circle" color={color} />,
 				}}
 			/>
 			<Tabs.Screen
 				name="me/index"
 				options={{
 					title: "Profile",
-					tabBarIcon: ({ color }) => (
-						<IconSymbol size={30} name="person.fill" color={color} />
-					),
+					tabBarIcon: ({ color }) => <IconSymbol size={30} name="person.fill" color={color} />,
 				}}
 			/>
 			<Tabs.Screen
@@ -80,6 +72,22 @@ export default function TabLayout() {
 			/>
 			<Tabs.Screen
 				name="me/settings"
+				options={{
+					// Hide from tab bar
+					href: null,
+					headerShown: false,
+				}}
+			/>
+			{/* <Tabs.Screen
+				name="me/_MeScreenContent"
+				options={{
+					// Hide from tab bar
+					href: null,
+					headerShown: false,
+				}}
+			/> */}
+			<Tabs.Screen
+				name="user/[userId]/index"
 				options={{
 					// Hide from tab bar
 					href: null,
