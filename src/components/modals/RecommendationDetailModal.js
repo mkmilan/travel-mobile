@@ -1,9 +1,10 @@
 import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons"; // Added Ionicons
+import { useRouter } from "expo-router"; // Import useRouter
 import { forwardRef } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
 
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
@@ -38,6 +39,7 @@ const RecommendationDetailModal = forwardRef(
 	({ isVisible, onClose, recommendation, tripUserId, onEdit, tripRouteCoordinates }, ref) => {
 		/* run hooks unconditionally */
 		const { user: currentUser } = useAuthStore();
+		const router = useRouter();
 
 		/* if nothing to show just render an empty modal (keeps hook order) */
 		if (!recommendation) {
@@ -51,7 +53,18 @@ const RecommendationDetailModal = forwardRef(
 		/* ---------------------------------------------------------------- */
 		/* derived data                                                     */
 		/* ---------------------------------------------------------------- */
-		const { _id, name, description, rating, primaryCategory, attributeTags, photos = [], location } = recommendation;
+		const {
+			_id,
+			name,
+			description,
+			rating,
+			primaryCategory,
+			attributeTags,
+			photos = [],
+			location,
+			user, // Destructure user from recommendation
+			associatedTrip,
+		} = recommendation;
 		// console.log("RecommendationDetailModal", { recommendation });
 
 		const canEdit = currentUser?._id === tripUserId;
@@ -78,7 +91,18 @@ const RecommendationDetailModal = forwardRef(
 			onClose();
 			onEdit?.(recommendation);
 		};
-
+		const handleNavigateToTrip = () => {
+			if (associatedTrip) {
+				onClose(); // Close the modal before navigating
+				router.push(`/trip/${associatedTrip}`);
+			}
+		};
+		const handleNavigateToUserProfile = () => {
+			if (user?._id) {
+				onClose(); // Close this modal
+				router.push(`/user/${user._id}`); // Navigate to the user's profile
+			}
+		};
 		/* ---------------------------------------------------------------- */
 		/* render                                                           */
 		/* ---------------------------------------------------------------- */
@@ -96,7 +120,21 @@ const RecommendationDetailModal = forwardRef(
 							</Pressable>
 						)}
 					</View>
-
+					{/* Author Info */}
+					{user?._id && ( // Check if user and user._id exist
+						<Pressable onPress={handleNavigateToUserProfile} style={styles.authorSection}>
+							{user.profilePictureUrl ? (
+								<Image source={{ uri: user.profilePictureUrl }} style={styles.authorAvatar} />
+							) : (
+								<View style={[styles.authorAvatar, styles.avatarFallback]}>
+									<Text style={styles.avatarFallbackText}>{user.username?.[0]?.toUpperCase() || "?"}</Text>
+								</View>
+							)}
+							<Text style={styles.authorName} numberOfLines={1}>
+								{user.username || "Anonymous"}
+							</Text>
+						</Pressable>
+					)}
 					{/* map ------------------------------------------------------- */}
 					{tripRouteCoordinates?.length > 0 && recPoi.length > 0 && (
 						<View style={styles.section}>
@@ -107,6 +145,13 @@ const RecommendationDetailModal = forwardRef(
 								style={{ height: 220, marginBottom: theme.space.md }}
 							/>
 						</View>
+					)}
+					{/* Link to Associated Trip */}
+					{associatedTrip && (
+						<Pressable onPress={handleNavigateToTrip} style={styles.tripLinkButton}>
+							<Ionicons name="map-outline" size={20} color={theme.colors.primary} style={{ marginRight: 8 }} />
+							<Text style={styles.tripLinkText}>View Associated Trip</Text>
+						</Pressable>
 					)}
 
 					{/* meta row -------------------------------------------------- */}
@@ -239,5 +284,54 @@ const styles = StyleSheet.create({
 		marginTop: theme.space.sm,
 		color: theme.colors.textMuted,
 		fontSize: theme.fontSize.sm,
+	},
+	authorSection: {
+		// This style will make the whole row pressable
+		flexDirection: "row",
+		alignItems: "center",
+		paddingVertical: theme.space.sm,
+		paddingHorizontal: theme.space.md, // Added padding
+		marginBottom: theme.space.md,
+		// You can add a background color on hover/press if desired for Pressable
+		// backgroundColor: theme.colors.background, // Example
+	},
+	authorAvatar: {
+		width: 32,
+		height: 32,
+		borderRadius: 16,
+		marginRight: theme.space.sm,
+		backgroundColor: theme.colors.muted,
+		justifyContent: "center",
+		alignItems: "center",
+	},
+	avatarFallback: {
+		backgroundColor: theme.colors.primaryMuted,
+	},
+	avatarFallbackText: {
+		color: theme.colors.primary,
+		fontWeight: "bold",
+		fontSize: theme.fontSize.sm,
+	},
+	authorName: {
+		fontSize: theme.fontSize.md,
+		color: theme.colors.text,
+		fontWeight: "500",
+		flexShrink: 1, // Allow name to shrink if too long
+	},
+	tripLinkButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: theme.colors.primary + "15",
+		paddingVertical: theme.space.sm,
+		paddingHorizontal: theme.space.md,
+		borderRadius: theme.radius.md,
+		justifyContent: "center",
+		marginBottom: theme.space.lg,
+		marginHorizontal: theme.space.md, // Added horizontal margin for the button
+	},
+	tripLinkText: {
+		color: theme.colors.primary,
+		fontSize: theme.fontSize.md,
+		fontWeight: "600",
 	},
 });
