@@ -1,22 +1,31 @@
-// plain-JS, Expo 53
-import { useNavigation } from "@react-navigation/native";
-import { useEffect } from "react";
-import { BackHandler } from "react-native";
+// import { useNavigation } from "@react-navigation/native";
+// import { useEffect } from "react";
+// import { BackHandler } from "react-native";
 
-export default function useAndroidBackHandler() {
-	const navigation = useNavigation();
+// export default function useAndroidBackHandler() {
+// 	const navigation = useNavigation();
 
-	useEffect(() => {
-		// Called when the physical back button is pressed
-		function onBackPress() {
-			if (navigation.canGoBack()) {
-				navigation.goBack();
-				return true; // We consumed the event (stay in the app)
-			}
-			return false; // Let Android close the app
-		}
+// 	// helper – walk up the tree
+// 	function findNavigatorWithHistory(nav) {
+// 		let current = nav;
+// 		while (current && !current.canGoBack()) {
+// 			current = current.getParent();
+// 		}
+// 		return current;
+// 	}
 
-		BackHandler.addEventListener("hardwareBackPress", onBackPress);
-		return () => BackHandler.removeEventListener("hardwareBackPress", onBackPress);
-	}, [navigation]);
-}
+// 	useEffect(() => {
+// 		function onBackPress() {
+// 			const navToPop = findNavigatorWithHistory(navigation);
+
+// 			if (navToPop && navToPop.canGoBack()) {
+// 				navToPop.goBack();
+// 				return true; // we handled it
+// 			}
+// 			return false; // let Android close the app
+// 		}
+
+// 		BackHandler.addEventListener("hardwareBackPress", onBackPress);
+// 		return () => BackHandler.removeEventListener("hardwareBackPress", onBackPress);
+// 	}, [navigation]);
+// }

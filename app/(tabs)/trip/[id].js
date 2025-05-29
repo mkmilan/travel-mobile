@@ -1,3 +1,4 @@
+import RecommendationCard from "@/src/components/RecommendationCard";
 import TransportIcon from "@/src/components/TransportIcon";
 import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal";
@@ -201,10 +202,6 @@ export default function TripDetailScreen() {
 	const handleViewRecommendationDetail = (rec) => {
 		setSelectedRecommendation(rec);
 		setIsRecDetailModalVisible(true);
-		// console.log(
-		// 	"Viewing recommendation detailfrom handleViewRecommendationDetail",
-		// 	rec
-		// );
 	};
 
 	if (loading) {
@@ -345,31 +342,38 @@ export default function TripDetailScreen() {
 				{trip.recommendations && trip.recommendations.length > 0 ? (
 					// Conditionally render all recommendations or just the first 3
 					(showAllRecommendations ? trip.recommendations : trip.recommendations.slice(0, 3)).map((rec, index) => {
-						// ...existing code...
-						const categoryLabel = rec.primaryCategory
-							? rec.primaryCategory.charAt(0).toUpperCase() + rec.primaryCategory.slice(1)
-							: "N/A";
-
 						return (
-							<Pressable
-								key={`rec-${index}`}
-								style={styles.recommendationCard} // Use a new style for better visual separation
+							<RecommendationCard
+								key={rec._id} // Use recommendation ID as key
+								rec={rec}
 								onPress={() => handleViewRecommendationDetail(rec)}
-							>
-								<View style={styles.recommendationCardHeader}>
-									<Feather name="star" size={18} color={theme.colors.warning} />
-									<Text style={styles.recommendationName} numberOfLines={1}>
-										{rec.name || `Recommendation ${index + 1}`}
-									</Text>
-								</View>
-								<View style={styles.recommendationCardDetails}>
-									<Text style={styles.recommendationCategory}>{categoryLabel}</Text>
-									<StarRatingDisplay rating={rec.rating} size={16} />
-								</View>
-								{/* Optional: Add a short description snippet if available and desired */}
-								{/* {rec.description && <Text style={styles.recommendationDescriptionSnippet} numberOfLines={2}>{rec.description}</Text>} */}
-							</Pressable>
+							/>
 						);
+
+						// const categoryLabel = rec.primaryCategory
+						// 	? rec.primaryCategory.charAt(0).toUpperCase() + rec.primaryCategory.slice(1)
+						// 	: "N/A";
+
+						// return (
+						// 	<Pressable
+						// 		key={`rec-${index}`}
+						// 		style={styles.recommendationCard} // Use a new style for better visual separation
+						// 		onPress={() => handleViewRecommendationDetail(rec)}
+						// 	>
+						// 		<View style={styles.recommendationCardHeader}>
+						// 			<Feather name="star" size={18} color={theme.colors.warning} />
+						// 			<Text style={styles.recommendationName} numberOfLines={1}>
+						// 				{rec.name || `Recommendation ${index + 1}`}
+						// 			</Text>
+						// 		</View>
+						// 		<View style={styles.recommendationCardDetails}>
+						// 			<Text style={styles.recommendationCategory}>{categoryLabel}</Text>
+						// 			<StarRatingDisplay rating={rec.rating} size={16} />
+						// 		</View>
+						// 		{/* Optional: Add a short description snippet if available and desired */}
+						// 		{/* {rec.description && <Text style={styles.recommendationDescriptionSnippet} numberOfLines={2}>{rec.description}</Text>} */}
+						// 	</Pressable>
+						// );
 					})
 				) : (
 					<Text style={styles.emptySectionText}>No recommendations added.</Text>

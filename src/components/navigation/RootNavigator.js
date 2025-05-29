@@ -1,26 +1,16 @@
-import NavBar from "@/components/NavBar";
-import useAndroidBackHandler from "@/hooks/useAndroidBackHandler";
-import { NavigationContainer } from "@react-navigation/native";
-import { createStackNavigator } from "@react-navigation/native-stack";
+// import useAndroidBackHandler from "@/hooks/useAndroidBackHandler";
+// import MainTabs from "@/navigation/MainTabs";
+// import { NavigationContainer } from "@react-navigation/native";
+// import { createStackNavigator } from "@react-navigation/native-stack";
 
-const Stack = createStackNavigator();
+// const Stack = createStackNavigator();
 
-export default function RootNavigator() {
-	useAndroidBackHandler();
-	return (
-		<NavigationContainer>
-			<Stack.Navigator
-				screenOptions={{
-					header: (props) => <NavBar {...props} />,
-					headerTransparent: false, // avoid edge-to-edge bleed
-				}}
-			>
-				{/* your screens – keep each feature in its own Stack if you use Tabs */}
-				<Stack.Screen name="Feed" component={FeedScreen} />
-				<Stack.Screen name="TripDetail" component={TripDetailScreen} />
-				<Stack.Screen name="RecordTrip" component={RecordTripScreen} />
-				{/* ... */}
-			</Stack.Navigator>
-		</NavigationContainer>
-	);
-}
+// export default function RootNavigator() {
+// 	useAndroidBackHandler();
+// 	return (
+
+// 		<NavigationContainer>
+// 			<MainTabs /> {/* ← tabs become the single child */}
+// 		</NavigationContainer>
+// 	);
+// }
