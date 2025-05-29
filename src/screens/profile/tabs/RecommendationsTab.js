@@ -149,7 +149,7 @@ import { ActivityIndicator, FlatList, RefreshControl, Text, View } from "react-n
 import RecommendationCard from "@/src/components/RecommendationCard";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal"; // Added
 import RecommendationDetailModal from "@/src/components/modals/RecommendationDetailModal";
-import { getRecommendationsByUser, getTripJsonById } from "@/src/services/api";
+import { getRecommendationsByUser, getTripJsonById, updateRecommendation } from "@/src/services/api";
 import { theme } from "@/src/theme";
 import { lineStringToCoords } from "@/src/utils/geo";
 
@@ -248,6 +248,7 @@ export default function RecommendationsTab({ userId }) {
 	const handleEditRecommendation = (recommendationToEdit) => {
 		setDetailModalOpen(false); // Close detail modal
 		if (addRecModalRef.current && recommendationToEdit) {
+			console.log("[RecommendationsTab] Opening AddRecModal for edit:", recommendationToEdit); // Log data passed to openEdit
 			// Ensure `recommendationToEdit.location.coordinates` is [longitude, latitude]
 			// The log shows it's an array, assuming it's in the correct GeoJSON order.
 			// AddRecommendationModal's openEdit expects this.
@@ -257,10 +258,19 @@ export default function RecommendationsTab({ userId }) {
 		}
 	};
 
-	const handleRecommendationSubmitted = async () => {
-		// This function will be called by AddRecommendationModal after submission (create or update)
-		// Refresh the list of recommendations
-		await fetchPage(1, true); // Reload data from page 1, replacing current items
+	const handleRecommendationSubmitted = async (recommendationData, isEditMode = false) => {
+		console.log("[RecommendationsTab] handleRecommendationSubmitted called with:", { recommendationData, isEditMode });
+		try {
+			if (isEditMode && recommendationData._id) {
+				// Ensure _id is present for updates
+				// console.log("[RecommendationsTab] Calling updateRecommendation API for ID:", recommendationData._id);
+				await updateRecommendation(recommendationData._id, recommendationData);
+			}
+			await fetchPage(1, true); // Reload data from page 1
+		} catch (error) {
+			console.error("[RecommendationsTab] Failed to save recommendation:", error.response?.data || error.message);
+			Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
+		}
 	};
 
 	/* ---------------- render ---------------- */

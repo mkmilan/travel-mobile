@@ -312,7 +312,10 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			recommendationData._id = editingRecommendationId;
 		}
 
-		console.log(isEditMode ? "Updating recommendation:" : "Submitting recommendation:", recommendationData);
+		// console.log(
+		// 	isEditMode ? "ADD REC MODAL Updating recommendation:" : "Submitting recommendation:",
+		// 	recommendationData
+		// );
 
 		onSubmit(recommendationData, isEditMode);
 		setVisible(false);

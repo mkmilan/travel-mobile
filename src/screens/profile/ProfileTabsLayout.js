@@ -12,7 +12,7 @@ const TopTabs = createMaterialTopTabNavigator();
  */
 export default function ProfileTabsLayout({ isSelf = false, userId, summaryData, topOffset = 0 }) {
 	const insets = useSafeAreaInsets();
-	console.log("ProfileTabsLayout userid 2 step", { isSelf, userId });
+	// console.log("ProfileTabsLayout userid 2 step", { isSelf, userId });
 	// console.log("ProfileTabsLayout summaryData", summaryData);
 
 	return (
