@@ -1,10 +1,12 @@
 import NavBar from "@/components/NavBar";
+import useAndroidBackHandler from "@/hooks/useAndroidBackHandler";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/native-stack";
 
 const Stack = createStackNavigator();
 
 export default function RootNavigator() {
+	useAndroidBackHandler();
 	return (
 		<NavigationContainer>
 			<Stack.Navigator
