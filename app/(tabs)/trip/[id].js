@@ -1,36 +1,44 @@
+// ...existing imports...
+import CommentList from "@/src/components/CommentList";
 import RecommendationCard from "@/src/components/RecommendationCard";
 import TransportIcon from "@/src/components/TransportIcon";
 import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
+import AddCommentModal from "@/src/components/modals/AddCommentModal";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal";
+import LikersModal from "@/src/components/modals/LikersModal";
 import RecommendationDetailModal from "@/src/components/modals/RecommendationDetailModal";
 import IconStatDisplay from "@/src/components/trip/IconStatDisplay";
 import Section from "@/src/components/trip/Section";
 import SocialButton from "@/src/components/trip/SocialButton";
-import { addRecommendation, getTripJsonById, updateRecommendation } from "@/src/services/api";
+import {
+	addRecommendation,
+	addTripComment,
+	deleteTripComment,
+	getTripComments,
+	getTripJsonById,
+	getTripLikers,
+	likeTrip,
+	unlikeTrip,
+	updateRecommendation,
+} from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-
-const StarRatingDisplay = ({ rating, size = 20, style }) => {
-	return (
-		<View style={[{ flexDirection: "row" }, style]}>
-			{[1, 2, 3, 4, 5].map((star) => (
-				<Ionicons
-					key={star}
-					name={rating >= star ? "star" : "star-outline"}
-					size={size}
-					color={rating >= star ? "#FCD34D" : theme.colors.textMuted}
-					style={{ marginRight: 2 }}
-				/>
-			))}
-		</View>
-	);
-};
+import {
+	ActivityIndicator,
+	Alert,
+	Modal,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
+} from "react-native";
 
 const DropdownMenu = ({ isVisible, onClose, onEdit, onDelete, onAddRecommendation }) => {
 	return (
@@ -63,7 +71,7 @@ export default function TripDetailScreen() {
 	const { id: tripId } = useLocalSearchParams();
 	const { user: currentUser, isAuthenticated } = useAuthStore();
 
-	const [trip, setTrip] = useState(null);
+	const [trip, setTrip] = useState(null); // Will store the full trip object including its own commentsCount
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 
@@ -73,42 +81,228 @@ export default function TripDetailScreen() {
 	const [showAllPois, setShowAllPois] = useState(false);
 	const [showAllRecommendations, setShowAllRecommendations] = useState(false);
 
+	// --- Likers State ---
+	const [isLikersModalVisible, setIsLikersModalVisible] = useState(false);
+	const [likers, setLikers] = useState([]); // For the modal list
+	const [likersLoading, setLikersLoading] = useState(false);
+	const [likersError, setLikersError] = useState("");
+	const [isLikedByCurrentUser, setIsLikedByCurrentUser] = useState(false);
+	const [optimisticLikesCount, setOptimisticLikesCount] = useState(0);
+
+	// --- Comments State ---
+	const [comments, setComments] = useState([]); // This will hold fully populated comments
+	const [commentsLoading, setCommentsLoading] = useState(false);
+	const [commentsError, setCommentsError] = useState("");
+	const [isAddCommentModalVisible, setIsAddCommentModalVisible] = useState(false);
+	const [isCommentsSectionVisible, setIsCommentsSectionVisible] = useState(false);
+	const [isCommentListExpanded, setIsCommentListExpanded] = useState(false);
+
 	const addRecommendationModalRef = useRef(null);
-	// Keep the initial useEffect for when tripId changes
-	useEffect(() => {
-		if (tripId) {
-			fetchTripDetails();
-		} else {
+
+	const fetchTripDetails = async (isRefetch = false) => {
+		if (!tripId) {
 			setError("Trip ID is missing.");
 			setLoading(false);
+			return;
 		}
-	}, [tripId]);
-
-	// Add useFocusEffect to refresh data when screen comes into focus
-	useFocusEffect(
-		useCallback(() => {
-			if (tripId) {
-				fetchTripDetails();
-			}
-		}, [tripId])
-	);
-
-	const fetchTripDetails = async () => {
-		setLoading(true);
+		if (!isRefetch) {
+			// Only show main loading indicator on initial load
+			setLoading(true);
+		}
 		setError(null);
 		try {
 			const data = await getTripJsonById(tripId);
-			setTrip(data);
+			const likesArray = data.likes || [];
+			// Get comment COUNT from initial trip load, but not the comment objects themselves for display
+			const initialCommentsArray = data.comments || [];
+
+			setTrip({
+				...data,
+				likesCount: likesArray.length,
+				commentsCount: initialCommentsArray.length, // Store the count from the main trip object
+				// Do NOT store data.comments directly in trip state if they are not populated
+			});
+
+			setOptimisticLikesCount(likesArray.length);
+			if (currentUser?._id) {
+				setIsLikedByCurrentUser(likesArray.includes(currentUser._id));
+			} else {
+				setIsLikedByCurrentUser(false);
+			}
+
+			// If comments are already visible/expanded and need to be (re)loaded
+			if (
+				isCommentListExpanded ||
+				(isCommentsSectionVisible && initialCommentsArray.length > 0 && comments.length === 0)
+			) {
+				await fetchCommentsData(); // Fetch full comments if section is open
+			}
 		} catch (err) {
 			console.error("Failed to fetch trip details:", err);
 			setError(err.message || "Could not load trip details.");
-			Alert.alert("Error", "Could not load trip details.");
 		} finally {
-			setLoading(false);
+			if (!isRefetch) {
+				setLoading(false);
+			}
 		}
 	};
 
+	useEffect(() => {
+		fetchTripDetails();
+	}, [tripId, currentUser?._id]); // Add currentUser._id as dep for isLikedByCurrentUser init
+
+	useFocusEffect(
+		useCallback(() => {
+			// Refetch trip details when the screen comes into focus to sync server state
+			fetchTripDetails(true);
+		}, [tripId, currentUser?._id]) // Add currentUser._id
+	);
+
 	const isOwner = isAuthenticated && trip && trip.user?._id === currentUser?._id;
+
+	const handleToggleLike = async () => {
+		if (!isAuthenticated || !trip) {
+			Alert.alert("Login Required", "You need to be logged in to like a trip.");
+			return;
+		}
+
+		const originalLikedState = isLikedByCurrentUser;
+		const currentLikes = optimisticLikesCount;
+
+		setIsLikedByCurrentUser(!originalLikedState);
+		setOptimisticLikesCount(!originalLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1));
+
+		try {
+			if (!originalLikedState) {
+				await likeTrip(tripId);
+			} else {
+				await unlikeTrip(tripId);
+			}
+			// Optionally, the API for like/unlike could return the updated trip/likesCount
+			// For now, useFocusEffect will eventually sync.
+		} catch (err) {
+			console.error("Failed to update like status:", err);
+			Alert.alert("Error", "Could not update like status. Please try again.");
+			setIsLikedByCurrentUser(originalLikedState);
+			setOptimisticLikesCount(currentLikes);
+		}
+	};
+
+	const fetchLikersData = async () => {
+		// For the LikersModal
+		if (!tripId) return;
+		setLikersLoading(true);
+		setLikersError("");
+		try {
+			const likersData = await getTripLikers(tripId); // This API fetches user objects
+			setLikers(likersData || []);
+		} catch (err) {
+			console.error("Failed to fetch likers:", err);
+			setLikersError(err.message || "Could not load likers.");
+		} finally {
+			setLikersLoading(false);
+		}
+	};
+
+	const handleOpenLikersModal = () => {
+		fetchLikersData();
+		setIsLikersModalVisible(true);
+	};
+
+	// fetchCommentsData can be used if you need to explicitly refresh comments
+	// or if they are not initially embedded in trip details.
+	const fetchCommentsData = async () => {
+		if (!tripId || commentsLoading) return;
+		setCommentsLoading(true);
+		setCommentsError("");
+		try {
+			const populatedComments = await getTripComments(tripId); // API call for full comments
+			setComments(populatedComments || []);
+			// Update trip's comment count if it differs, ensuring UI consistency
+			if (trip && trip.commentsCount !== (populatedComments?.length || 0)) {
+				setTrip((prevTrip) => ({ ...prevTrip, commentsCount: populatedComments?.length || 0 }));
+			}
+		} catch (err) {
+			console.error("Failed to fetch comments:", err);
+			setCommentsError(err.message || "Could not load comments.");
+			setComments([]); // Clear comments on error
+		} finally {
+			setCommentsLoading(false);
+		}
+	};
+
+	const handleToggleCommentsSection = () => {
+		const newVisibility = !isCommentsSectionVisible;
+		setIsCommentsSectionVisible(newVisibility);
+		// If comments were embedded, they are already in `comments` state.
+		// If section is opened, and comments were NOT embedded or need refresh:
+		if (newVisibility && (trip?.comments || []).length === 0 && (trip?.commentsCount || 0) > 0 && !commentsLoading) {
+			// This condition might be rare if comments are always embedded from your log
+			fetchCommentsData();
+		}
+		if (!newVisibility) {
+			setIsCommentListExpanded(false);
+		}
+	};
+
+	const handleToggleCommentList = () => {
+		const newExpandedState = !isCommentListExpanded;
+		setIsCommentListExpanded(newExpandedState);
+		// If expanding and comments were not fully loaded or need refresh
+		// (This might be redundant if comments are always fully embedded in `trip` state)
+		if (newExpandedState && comments.length !== (trip?.commentsCount || 0) && !commentsLoading) {
+			fetchCommentsData();
+		}
+	};
+
+	const handleAddCommentSubmit = async (text) => {
+		if (!tripId || !isAuthenticated) {
+			Alert.alert("Error", "You must be logged in to comment.");
+			throw new Error("Not authenticated");
+		}
+		try {
+			const newComment = await addTripComment(tripId, text);
+			setComments((prevComments) => [newComment, ...(prevComments || [])]);
+			if (trip) {
+				setTrip((prevTrip) => ({
+					...prevTrip,
+					commentsCount: (prevTrip.commentsCount || 0) + 1,
+				}));
+			}
+			if (!isCommentListExpanded) setIsCommentListExpanded(true);
+			if (!isCommentsSectionVisible) setIsCommentsSectionVisible(true);
+		} catch (err) {
+			console.error("Failed to add comment:", err);
+			Alert.alert("Error", err.message || "Could not post comment.");
+			throw err;
+		}
+	};
+
+	const handleDeleteComment = async (commentId) => {
+		if (!tripId || !isAuthenticated) return;
+		Alert.alert("Delete Comment", "Are you sure you want to delete this comment?", [
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Delete",
+				style: "destructive",
+				onPress: async () => {
+					try {
+						await deleteTripComment(tripId, commentId);
+						setComments((prevComments) => (prevComments || []).filter((comment) => comment._id !== commentId));
+						if (trip && typeof trip.commentsCount === "number" && trip.commentsCount > 0) {
+							setTrip((prevTrip) => ({
+								...prevTrip,
+								commentsCount: Math.max(0, prevTrip.commentsCount - 1),
+							}));
+						}
+					} catch (err) {
+						console.error("Failed to delete comment:", err);
+						Alert.alert("Error", err.message || "Could not delete comment.");
+					}
+				},
+			},
+		]);
+	};
 
 	const handleEdit = () => {
 		setIsDropdownVisible(false);
@@ -123,7 +317,6 @@ export default function TripDetailScreen() {
 				text: "Delete",
 				style: "destructive",
 				onPress: () => {
-					// TODO: Implement delete functionality
 					Alert.alert("Delete", "Delete functionality to be implemented.");
 				},
 			},
@@ -135,76 +328,52 @@ export default function TripDetailScreen() {
 		if (addRecommendationModalRef.current) {
 			let initialMapLocation = null;
 			if (trip) {
-				// Try to get coordinates from the simplified route first
 				if (trip.simplifiedRoute) {
 					const routeCoords = lineStringToCoords(trip.simplifiedRoute);
 					if (routeCoords && routeCoords.length > 0) {
-						initialMapLocation = {
-							lat: routeCoords[0].latitude,
-							lon: routeCoords[0].longitude,
-						};
+						initialMapLocation = { lat: routeCoords[0].latitude, lon: routeCoords[0].longitude };
 					}
 				}
-				// Fallback to trip's start location (assuming GeoJSON Point: [lon, lat])
 				if (!initialMapLocation && trip.startLocation?.coordinates?.length === 2) {
-					initialMapLocation = {
-						lat: trip.startLocation.coordinates[1],
-						lon: trip.startLocation.coordinates[0],
-					};
+					initialMapLocation = { lat: trip.startLocation.coordinates[1], lon: trip.startLocation.coordinates[0] };
 				}
-				// Fallback to trip's end location
 				if (!initialMapLocation && trip.endLocation?.coordinates?.length === 2) {
-					initialMapLocation = {
-						lat: trip.endLocation.coordinates[1],
-						lon: trip.endLocation.coordinates[0],
-					};
+					initialMapLocation = { lat: trip.endLocation.coordinates[1], lon: trip.endLocation.coordinates[0] };
 				}
 			}
-
 			addRecommendationModalRef.current.open(initialMapLocation, tripId);
-		} else {
-			Alert.alert("Add Recommendation", "Add recommendation functionality to be implemented.");
 		}
 	};
+
 	const handleEditRecommendation = (recommendation) => {
-		console.log("Editing recommendation:", recommendation);
 		addRecommendationModalRef.current?.openEdit(recommendation);
 	};
 
 	const handleRecommendationSubmit = async (recommendationData, isEditMode = false) => {
 		try {
 			if (isEditMode) {
-				// Update existing recommendation
 				await updateRecommendation(recommendationData._id, recommendationData);
 				Alert.alert("Success", "Recommendation updated successfully!");
 			} else {
-				// Add new recommendation
-				await addRecommendation(recommendationData);
+				await addRecommendation({ ...recommendationData, tripId });
 				Alert.alert("Success", "Recommendation added successfully!");
 			}
-
-			// Refresh trip data to show updated recommendations
-			fetchTripDetails();
+			fetchTripDetails(); // Refresh trip data to show new/updated recommendation
 		} catch (error) {
 			console.error("Failed to save recommendation:", error);
 			Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
 		}
 	};
 
-	const handleViewLikes = () => Alert.alert("Likes", "View likes functionality to be implemented.");
-	const handleViewComments = () => Alert.alert("Comments", "View comments functionality to be implemented.");
 	const handleShare = () => Alert.alert("Share", "Share functionality to be implemented.");
-
-	const handleViewPois = () => Alert.alert("POIs", "View all POIs functionality to be implemented.");
-	const handleViewRecommendations = () =>
-		Alert.alert("Recommendations", "View all recommendations functionality to be implemented.");
 
 	const handleViewRecommendationDetail = (rec) => {
 		setSelectedRecommendation(rec);
 		setIsRecDetailModalVisible(true);
 	};
 
-	if (loading) {
+	if (loading && !trip) {
+		// Show loading only if trip is not yet set
 		return (
 			<View style={styles.centered}>
 				<ActivityIndicator size="large" color={theme.colors.primary} />
@@ -212,10 +381,11 @@ export default function TripDetailScreen() {
 		);
 	}
 
-	if (error || !trip) {
+	if (error) {
+		// Show error if error state is set
 		return (
 			<View style={styles.centered}>
-				<Text style={styles.errorText}>{error || "Trip not found."}</Text>
+				<Text style={styles.errorText}>{error}</Text>
 				<Pressable onPress={() => router.back()} style={styles.button}>
 					<Text style={styles.buttonText}>Go Back</Text>
 				</Pressable>
@@ -223,13 +393,25 @@ export default function TripDetailScreen() {
 		);
 	}
 
-	// --- Derived Data for Display ---
+	if (!trip) {
+		// Fallback if trip is null after loading and no error (should be rare)
+		return (
+			<View style={styles.centered}>
+				<Text style={styles.errorText}>Trip not found.</Text>
+				<Pressable onPress={() => router.back()} style={styles.button}>
+					<Text style={styles.buttonText}>Go Back</Text>
+				</Pressable>
+			</View>
+		);
+	}
+
+	// --- Derived Data for Display (now that trip is guaranteed to be non-null) ---
 	const tripUser = trip.user || {};
 	const distance = kmOrMiles(trip.distanceMeters);
 	const duration = msToDuration(trip.durationMillis);
 	const avgSpeedDisplay = `${calcAvgSpeed(trip.distanceMeters, trip.durationMillis)} ${
 		kmOrMiles(1000).endsWith("km") ? "km/h" : "mph"
-	}`; // Ensure unit matches
+	}`;
 	const mapCoords = lineStringToCoords(trip.simplifiedRoute);
 	const travelMode = trip.defaultTravelMode || "car";
 
@@ -243,12 +425,13 @@ export default function TripDetailScreen() {
 		visibilityText = "Private";
 	}
 
+	const recommendations = trip.recommendations || [];
+	const pois = trip.pointsOfInterest || []; // Corrected from your JSON: pointsOfInterest
+
 	return (
-		<ScrollView style={styles.container}>
-			{/* User Info and Title */}
+		<ScrollView style={styles.container} nestedScrollEnabled={true}>
 			<View style={styles.header}>
 				<Pressable onPress={() => router.push(`/user/${tripUser._id}`)} style={styles.userInfo}>
-					{/* Placeholder for profile image */}
 					<View style={styles.profileImagePlaceholder}>
 						<Feather name="user" size={24} color={theme.colors.textMuted} />
 					</View>
@@ -269,31 +452,15 @@ export default function TripDetailScreen() {
 			)}
 			<Text style={styles.dateText}>{isoToDate(trip.startDate || trip.createdAt)}</Text>
 
-			{/* Description */}
 			{trip.description && <Text style={styles.description}>{trip.description}</Text>}
 
-			{/* Interactive Map Placeholder (replace with actual interactive map later) */}
-			{/* <Section title="Route Map">
-				<TripMapThumbnail coords={mapCoords} />
-				
-				<Text style={styles.placeholderText}>
-					[Interactive Map Placeholder]
-				</Text>
-			</Section> */}
 			<Section title="Route Map">
-				<InteractiveTripMap routeCoords={mapCoords} pois={trip.pois || []} style={{ marginBottom: theme.space.md }} />
+				<InteractiveTripMap routeCoords={mapCoords} pois={pois} style={{ marginBottom: theme.space.md }} />
 			</Section>
-			{/* Stats */}
+
 			<View style={styles.statsGrid}>
 				<IconStatDisplay
-					customIcon={
-						// Pass the TransportIcon component
-						<TransportIcon
-							mode={travelMode}
-							size={22} // Adjust size as needed for this context
-							color={theme.colors.textMuted}
-						/>
-					}
+					customIcon={<TransportIcon mode={travelMode} size={20} color={theme.colors.textMuted} />}
 					value={travelMode.charAt(0).toUpperCase() + travelMode.slice(1)}
 					label="Mode"
 				/>
@@ -303,24 +470,82 @@ export default function TripDetailScreen() {
 				<IconStatDisplay iconName="activity" value={avgSpeedDisplay} label="Avg. Speed" />
 			</View>
 
-			{/* Social Interactions */}
+			{/* Social Bar */}
 			<View style={styles.socialBar}>
-				<SocialButton iconName="heart" count={trip.likesCount || 0} onPress={handleViewLikes} />
-				<SocialButton iconName="message-circle" count={trip.commentsCount || 0} onPress={handleViewComments} />
+				<View style={styles.likeButtonContainer}>
+					<TouchableOpacity onPress={handleToggleLike} style={styles.socialIconPressable}>
+						<Feather
+							name="heart"
+							size={20}
+							color={optimisticLikesCount > 0 ? theme.colors.error : theme.colors.textMuted}
+							fill={isLikedByCurrentUser ? theme.colors.error : "none"}
+						/>
+					</TouchableOpacity>
+					<TouchableOpacity onPress={handleOpenLikersModal} style={styles.socialCountPressable}>
+						<Text
+							style={[
+								styles.socialCountText,
+								(isLikedByCurrentUser || optimisticLikesCount > 0) && { color: theme.colors.error },
+							]}
+						>
+							{optimisticLikesCount}
+						</Text>
+					</TouchableOpacity>
+				</View>
+				<SocialButton iconName="message-circle" count={trip.commentsCount || 0} onPress={handleToggleCommentsSection} />
 				<SocialButton iconName="share-2" onPress={handleShare} />
 			</View>
 
-			{/* Points of Interest */}
+			{/* Comments Section */}
+			{isCommentsSectionVisible && (
+				<Section title="Comments">
+					<TouchableOpacity style={styles.addCommentCard} onPress={() => setIsAddCommentModalVisible(true)}>
+						<Feather name="plus-circle" size={20} color={theme.colors.primary} />
+						<Text style={styles.addCommentCardText}>
+							{(trip.commentsCount || 0) === 0 ? "Be the first to comment!" : "Add a comment"}
+						</Text>
+					</TouchableOpacity>
+
+					{(trip.commentsCount || 0) > 0 && (
+						<TouchableOpacity onPress={handleToggleCommentList} style={styles.viewCommentsButton}>
+							<Text style={styles.viewCommentsButtonText}>
+								{isCommentListExpanded ? "Hide comments" : `View all ${trip.commentsCount} comments`}
+							</Text>
+							<Feather
+								name={isCommentListExpanded ? "chevron-up" : "chevron-down"}
+								size={20}
+								color={theme.colors.primary}
+							/>
+						</TouchableOpacity>
+					)}
+
+					{
+						isCommentListExpanded &&
+							(commentsLoading ? (
+								<ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.space.md }} />
+							) : commentsError ? (
+								<Text style={styles.errorTextSmall}>{commentsError}</Text>
+							) : comments.length > 0 ? (
+								<CommentList
+									comments={comments}
+									currentUserId={currentUser?._id}
+									onDeleteComment={handleDeleteComment}
+								/>
+							) : (trip.commentsCount || 0) > 0 && !commentsLoading ? ( // If count > 0 but local comments array is empty after trying to load
+								<Text style={styles.emptySectionText}>No comments found, or an error occurred.</Text>
+							) : null) // If count is 0, CommentList will show "No comments yet..." if comments array is empty
+					}
+				</Section>
+			)}
 			<Section
 				title="Points of Interest"
-				onSeeAll={trip.pois?.length > 3 ? () => setShowAllPois(!showAllPois) : null}
+				onSeeAll={pois.length > 3 ? () => setShowAllPois(!showAllPois) : undefined}
 				isExpanded={showAllPois}
 			>
-				{trip.pois && trip.pois.length > 0 ? (
-					// Conditionally render all POIs or just the first 3
-					(showAllPois ? trip.pois : trip.pois.slice(0, 3)).map((poi, index) => (
+				{pois.length > 0 ? (
+					(showAllPois ? pois : pois.slice(0, 3)).map((poi, index) => (
 						<Pressable
-							key={`poi-${index}`}
+							key={poi._id || `poi-${index}`}
 							style={styles.listItem}
 							onPress={() => Alert.alert("POI Detail", poi.note || "View POI")}
 						>
@@ -333,59 +558,26 @@ export default function TripDetailScreen() {
 				)}
 			</Section>
 
-			{/* Recommendations */}
 			<Section
 				title="Recommendations"
-				onSeeAll={trip.recommendations?.length > 3 ? () => setShowAllRecommendations(!showAllRecommendations) : null}
+				onSeeAll={recommendations.length > 3 ? () => setShowAllRecommendations(!showAllRecommendations) : undefined}
 				isExpanded={showAllRecommendations}
 			>
-				{trip.recommendations && trip.recommendations.length > 0 ? (
-					// Conditionally render all recommendations or just the first 3
-					(showAllRecommendations ? trip.recommendations : trip.recommendations.slice(0, 3)).map((rec, index) => {
-						return (
-							<RecommendationCard
-								key={rec._id} // Use recommendation ID as key
-								rec={rec}
-								onPress={() => handleViewRecommendationDetail(rec)}
-							/>
-						);
-
-						// const categoryLabel = rec.primaryCategory
-						// 	? rec.primaryCategory.charAt(0).toUpperCase() + rec.primaryCategory.slice(1)
-						// 	: "N/A";
-
-						// return (
-						// 	<Pressable
-						// 		key={`rec-${index}`}
-						// 		style={styles.recommendationCard} // Use a new style for better visual separation
-						// 		onPress={() => handleViewRecommendationDetail(rec)}
-						// 	>
-						// 		<View style={styles.recommendationCardHeader}>
-						// 			<Feather name="star" size={18} color={theme.colors.warning} />
-						// 			<Text style={styles.recommendationName} numberOfLines={1}>
-						// 				{rec.name || `Recommendation ${index + 1}`}
-						// 			</Text>
-						// 		</View>
-						// 		<View style={styles.recommendationCardDetails}>
-						// 			<Text style={styles.recommendationCategory}>{categoryLabel}</Text>
-						// 			<StarRatingDisplay rating={rec.rating} size={16} />
-						// 		</View>
-						// 		{/* Optional: Add a short description snippet if available and desired */}
-						// 		{/* {rec.description && <Text style={styles.recommendationDescriptionSnippet} numberOfLines={2}>{rec.description}</Text>} */}
-						// 	</Pressable>
-						// );
-					})
+				{recommendations.length > 0 ? (
+					(showAllRecommendations ? recommendations : recommendations.slice(0, 3)).map((rec) => (
+						<RecommendationCard key={rec._id} rec={rec} onPress={() => handleViewRecommendationDetail(rec)} />
+					))
 				) : (
 					<Text style={styles.emptySectionText}>No recommendations added.</Text>
 				)}
 			</Section>
 
-			{/* Gallery Placeholder */}
 			<Section title="Photo Gallery">
 				<Text style={styles.placeholderText}>[Photo Gallery Placeholder - Coming Soon]</Text>
 			</Section>
 
 			<View style={{ height: 50 }} />
+
 			<DropdownMenu
 				isVisible={isDropdownVisible}
 				onClose={() => setIsDropdownVisible(false)}
@@ -402,11 +594,22 @@ export default function TripDetailScreen() {
 				onEdit={handleEditRecommendation}
 				tripRouteCoordinates={mapCoords}
 			/>
+			<LikersModal
+				isVisible={isLikersModalVisible}
+				onClose={() => setIsLikersModalVisible(false)}
+				likers={likers} // This is the list of user objects for the modal
+				isLoading={likersLoading}
+				error={likersError}
+			/>
+			<AddCommentModal
+				isVisible={isAddCommentModalVisible}
+				onClose={() => setIsAddCommentModalVisible(false)}
+				onSubmit={handleAddCommentSubmit}
+			/>
 		</ScrollView>
 	);
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -424,6 +627,12 @@ const styles = StyleSheet.create({
 		color: theme.colors.error,
 		textAlign: "center",
 		marginBottom: theme.space.md,
+	},
+	errorTextSmall: {
+		fontSize: theme.fontSize.sm,
+		color: theme.colors.error,
+		textAlign: "center",
+		paddingVertical: theme.space.md,
 	},
 	button: {
 		backgroundColor: theme.colors.primary,
@@ -460,21 +669,11 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		color: theme.colors.text,
 	},
-	editButton: {
-		flexDirection: "row",
-		alignItems: "center",
+	menuButton: {
 		padding: theme.space.sm,
-		// borderWidth: 1,
-		// borderColor: theme.colors.primary,
-		// borderRadius: theme.radius.sm,
-	},
-	editButtonText: {
-		color: theme.colors.primary,
-		marginLeft: theme.space.xs,
-		fontWeight: "500",
 	},
 	tripTitle: {
-		fontSize: 24, // Larger title
+		fontSize: 24,
 		fontWeight: "bold",
 		color: theme.colors.text,
 		marginBottom: theme.space.xs,
@@ -495,25 +694,6 @@ const styles = StyleSheet.create({
 		lineHeight: theme.fontSize.md * 1.5,
 		marginBottom: theme.space.lg,
 	},
-	sectionContainer: {
-		marginBottom: theme.space.lg,
-	},
-	sectionHeader: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginBottom: theme.space.sm,
-	},
-	sectionTitle: {
-		fontSize: theme.fontSize.lg,
-		fontWeight: "600",
-		color: theme.colors.text,
-	},
-	seeAllText: {
-		fontSize: theme.fontSize.sm,
-		color: theme.colors.primary,
-		fontWeight: "500",
-	},
 	statsGrid: {
 		flexDirection: "row",
 		flexWrap: "wrap",
@@ -522,27 +702,6 @@ const styles = StyleSheet.create({
 		backgroundColor: theme.colors.inputBackground,
 		paddingVertical: theme.space.sm,
 		borderRadius: theme.radius.md,
-	},
-	iconStatDisplay: {
-		alignItems: "center",
-		width: "30%", // Adjust for 3 items per row, or '45%' for 2 items
-		marginBottom: theme.space.md,
-		paddingHorizontal: theme.space.xs,
-	},
-	iconStatDisplayContent: {
-		alignItems: "center",
-		marginTop: theme.space.xs,
-	},
-	iconStatValue: {
-		fontSize: theme.fontSize.md,
-		fontWeight: "600",
-		color: theme.colors.text,
-		textAlign: "center",
-	},
-	iconStatLabel: {
-		fontSize: 12,
-		color: theme.colors.textMuted,
-		textAlign: "center",
 	},
 	socialBar: {
 		flexDirection: "row",
@@ -554,22 +713,58 @@ const styles = StyleSheet.create({
 		borderBottomWidth: 1,
 		borderColor: theme.colors.inputBorder,
 	},
-	socialButton: {
+	likeButtonContainer: {
 		flexDirection: "row",
 		alignItems: "center",
 		paddingHorizontal: theme.space.sm,
 	},
-	socialCount: {
-		marginLeft: theme.space.xs,
+	socialIconPressable: {
+		padding: theme.space.xs,
+	},
+	socialCountPressable: {
+		paddingLeft: theme.space.xs,
+		paddingVertical: theme.space.xs,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	socialCountText: {
 		fontSize: theme.fontSize.sm,
-		color: theme.colors.text,
+		color: theme.colors.textMuted,
 		fontWeight: "500",
 	},
-	socialLabel: {
-		// If you want text labels like "Like", "Comment"
-		marginLeft: theme.space.xs,
-		fontSize: theme.fontSize.sm,
+	addCommentCard: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: theme.colors.inputBackground,
+		borderRadius: theme.radius.md,
+		padding: theme.space.md,
+		marginBottom: theme.space.md,
+		shadowColor: "#000",
+		shadowOpacity: 0.05,
+		shadowRadius: 4,
+		elevation: 2,
+	},
+	addCommentCardText: {
+		marginLeft: theme.space.sm,
+		fontSize: theme.fontSize.md,
 		color: theme.colors.text,
+		fontWeight: "600",
+	},
+	viewCommentsButton: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
+		paddingVertical: theme.space.sm,
+		paddingHorizontal: theme.space.xs,
+		marginBottom: theme.space.md,
+		backgroundColor: theme.colors.inputBackground,
+		borderRadius: theme.radius.md,
+	},
+	viewCommentsButtonText: {
+		color: theme.colors.primary,
+		fontWeight: "500",
+		fontSize: theme.fontSize.md,
+		marginLeft: theme.space.sm,
 	},
 	listItem: {
 		flexDirection: "row",
@@ -587,10 +782,6 @@ const styles = StyleSheet.create({
 		color: theme.colors.text,
 		flex: 1,
 	},
-	listItemSubtitle: {
-		fontSize: theme.fontSize.sm,
-		color: theme.colors.textMuted,
-	},
 	emptySectionText: {
 		fontSize: theme.fontSize.sm,
 		color: theme.colors.textMuted,
@@ -603,55 +794,12 @@ const styles = StyleSheet.create({
 		paddingVertical: theme.space.lg,
 		fontStyle: "italic",
 	},
-	recommendationCard: {
-		backgroundColor: theme.colors.inputBackground,
-		borderRadius: theme.radius.md,
-		padding: theme.space.md,
-		marginBottom: theme.space.md,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.05,
-		shadowRadius: 2,
-		elevation: 1,
-	},
-	recommendationCardHeader: {
-		flexDirection: "row",
-		alignItems: "center",
-		marginBottom: theme.space.sm, // Increased margin for more space below header
-	},
-	recommendationName: {
-		fontSize: theme.fontSize.md,
-		fontWeight: "600",
-		color: theme.colors.text,
-		marginLeft: theme.space.sm,
-		flex: 1,
-	},
-	recommendationCardDetails: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginTop: theme.space.xs, // Add some top margin
-	},
-	recommendationCategory: {
-		fontSize: theme.fontSize.sm,
-		color: theme.colors.primary, // Use primary color for text for better contrast
-		backgroundColor: theme.colors.primary + "20", // Lighter primary background
-		paddingHorizontal: theme.space.sm, // Increased padding
-		paddingVertical: theme.space.xs, // Increased padding
-		borderRadius: theme.radius.sm,
-		marginRight: theme.space.md, // Add margin to separate from stars
-		alignSelf: "flex-start", // Ensure it doesn't stretch if stars are taller
-	},
-	menuButton: {
-		padding: theme.space.sm,
-		borderRadius: theme.radius.sm,
-	},
 	modalOverlay: {
 		flex: 1,
 		backgroundColor: "rgba(0, 0, 0, 0.5)",
 		justifyContent: "flex-start",
 		alignItems: "flex-end",
-		paddingTop: 80, // Adjust based on your header height
+		paddingTop: 80,
 		paddingRight: theme.space.md,
 	},
 	dropdownMenu: {

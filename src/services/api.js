@@ -224,3 +224,70 @@ export const getRecommendationsByUser = async (userId, page = 1, limit = 10) => 
 	// console.log("[api] getRecommendationsByUser data", data);
 	return data;
 };
+///////////////////
+export const getTripLikers = async (tripId) => {
+	// router.get("trips/:tripId/likers", getTripLikers);
+	const data = await apiFetch(`/trips/${tripId}/likers`, {
+		method: "GET",
+	});
+	console.log(`[api] getTripLikers  data`, data);
+	return data;
+};
+
+export const getTripComments = async (tripId) => {
+	// router.get("trips/:tripId/comments", getTripComments);
+	const data = await apiFetch(`/trips/${tripId}/comments`, {
+		method: "GET",
+	});
+	// console.log(`[api] getTripComments data`, data);
+	return data;
+};
+
+export const addTripComment = async (tripId, text) => {
+	// router.post("trips/:tripId/comments", protect, addCommentToTrip);
+	const data = await apiFetch(`/trips/${tripId}/comments`, {
+		method: "POST",
+		csrf: true,
+		body: JSON.stringify({ text }),
+	});
+	console.log(`[api] addTripComment data`, data);
+	return data;
+};
+
+export const deleteTripComment = async (tripId, commentId) => {
+	// router.route("trips/:tripId/comments/:commentId").delete(protect, deleteCommentFromTrip);
+	const data = await apiFetch(`/trips/${tripId}/comments/${commentId}`, {
+		method: "DELETE",
+		csrf: true,
+	});
+	console.log(`[api] deleteTripComment data`, data);
+	return data;
+};
+
+export const likeTrip = async (tripId) => {
+	// router.post("trips/:tripId/like", protect, likeTrip);
+	return await apiFetch(`/trips/${tripId}/like`, {
+		method: "POST",
+		csrf: true,
+	});
+};
+
+export const unlikeTrip = async (tripId) => {
+	// router.delete("trips/:tripId/like", protect, unlikeTrip);
+	return await apiFetch(`/trips/${tripId}/like`, {
+		// Often, unliking is a DELETE request to the same endpoint
+		method: "DELETE",
+		csrf: true,
+	});
+};
+
+///////////////////////////////////////
+// router.get("/search", protect, searchUsers);
+// router.post("users/:userId/follow", protect, followUser);
+// router.delete("users/:userId/follow", protect, unfollowUser);
+// router.get("users/:userId/pois", getUserPois);
+// router.get("users/:userId/followers", getUserFollowers);
+// router.get("users/:userId/following", getUserFollowing);
+// router.get("users/:userId/photos", getUserPhotos);
+// router.post("trips/:tripId/photos", protect, uploadMultiplePhotos, uploadTripPhotos);
+// router.delete("trips/:tripId/photos/:photoId", protect, deleteTripPhoto);

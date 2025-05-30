@@ -10,7 +10,7 @@ import { ActivityIndicator, StyleSheet, View, useColorScheme } from "react-nativ
 import ProfileTabsLayout from "./ProfileTabsLayout";
 
 /* ───────────────── constants ───────────────── */
-const FUTURE_TOP_NAVBAR_HEIGHT = 60;
+const FUTURE_TOP_NAVBAR_HEIGHT = 0;
 
 /* ───────────────── screen ───────────────── */
 export default function ProfileScreen() {

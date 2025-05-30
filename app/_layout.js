@@ -1,26 +1,34 @@
-// eslint-disable-next-line import/order
-// prettier-ignore
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+// app/_layout.js
+/* eslint-disable import/order */
 
-import { useAuthStore } from "@/src/stores/auth"; // Make sure alias `@` works
+import TopNavBar from "@/src/components/TopNavBar";
+import { useAuthStore } from "@/src/stores/auth";
+import { SystemUI, configureAndroidNavBar } from "@/src/utils/systemUI"; /////////////////////////////////
 import { SplashScreen, Stack } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import FlashMessage from "react-native-flash-message";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
-	const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-	const loading = useAuthStore((state) => state.loading);
-	const syncFromStorage = useAuthStore((state) => state.syncFromStorage);
+/* ────────────────────────────────────────────────────────────
+ *  ❶  CONSTANT, never recreated  →  no header loop
+ * ──────────────────────────────────────────────────────────── */
+const topHeader = () => <TopNavBar />;
+const tabsScreenOptions = { header: topHeader };
 
-	// Hydrate auth state from SecureStore
+export default function RootLayout() {
+	/* Auth hydration */
+	const { isAuthenticated, loading, syncFromStorage } = useAuthStore();
+
 	useEffect(() => {
 		syncFromStorage().finally(() => SplashScreen.hideAsync());
-	}, [syncFromStorage]); // Added syncFromStorage to dependency array, though it should be stable from Zustand
+		configureAndroidNavBar(); ////////////////////////////////////
+	}, [syncFromStorage]);
 
-	// While loading the user from storage
+	/* While loading SecureStore */
 	if (loading) {
 		return (
 			<View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -31,16 +39,17 @@ export default function RootLayout() {
 
 	return (
 		<GestureHandlerRootView style={{ flex: 1 }}>
-			<Stack screenOptions={{ headerShown: false }}>
-				{!isAuthenticated ? (
-					// This will only show login.js in (auth) stack
-					<Stack.Screen name="(auth)" />
-				) : (
-					// This will show the full tabbed app
-					<Stack.Screen name="(tabs)" />
-				)}
-			</Stack>
-			<FlashMessage position="top" />
+			<SafeAreaProvider>
+				<SystemUI />
+				<Stack /* DON’T set headerShown:false here */>
+					{!isAuthenticated ? (
+						<Stack.Screen name="(auth)" options={{ headerShown: false }} /* keep auth screens clean */ />
+					) : (
+						<Stack.Screen name="(tabs)" options={tabsScreenOptions} /* 1-time constant object */ />
+					)}
+				</Stack>
+				<FlashMessage position="top" />
+			</SafeAreaProvider>
 		</GestureHandlerRootView>
 	);
 }
