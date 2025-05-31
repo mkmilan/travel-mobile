@@ -230,7 +230,7 @@ export const getTripLikers = async (tripId) => {
 	const data = await apiFetch(`/trips/${tripId}/likers`, {
 		method: "GET",
 	});
-	console.log(`[api] getTripLikers  data`, data);
+	// console.log(`[api] getTripLikers  data`, data);
 	return data;
 };
 
@@ -250,7 +250,7 @@ export const addTripComment = async (tripId, text) => {
 		csrf: true,
 		body: JSON.stringify({ text }),
 	});
-	console.log(`[api] addTripComment data`, data);
+	// console.log(`[api] addTripComment data`, data);
 	return data;
 };
 
@@ -260,7 +260,7 @@ export const deleteTripComment = async (tripId, commentId) => {
 		method: "DELETE",
 		csrf: true,
 	});
-	console.log(`[api] deleteTripComment data`, data);
+	// console.log(`[api] deleteTripComment data`, data);
 	return data;
 };
 

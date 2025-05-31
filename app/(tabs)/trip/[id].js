@@ -22,6 +22,7 @@ import {
 	updateRecommendation,
 } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
+import { useTripSocialStore } from "@/src/stores/tripSocialStore";
 import { theme } from "@/src/theme";
 import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
@@ -70,6 +71,7 @@ export default function TripDetailScreen() {
 	const router = useRouter();
 	const { id: tripId } = useLocalSearchParams();
 	const { user: currentUser, isAuthenticated } = useAuthStore();
+	const { setRecCount, setLikeState, setCommentCount } = useTripSocialStore();
 
 	const [trip, setTrip] = useState(null); // Will store the full trip object including its own commentsCount
 	const [loading, setLoading] = useState(true);
@@ -172,6 +174,11 @@ export default function TripDetailScreen() {
 		setIsLikedByCurrentUser(!originalLikedState);
 		setOptimisticLikesCount(!originalLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1));
 
+		// push optimistic state to the slice immediately
+		setLikeState(tripId, {
+			isLiked: !originalLikedState,
+			count: !originalLikedState ? currentLikes + 1 : currentLikes - 1,
+		});
 		try {
 			if (!originalLikedState) {
 				await likeTrip(tripId);
@@ -185,6 +192,7 @@ export default function TripDetailScreen() {
 			Alert.alert("Error", "Could not update like status. Please try again.");
 			setIsLikedByCurrentUser(originalLikedState);
 			setOptimisticLikesCount(currentLikes);
+			setLikeState(tripId, { isLiked: originalLikedState, count: currentLikes });
 		}
 	};
 
@@ -268,6 +276,7 @@ export default function TripDetailScreen() {
 					...prevTrip,
 					commentsCount: (prevTrip.commentsCount || 0) + 1,
 				}));
+				setCommentCount(tripId, (trip?.commentsCount || 0) + 1);
 			}
 			if (!isCommentListExpanded) setIsCommentListExpanded(true);
 			if (!isCommentsSectionVisible) setIsCommentsSectionVisible(true);
@@ -294,6 +303,7 @@ export default function TripDetailScreen() {
 								...prevTrip,
 								commentsCount: Math.max(0, prevTrip.commentsCount - 1),
 							}));
+							setCommentCount(tripId, Math.max(0, (trip?.commentsCount || 1) - 1));
 						}
 					} catch (err) {
 						console.error("Failed to delete comment:", err);
@@ -359,6 +369,8 @@ export default function TripDetailScreen() {
 				Alert.alert("Success", "Recommendation added successfully!");
 			}
 			fetchTripDetails(); // Refresh trip data to show new/updated recommendation
+			// setRecCount(tripId, (prev) => (isEdit ? prev : (trip?.recommendations?.length || 0) + 1));
+			setRecCount(tripId, (prev) => (isEdit ? prev : (trip?.recommendations?.length || 0) + 1));
 		} catch (error) {
 			console.error("Failed to save recommendation:", error);
 			Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
@@ -493,6 +505,8 @@ export default function TripDetailScreen() {
 					</TouchableOpacity>
 				</View>
 				<SocialButton iconName="message-circle" count={trip.commentsCount || 0} onPress={handleToggleCommentsSection} />
+				{/* <SocialButton iconName="star" countComponent={<SocialCount trip={trip} type="recs" />} /> */}
+				<SocialButton iconName="star" count={trip.recommendations?.length || 0} />
 				<SocialButton iconName="share-2" onPress={handleShare} />
 			</View>
 
