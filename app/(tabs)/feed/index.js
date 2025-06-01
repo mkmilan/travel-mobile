@@ -38,6 +38,7 @@ export default function FeedScreen() {
 			const { items: fetched } = await getFeedTripJson(page);
 			/* cache counts for optimistic sync */
 			fetched.forEach(primeCounts);
+			// console.log("FEED TRIP/items", items[0]);
 
 			setItems((prev) => [...prev, ...fetched]);
 			setHasMore(fetched.length > 0);
@@ -72,7 +73,12 @@ export default function FeedScreen() {
 				data={items}
 				keyExtractor={(t, i) => t._id ?? `idx-${i}`}
 				renderItem={({ item }) => (
-					<TripCardContainer trip={item} onOpenSheet={openSheet} onPress={() => router.push(`/trip/${item._id}`)} />
+					<TripCardContainer
+						user={item.user}
+						trip={item}
+						onOpenSheet={openSheet}
+						onPress={() => router.push(`/trip/${item._id}`)}
+					/>
 				)}
 				contentContainerStyle={{
 					paddingHorizontal: theme.space.md,

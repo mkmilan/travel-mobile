@@ -25,10 +25,10 @@ export default function MyTrips() {
 
 	/* ---------- sheet state ---------- */
 	const [sheetType, setSheetType] = useState(null); // 'likers' | 'comments' | 'recs'
-	const [selectedTrip, setSelectedTrip] = useState(null);
+	const [selectedTrip, setSelected] = useState(null);
 
 	/* ---------- helpers ---------- */
-	const user = useAuthStore((s) => s.user || {});
+	const user = useAuthStore((s) => s.user);
 	const username = user?.username || "Unknown User";
 	const router = useRouter();
 	const { primeCounts } = useTripSocialStore();
@@ -95,6 +95,7 @@ export default function MyTrips() {
 						onPress={() => router.push(`/trip/${item._id}`)}
 						/* TripCard needs userName explicitly */
 						userNameOverride={username}
+						user={user}
 					/>
 				)}
 				contentContainerStyle={{
@@ -113,7 +114,12 @@ export default function MyTrips() {
 			{/* ---- reusable bottom-sheets (one copy each) ---- */}
 			<LikersSheet trip={selectedTrip} visible={sheetType === "likers"} onClose={closeSheet} />
 			<CommentsSheet trip={selectedTrip} visible={sheetType === "comments"} onClose={closeSheet} />
-			<RecommendationsSheet trip={selectedTrip} userId={user._id} visible={sheetType === "recs"} onClose={closeSheet} />
+			<RecommendationsSheet
+				trip={selectedTrip}
+				userId={user?._id}
+				visible={sheetType === "recs"}
+				onClose={closeSheet}
+			/>
 		</View>
 	);
 }

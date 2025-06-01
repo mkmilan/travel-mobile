@@ -59,6 +59,16 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 	return data;
 }
 
+//  ========== PHOTO UTILS ==========
+/**
+ * Convert a raw GridFS photoId into a full URL the <Image> component can load.
+ * Safely returns "" for falsy / malformed ids.
+ *
+ *   const uri = buildPhotoUrl(user.profilePictureUrl);
+ *   <Image source={{ uri }} />
+ */
+export const buildPhotoUrl = (photoId) => (photoId ? `${API_URL}/photos/${photoId}` : "");
+
 /* ------------------------------------------------------------------ *
  * typed helpers for upcoming screens
  * ------------------------------------------------------------------ */
@@ -105,7 +115,7 @@ export const getPublicUserById = async (userId) => {
 	const data = await apiFetch(`/users/user/${userId}`, {
 		method: "GET",
 	});
-	console.log(`[api] getPublicUserById user data`, data);
+	// console.log(`[api] getPublicUserById user data`, data);
 
 	return data;
 };
@@ -282,6 +292,56 @@ export const unlikeTrip = async (tripId) => {
 	});
 };
 
+//  ========== PHOTOS ==========
+/* ───────────────── uploadProfilePhoto ✅ ─────────────────
+ *
+ * PUT /api/users/me   (multer field name: photo)
+ * Sends a multipart-form request with the selected image.
+ * Returns whatever updateUserProfile sends back (usually { user }).
+ *
+ * Usage example in a screen:
+ *   const res = await uploadProfilePhoto(pickedImageUri);
+ *   authStore.setState({ user: res.user }); // or however you refresh user data
+ */
+export const uploadProfilePhoto = async (localUri) => {
+	// 1. Resolve tokens
+	const csrfToken = await getCsrfToken();
+	const authToken = await SecureStore.getItemAsync("auth-token");
+
+	// 2. Build FormData (no import needed – global in RN)
+	const filename = localUri.split("/").pop() || "avatar.jpg";
+	const ext = (filename.match(/\.\w+$/)?.[0] || ".jpg").slice(1).toLowerCase();
+	const mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+	const form = new FormData();
+	form.append("photo", {
+		uri: localUri,
+		name: filename,
+		type: mimeType,
+	});
+
+	// 3. Direct fetch (we **don’t** use apiFetch so we avoid the JSON header)
+	const res = await fetch(`${API_URL}/users/me`, {
+		method: "PUT",
+		headers: {
+			"X-CSRF-Token": csrfToken,
+			Authorization: `Bearer ${authToken}`,
+			// 👇 Don’t set Content-Type – fetch will add the right multipart boundary
+		},
+		body: form,
+	});
+
+	const isJson = res.headers.get("content-type")?.includes("application/json");
+	const data = isJson ? await res.json() : await res.text();
+
+	if (!res.ok) {
+		const msg = isJson ? data.message : data;
+		throw new Error(msg || `Profile photo upload failed (${res.status})`);
+	}
+
+	return data; // e.g. { user: { …profilePictureUrl… } }
+};
+
 ///////////////////////////////////////
 // router.get("/search", protect, searchUsers);
 // router.post("users/:userId/follow", protect, followUser);
@@ -289,6 +349,8 @@ export const unlikeTrip = async (tripId) => {
 // router.get("users/:userId/pois", getUserPois);
 // router.get("users/:userId/followers", getUserFollowers);
 // router.get("users/:userId/following", getUserFollowing);
+
 // router.get("users/:userId/photos", getUserPhotos);
 // router.post("trips/:tripId/photos", protect, uploadMultiplePhotos, uploadTripPhotos);
 // router.delete("trips/:tripId/photos/:photoId", protect, deleteTripPhoto);
+// router.get("photos/:photoId", getPhotoById);

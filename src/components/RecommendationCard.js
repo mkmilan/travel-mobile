@@ -1,7 +1,7 @@
 import { theme } from "@/src/theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import Avatar from "./ui/Avatar";
 const avatar = 26;
 
 /** static display – parent decides what happens onPress */
@@ -25,10 +25,12 @@ export default function RecommendationCard({ rec, onPress }) {
 				{/* author */}
 				{rec.user && (
 					<View style={styles.author}>
-						{rec.user.profilePictureUrl ? (
-							<Image
-								source={{ uri: rec.user.profilePictureUrl }}
-								style={{ width: avatar, height: avatar, borderRadius: avatar / 2 }}
+						{rec.user?.profilePictureUrl ? (
+							<Avatar
+								user={rec.user}
+								profilePictureUrl={rec.user.profilePictureUrl}
+								size={26}
+								style={{ marginRight: theme.space.sm }}
 							/>
 						) : (
 							<View style={styles.avatarFallback}>

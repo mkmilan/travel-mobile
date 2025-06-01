@@ -3,6 +3,7 @@ import { theme } from "@/src/theme";
 import { useRouter } from "expo-router";
 import React from "react";
 import { ActivityIndicator, FlatList, Pressable, Text } from "react-native";
+import Avatar from "../ui/Avatar";
 import BaseSheet from "./BaseSheet";
 
 export default function LikersSheet({ trip, visible, onClose }) {
@@ -29,7 +30,22 @@ export default function LikersSheet({ trip, visible, onClose }) {
 					data={likers}
 					keyExtractor={(i) => i._id}
 					renderItem={({ item }) => (
-						<Pressable onPress={() => goProfile(item._id)} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+						<Pressable
+							onPress={() => goProfile(item._id)}
+							style={{
+								paddingVertical: 12,
+								paddingHorizontal: 16,
+								display: "flex",
+								flexDirection: "row",
+								alignItems: "center",
+							}}
+						>
+							<Avatar
+								user={item}
+								profilePictureUrl={item.profilePictureUrl}
+								size={26}
+								style={{ marginRight: theme.space.sm }}
+							/>
 							<Text style={{ color: theme.colors.primary }}>{item.username}</Text>
 						</Pressable>
 					)}

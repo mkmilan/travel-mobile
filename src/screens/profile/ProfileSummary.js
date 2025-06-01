@@ -1,29 +1,16 @@
+import Avatar from "@/src/components/ui/Avatar";
 import { theme as baseTheme } from "@/src/theme";
 import { Feather } from "@expo/vector-icons";
 import { Link } from "expo-router";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
-const API_URL = "YOUR_API_BASE_URL"; // or import from env
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout }) {
-	const avatarUri =
-		displayedUser.profilePictureUrl && API_URL !== "YOUR_API_BASE_URL"
-			? `${API_URL}/photos/${displayedUser.profilePictureUrl}`
-			: null;
-
 	return (
 		<View>
 			{/* ----- header ----- */}
 			<View style={[styles.profileHeader, { borderBottomColor: colors.inputBorder }]}>
-				{avatarUri ? (
-					<Image source={{ uri: avatarUri }} style={styles.profilePicture} />
-				) : (
-					<View style={[styles.profilePicture, styles.placeholder, { backgroundColor: colors.inputBorder }]}>
-						<Text style={{ fontSize: 40, color: colors.textMuted }}>
-							{displayedUser.username.charAt(0).toUpperCase()}
-						</Text>
-					</View>
-				)}
+				<Avatar user={displayedUser} photoId={displayedUser.profilePictureUrl} size={100} />
+
 				<Text style={[styles.username, { color: colors.text }]}>{displayedUser.username}</Text>
 				{displayedUser.bio?.length > 0 && (
 					<Text style={[styles.bio, { color: colors.textMuted }]}>{displayedUser.bio}</Text>

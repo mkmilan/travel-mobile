@@ -8,7 +8,7 @@ import TripCard from "./TripCard";
  * Wraps the dumb <TripCard/> with formatted numbers
  * and the shared social-state actions.
  */
-export default function TripCardContainer({ trip, onOpenSheet, onPress, userNameOverride }) {
+export default function TripCardContainer({ trip, onOpenSheet, onPress, userNameOverride, user }) {
 	const { likesCount, commentsCount, recommendationCount, isLiked, toggleLike } = useTripSocial(trip);
 
 	/* ---- format everything exactly like the old page did ---- */
@@ -22,6 +22,7 @@ export default function TripCardContainer({ trip, onOpenSheet, onPress, userName
 	return (
 		<TripCard
 			/* static trip info */
+			user={user}
 			tripId={trip._id}
 			title={trip.title}
 			userName={displayUser}

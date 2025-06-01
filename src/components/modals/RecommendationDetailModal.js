@@ -4,8 +4,8 @@ import { theme } from "@/src/theme";
 import { Feather, Ionicons } from "@expo/vector-icons"; // Added Ionicons
 import { useRouter } from "expo-router"; // Import useRouter
 import { forwardRef } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
-
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
+import Avatar from "../ui/Avatar";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
 
@@ -124,7 +124,12 @@ const RecommendationDetailModal = forwardRef(
 					{user?._id && ( // Check if user and user._id exist
 						<Pressable onPress={handleNavigateToUserProfile} style={styles.authorSection}>
 							{user.profilePictureUrl ? (
-								<Image source={{ uri: user.profilePictureUrl }} style={styles.authorAvatar} />
+								<Avatar
+									user={user}
+									profilePictureUrl={user.profilePictureUrl}
+									size={26}
+									style={{ marginRight: theme.space.sm }}
+								/>
 							) : (
 								<View style={[styles.authorAvatar, styles.avatarFallback]}>
 									<Text style={styles.avatarFallbackText}>{user.username?.[0]?.toUpperCase() || "?"}</Text>

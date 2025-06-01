@@ -7,6 +7,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { theme } from "../theme";
+import Avatar from "./ui/Avatar";
 
 const NAVBAR_HEIGHT = 56; // px – adjust once here if you ever change the design
 
@@ -23,12 +25,7 @@ export default function TopNavBar() {
 				style={styles.left}
 				onPress={() => router.push("/(tabs)/me")} // ↖︎ points to your existing user tab
 			>
-				{/* {avatarUrl ? (
-					<Image source={{ uri: avatarUrl }} style={styles.avatar} />
-				) : (
-					<Image source={require("@/assets/avatar-placeholder.png")} style={styles.avatar} />
-				)} */}
-				{/* <Image source={require("@/assets/avatar-placeholder.png")} style={styles.avatar} /> */}
+				<Avatar user={user} photoId={user?.profilePictureUrl} size={32} style={{ marginRight: theme.space.sm }} />
 				<Text style={styles.username} numberOfLines={1}>
 					{username}
 				</Text>

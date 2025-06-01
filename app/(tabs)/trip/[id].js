@@ -10,6 +10,7 @@ import RecommendationDetailModal from "@/src/components/modals/RecommendationDet
 import IconStatDisplay from "@/src/components/trip/IconStatDisplay";
 import Section from "@/src/components/trip/Section";
 import SocialButton from "@/src/components/trip/SocialButton";
+import Avatar from "@/src/components/ui/Avatar";
 import {
 	addRecommendation,
 	addTripComment,
@@ -444,9 +445,12 @@ export default function TripDetailScreen() {
 		<ScrollView style={styles.container} nestedScrollEnabled={true}>
 			<View style={styles.header}>
 				<Pressable onPress={() => router.push(`/user/${tripUser._id}`)} style={styles.userInfo}>
-					<View style={styles.profileImagePlaceholder}>
-						<Feather name="user" size={24} color={theme.colors.textMuted} />
-					</View>
+					<Avatar
+						user={tripUser}
+						photoId={tripUser.profilePictureUrl}
+						size={28}
+						style={{ marginRight: theme.space.sm }}
+					/>
 					<Text style={styles.userName}>{tripUser.username || "Unknown User"}</Text>
 				</Pressable>
 				{isOwner && (

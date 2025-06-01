@@ -94,7 +94,12 @@ export default function TripsTab({ userId }) {
 				data={items}
 				keyExtractor={(t) => t._id}
 				renderItem={({ item }) => (
-					<TripCardContainer trip={item} onOpenSheet={openSheet} onPress={() => router.push(`/trip/${item._id}`)} />
+					<TripCardContainer
+						user={item.user}
+						trip={item}
+						onOpenSheet={openSheet}
+						onPress={() => router.push(`/trip/${item._id}`)}
+					/>
 				)}
 				contentContainerStyle={{
 					paddingHorizontal: theme.space.sm,

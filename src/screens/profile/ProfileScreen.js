@@ -1,6 +1,5 @@
 // fetch helpers
 import { getPublicUserById, getUserById } from "@/src/services/api";
-
 import { useAuthStore } from "@/src/stores/auth";
 import { darkTheme, theme as lightTheme } from "@/src/theme";
 
@@ -54,6 +53,7 @@ export default function ProfileScreen() {
 			setLoading(true);
 			try {
 				const data = isSelf ? await getUserById(profileId) : await getPublicUserById(profileId);
+				// console.log("ProfileScreen fetch", data);
 
 				if (cancelled) return;
 
@@ -76,6 +76,24 @@ export default function ProfileScreen() {
 			cancelled = true;
 		};
 	}, [profileId, isSelf]);
+
+	useEffect(() => {
+		if (isSelf) {
+			// copy the latest authUser into local state
+			setDisplayedUser(authUser);
+
+			// optional: refresh counters if backend returned them
+			setStats((prev) => ({
+				...prev,
+				totalTrips: authUser.totalTrips ?? prev.totalTrips,
+				totalDistance: authUser.totalDistance ?? prev.totalDistance,
+				recommendationCount: authUser.totalRecommendations ?? prev.recommendationCount,
+				followers: authUser.followersCount ?? prev.followers,
+				following: authUser.followingCount ?? prev.following,
+				poi: authUser.totalPois ?? prev.poi,
+			}));
+		}
+	}, [isSelf, authUser]);
 
 	/* loading / error ---------------------------------------------------- */
 	if (loading || !displayedUser) {

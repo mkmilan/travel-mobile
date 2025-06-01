@@ -3,8 +3,10 @@ import TripMapThumbnail from "@/src/components/TripMapThumbnail";
 import { theme } from "@/src/theme";
 import { Feather } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Avatar from "./ui/Avatar";
 
 export default function TripCard({
+	user,
 	userName,
 	title,
 	date,
@@ -81,6 +83,11 @@ export default function TripCard({
 				{/* Header: User, Title, Visibility */}
 				<View style={styles.headerContainer}>
 					<View style={styles.titleUserContainer}>
+						<Avatar
+							user={user} // if you have the user object
+							photoId={user?.profilePictureUrl} // or raw id
+							size={28}
+						/>
 						<Text style={styles.userName} numberOfLines={1}>
 							{userName}
 						</Text>

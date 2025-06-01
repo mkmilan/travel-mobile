@@ -4,6 +4,7 @@ import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { isoToDate } from "@/src/utils/format"; // same util TripDetail uses
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React from "react";
 import {
 	ActivityIndicator,
@@ -17,12 +18,13 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Avatar from "../ui/Avatar";
 import BaseSheet from "./BaseSheet";
 
 export default function CommentsSheet({ trip, visible, onClose }) {
 	const { user } = useAuthStore(); // current logged-in user
 	const insets = useSafeAreaInsets();
-
+	const router = useRouter();
 	/* ---- social slice ---- */
 	const { comments, loadComments, addComment } = useTripSocial(trip || {});
 
@@ -62,9 +64,18 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 	/* ------------------------------------------------------------------ */
 	const renderItem = ({ item }) => {
 		const mine = item.user._id === user?._id;
+		const avatarUser = item.user || item; // fallback if user is missing
+		const avatarProfilePictureUrl = item.profilePictureUrl || item.user?.profilePictureUrl;
 		return (
 			<View style={styles.commentCard}>
 				<View style={styles.commentHeader}>
+					<Avatar
+						user={avatarUser}
+						profilePictureUrl={avatarProfilePictureUrl}
+						size={26}
+						style={{ marginRight: theme.space.sm }}
+						onPress={() => router.push(`/user/${mine}`)}
+					/>
 					<Text style={styles.author}>{item.user.username}</Text>
 					<Text style={styles.date}>{isoToDate(item.createdAt)}</Text>
 					{mine && (
