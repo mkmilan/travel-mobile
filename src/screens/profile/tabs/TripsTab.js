@@ -4,19 +4,19 @@ import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, Text, View } from "react-native";
 
-import TripCard from "@/src/components/TripCard";
+import TripCardContainer from "@/src/components/TripCardContainer";
+import CommentsSheet from "@/src/components/sheets/CommentsSheet";
+import LikersSheet from "@/src/components/sheets/LikersSheet";
+import RecommendationsSheet from "@/src/components/sheets/RecommendationsSheet";
+
 import { getTripsByUser } from "@/src/services/api";
 import { theme } from "@/src/theme";
-import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration } from "@/src/utils/format";
-import { lineStringToCoords } from "@/src/utils/geo";
 
-/**
- * Show trips that belong to <userId>
- * – fetch page-by-page with infinite scroll
- * – pull-to-refresh resets to first page
- */
+/* ------------------------------------------------------------------ */
+/* Show trips that belong to profile <userId>                         */
+/* ------------------------------------------------------------------ */
 export default function TripsTab({ userId }) {
-	/* ─────────────────── state ─────────────────── */
+	/* ---------------- local list state ---------------- */
 	const [items, setItems] = useState([]);
 	const [page, setPage] = useState(1);
 	const [loading, setLoading] = useState(false);
@@ -24,15 +24,20 @@ export default function TripsTab({ userId }) {
 	const [hasNext, setHasNext] = useState(true);
 	const [error, setError] = useState(null);
 
+	/* ---------------- sheet state ---------------- */
+	const [sheetType, setSheetType] = useState(null); // 'likers' | 'comments' | 'recs'
+	const [selectedTrip, setSelectedTrip] = useState(null);
+
 	const router = useRouter();
 
-	/* ─────────────────── helpers ─────────────────── */
+	/* ---------------- helpers ---------------- */
 	const fetchPage = useCallback(
 		async (pageToLoad, replace = false) => {
-			if (loading) return;
+			if (loading || (!hasNext && !replace)) return;
 			setLoading(true);
 			try {
-				const res = await getTripsByUser(userId, pageToLoad, 10); // controller returns { data, page, totalPages }
+				const res = await getTripsByUser(userId, pageToLoad, 10); // { data, page, totalPages }
+
 				setItems((prev) => (replace ? res.data : [...prev, ...res.data]));
 				setHasNext(pageToLoad < res.totalPages);
 				setPage(pageToLoad + 1);
@@ -40,12 +45,13 @@ export default function TripsTab({ userId }) {
 			} catch (e) {
 				console.warn("[TripsTab] fetch error", e.message);
 				setError(e.message);
+				setHasNext(false); // stop infinite loop on hard error
 			} finally {
 				setLoading(false);
 				setRefreshing(false);
 			}
 		},
-		[loading, userId]
+		[loading, userId, hasNext]
 	);
 
 	/* first time the tab becomes visible */
@@ -55,10 +61,10 @@ export default function TripsTab({ userId }) {
 		}, [fetchPage, items.length])
 	);
 
-	/* pull to refresh */
-	const onRefresh = async () => {
+	/* pull-to-refresh */
+	const onRefresh = () => {
 		setRefreshing(true);
-		await fetchPage(1, true);
+		fetchPage(1, true);
 	};
 
 	/* infinite scroll */
@@ -66,7 +72,14 @@ export default function TripsTab({ userId }) {
 		if (!loading && hasNext) fetchPage(page);
 	};
 
-	/* ─────────────────── render ─────────────────── */
+	/* bottom-sheet helpers */
+	const openSheet = (type, trip) => {
+		setSelectedTrip(trip);
+		setSheetType(type);
+	};
+	const closeSheet = () => setSheetType(null);
+
+	/* ---------------- render ---------------- */
 	if (error && items.length === 0) {
 		return (
 			<View style={{ padding: 24 }}>
@@ -76,40 +89,33 @@ export default function TripsTab({ userId }) {
 	}
 
 	return (
-		<FlatList
-			data={items}
-			keyExtractor={(t) => t._id}
-			renderItem={({ item }) => (
-				<TripCard
-					{...item} // spread in case you added more fields later
-					userName={item.user?.username || "Unknown"}
-					visibility={item.defaultTripVisibility}
-					coords={lineStringToCoords(item.simplifiedRoute)}
-					travelMode={item.defaultTravelMode}
-					title={item.title}
-					description={item.description}
-					date={isoToDate(item.startDate || item.createdAt)}
-					distanceKm={kmOrMiles(item.distanceMeters)}
-					durationStr={msToDuration(item.durationMillis)}
-					avgSpeed={calcAvgSpeed(item.distanceMeters, item.durationMillis)}
-					likes={item.likesCount}
-					comments={item.commentsCount}
-					onPress={() => router.push(`/trip/${item._id}`)}
-				/>
-			)}
-			contentContainerStyle={{
-				paddingHorizontal: theme.space.sm,
-				paddingTop: theme.space.sm,
-			}}
-			onEndReachedThreshold={0.4}
-			onEndReached={loadMore}
-			ListFooterComponent={loading && items.length > 0 ? <ActivityIndicator style={{ margin: 16 }} /> : null}
-			refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-			ListEmptyComponent={
-				!loading && items.length === 0 ? (
-					<Text style={{ textAlign: "center", marginTop: 32 }}>Nothing to show yet.</Text>
-				) : null
-			}
-		/>
+		<View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+			<FlatList
+				data={items}
+				keyExtractor={(t) => t._id}
+				renderItem={({ item }) => (
+					<TripCardContainer trip={item} onOpenSheet={openSheet} onPress={() => router.push(`/trip/${item._id}`)} />
+				)}
+				contentContainerStyle={{
+					paddingHorizontal: theme.space.sm,
+					paddingTop: theme.space.sm,
+					paddingBottom: theme.space.sm,
+				}}
+				onEndReached={loadMore}
+				onEndReachedThreshold={0.4}
+				ListFooterComponent={loading && items.length > 0 ? <ActivityIndicator style={{ margin: 16 }} /> : null}
+				refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+				ListEmptyComponent={
+					!loading && items.length === 0 ? (
+						<Text style={{ textAlign: "center", marginTop: 32 }}>Nothing to show yet.</Text>
+					) : null
+				}
+			/>
+
+			{/* ---- shared bottom sheets (one copy each) ---- */}
+			<LikersSheet trip={selectedTrip} visible={sheetType === "likers"} onClose={closeSheet} />
+			<CommentsSheet trip={selectedTrip} visible={sheetType === "comments"} onClose={closeSheet} />
+			<RecommendationsSheet trip={selectedTrip} visible={sheetType === "recs"} onClose={closeSheet} />
+		</View>
 	);
 }

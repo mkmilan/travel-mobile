@@ -186,6 +186,17 @@ export const getFeedTripJson = async (page = 1, pageSize = 10) => {
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
 
+// ───────────────── getTripsByUser  ✅ ─────────────────
+//targeted user id is userId our/user that make call is in req
+export const getTripsByUser = async (userId, page = 1, limit = 10) => {
+	const data = await apiFetch(`/v2/trips/json/user/${userId}?page=${page}&limit=${limit}`, {
+		method: "GET",
+	});
+	// console.log("[api] getTripsByUser data", data);
+
+	return data;
+};
+
 // ───────────────── updateRecommendations  ✅ ─────────────────
 export const updateRecommendation = async (recommendationId, updatedData, csrf = true) => {
 	const data = await apiFetch(`/v2/recommendations/${recommendationId}`, {
@@ -203,16 +214,6 @@ export const addRecommendation = async (recommendationData, csrf = true) => {
 		csrf,
 		body: JSON.stringify(recommendationData),
 	});
-	return data;
-};
-
-//targeted user id is userId our/user that make call is in req
-export const getTripsByUser = async (userId, page = 1, limit = 10) => {
-	const data = await apiFetch(`/v2/trips/json/user/${userId}?page=${page}&limit=${limit}`, {
-		method: "GET",
-	});
-	// console.log("[api] getTripsByUser data", data);
-
 	return data;
 };
 
