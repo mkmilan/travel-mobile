@@ -9,6 +9,22 @@ import {
 } from "@/src/services/api";
 import { create } from "zustand";
 
+/**
+ * Slice that tracks live social state per trip.
+ *
+ *   trips = {
+ *     [tripId]: {
+ *       likesCount,
+ *       commentsCount,
+ *       recommendationCount,
+ *       isLikedByCurrentUser,
+ *       comments,          // array
+ *       likers,            // array
+ *       recommendations,   // array
+ *     }
+ *   }
+ */
+
 export const useTripSocialStore = create((set, get) => ({
 	trips: {}, // { [tripId]: {likesCount, isLikedByCurrentUser, ...} }
 
@@ -119,4 +135,7 @@ export const useTripSocialStore = create((set, get) => ({
 				},
 			},
 		})),
+
+	/* ─────────── RESET (for logout) ─────────── */
+	reset: () => set({ trips: {} }),
 }));

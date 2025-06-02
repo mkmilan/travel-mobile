@@ -36,7 +36,9 @@
       },
       "env": {
         "APP_ENV": "production",
-        "API_URL": "https://travel-server-fdxh.onrender.com/api"
+        "NODE_ENV": "production",
+        "API_URL": "https://travel-server-fdxh.onrender.com/api",
+        "GOOGLE_MAPS_KEY": "$GOOGLE_MAPS_KEY"
       }
     }
   }

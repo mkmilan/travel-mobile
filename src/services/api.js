@@ -37,6 +37,7 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 	/* attach CSRF header if requested */
 	if (csrf) {
 		headers["X-CSRF-Token"] = await getCsrfToken();
+		options.credentials = "include"; // ADDED
 	}
 
 	/* attach JWT if authenticated route */
@@ -45,8 +46,29 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 		if (token) headers["Authorization"] = `Bearer ${token}`;
 	}
 
+	/* ──────────────────────────────────────────────────────────────── *
+	 *  ABSOLUTE SAFETY VALVE
+	 *  If any code ever builds a path containing “undefined” or “null”
+	 *  as a final URL segment, bail out early so the backend never sees it.
+	 * ---------------------------------------------------------------- */
+	const badIdPattern = /\/(undefined|null)(?:$|[/?#])/;
+	if (badIdPattern.test(path)) {
+		console.warn("[apiFetch] blocked invalid path →", path);
+		return null; // swallow the call gracefully
+	}
+
 	const res = await fetch(`${API_URL}${path}`, { method, headers, ...options });
 
+	/* ─── automatic logout on 401 ─── */
+	if (res.status === 401) {
+		try {
+			const { logout } = require("@/src/stores/auth").useAuthStore.getState();
+			await logout(); // clear SecureStore + state
+		} catch {
+			/* ignore */
+		}
+		// Optional: toast could go here
+	}
 	/* safe JSON parse */
 	const isJson = res.headers.get("content-type")?.includes("application/json");
 	const data = isJson ? await res.json() : await res.text();
@@ -112,6 +134,14 @@ export const getUserById = async (userId) => {
 };
 // ───────────────── getPublicUserById  ✅ ───────────────── old
 export const getPublicUserById = async (userId) => {
+	if (
+		!userId || // falsy
+		userId === "undefined" || // literal string
+		userId === "null"
+	) {
+		console.warn("[api] getPublicUserById called with invalid id:", userId);
+		return null;
+	}
 	const data = await apiFetch(`/users/user/${userId}`, {
 		method: "GET",
 	});

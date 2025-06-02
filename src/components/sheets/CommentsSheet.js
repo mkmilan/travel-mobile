@@ -64,6 +64,7 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 	/* ------------------------------------------------------------------ */
 	const renderItem = ({ item }) => {
 		const mine = item.user._id === user?._id;
+
 		const avatarUser = item.user || item; // fallback if user is missing
 		const avatarProfilePictureUrl = item.profilePictureUrl || item.user?.profilePictureUrl;
 		return (
@@ -74,7 +75,7 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 						profilePictureUrl={avatarProfilePictureUrl}
 						size={26}
 						style={{ marginRight: theme.space.sm }}
-						onPress={() => router.push(`/user/${mine}`)}
+						onPress={() => router.push(`/user/${item.user?._id}`)}
 					/>
 					<Text style={styles.author}>{item.user.username}</Text>
 					<Text style={styles.date}>{isoToDate(item.createdAt)}</Text>

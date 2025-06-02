@@ -9,6 +9,13 @@
     "ios": "expo run:ios",
     "web": "expo start --web"
   },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "listUnknownPackages": false
+      }
+    }
+  },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
     "@gorhom/bottom-sheet": "^5.1.4",
@@ -47,7 +54,7 @@
     "react-native-get-random-values": "^1.11.0",
     "react-native-maps": "1.20.1",
     "react-native-modal": "^14.0.0-rc.1",
-    "react-native-pager-view": "^6.8.0",
+    "react-native-pager-view": "6.7.1",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.10.0",
     "react-native-tab-view": "^4.1.0",

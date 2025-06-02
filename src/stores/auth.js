@@ -48,6 +48,11 @@ export const useAuthStore = create((set, get) => ({
 
 	/* ─────────────────── LOGOUT ─────────────────── */
 	logout: async () => {
+		// 1. clear every social cache so mounted screens stop poking the API
+		try {
+			require("@/src/stores/tripSocialStore").useTripSocialStore.getState().reset();
+		} catch (_) {} // ignore if the store hasn't been loaded yet
+
 		await SecureStore.deleteItemAsync(STORAGE_KEYS.user);
 		await SecureStore.deleteItemAsync(STORAGE_KEYS.token);
 		set({
