@@ -12,6 +12,7 @@ import {
 	travelModeOptions,
 	tripVisibilityOptions,
 } from "@/src/constants/settingsOptions";
+import useRequireAuth from "@/src/hooks/useRequireAuth";
 import { updateUserSettings } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
@@ -61,6 +62,10 @@ const withIcon = (arr) =>
 
 /* ------------------------------------------------------------------ */
 export default function SettingsScreen() {
+	/* guard */
+	const ready = useRequireAuth();
+	if (!ready) return <View style={styles.blank} />;
+
 	const router = useRouter();
 	const user = useAuthStore((s) => s.user);
 	const updateUser = useAuthStore((s) => s.updateUser);

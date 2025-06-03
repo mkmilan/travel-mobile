@@ -106,6 +106,7 @@
 // });
 import FormField from "@/src/components/form/FormField";
 import Avatar from "@/src/components/ui/Avatar";
+import useRequireAuth from "@/src/hooks/useRequireAuth";
 import { updateUserById, uploadProfilePhoto } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
@@ -115,6 +116,10 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function EditProfileScreen() {
+	/* guard */
+	const ready = useRequireAuth();
+	if (!ready) return <View style={styles.blank} />;
+
 	/* ---------- auth & nav ---------- */
 	const router = useRouter();
 	const authStore = useAuthStore();
@@ -165,6 +170,7 @@ export default function EditProfileScreen() {
 			const updated = await updateUserById(true, payload);
 			authStore.updateUser(updated);
 			router.back();
+			// router.push("/(tabs)/me/profile");
 		} catch (e) {
 			Alert.alert("Error", e.message);
 		} finally {

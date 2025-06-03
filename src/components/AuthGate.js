@@ -15,7 +15,7 @@ export default function AuthGate({ children }) {
 	/* redirect when the gate decides we’re unauthenticated */
 	useEffect(() => {
 		if (!loading && !isAuthenticated) {
-			router.replace("/login");
+			router.replace("(auth)/login");
 		}
 	}, [loading, isAuthenticated]);
 

@@ -1,8 +1,8 @@
 // fetch helpers
+import useRequireAuth from "@/src/hooks/useRequireAuth";
 import { getPublicUserById, getUserById } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { darkTheme, theme as lightTheme } from "@/src/theme";
-
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, useColorScheme } from "react-native";
@@ -13,6 +13,10 @@ const FUTURE_TOP_NAVBAR_HEIGHT = 0;
 
 /* ───────────────── screen ───────────────── */
 export default function ProfileScreen() {
+	/* ─── step 1: guard ───────────────────────────────────────── */
+	const ready = useRequireAuth();
+	if (!ready) return <View style={styles.blank} />;
+
 	/* routing & auth ----------------------------------------------------- */
 	const { userId } = useLocalSearchParams(); // /user/[userId] – undefined on “Me”
 	const authUser = useAuthStore((s) => s.user);

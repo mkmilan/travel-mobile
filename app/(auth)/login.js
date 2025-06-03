@@ -2,15 +2,9 @@ import AuthInput from "@/src/components/AuthInput";
 import { loginRequest } from "@/src/services/auth";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
-import { router } from "expo-router";
+import { useRouter } from "expo-router";
 import { useState } from "react";
-import {
-	KeyboardAvoidingView,
-	Platform,
-	StyleSheet,
-	Text,
-	TouchableOpacity,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity } from "react-native";
 
 export default function LoginScreen() {
 	// local form state
@@ -18,7 +12,7 @@ export default function LoginScreen() {
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState(null);
 	const [submitting, setSubmitting] = useState(false);
-
+	const router = useRouter();
 	// Zustand actions
 	const login = useAuthStore((s) => s.login);
 
@@ -42,18 +36,8 @@ export default function LoginScreen() {
 			behavior={Platform.OS === "ios" ? "padding" : "height"}
 			style={{ flex: 1, justifyContent: "center", padding: 20 }}
 		>
-			<AuthInput
-				value={email}
-				onChangeText={setEmail}
-				placeholder="Email"
-				keyboardType="email-address"
-			/>
-			<AuthInput
-				value={password}
-				onChangeText={setPassword}
-				placeholder="Password"
-				secureTextEntry
-			/>
+			<AuthInput value={email} onChangeText={setEmail} placeholder="Email" keyboardType="email-address" />
+			<AuthInput value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry />
 
 			<TouchableOpacity
 				onPress={handleLogin}
@@ -74,22 +58,12 @@ export default function LoginScreen() {
 				</Text>
 			</TouchableOpacity>
 			{error && <Text style={styles.error}>{error}</Text>}
-			<TouchableOpacity
-				onPress={() => router.push("/register")}
-				style={{ marginTop: theme.space.md }}
-			>
-				<Text style={{ textAlign: "center", color: "blue" }}>
-					Don't have an account? Register
-				</Text>
+			<TouchableOpacity onPress={() => router.push("/register")} style={{ marginTop: theme.space.md }}>
+				<Text style={{ textAlign: "center", color: "blue" }}>Don't have an account? Register</Text>
 			</TouchableOpacity>
 
-			<TouchableOpacity
-				onPress={() => router.push("/forgot-password")}
-				style={{ marginTop: theme.space.sm }}
-			>
-				<Text style={{ textAlign: "center", color: theme.colors.link }}>
-					Forgot Password?
-				</Text>
+			<TouchableOpacity onPress={() => router.push("/forgot-password")} style={{ marginTop: theme.space.sm }}>
+				<Text style={{ textAlign: "center", color: theme.colors.link }}>Forgot Password?</Text>
 			</TouchableOpacity>
 		</KeyboardAvoidingView>
 	);
