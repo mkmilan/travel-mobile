@@ -451,6 +451,4 @@ export const deleteRecommendationPhoto = async (recId, photoId) =>
 // router.get("users/:userId/following", getUserFollowing);
 
 // router.get("users/:userId/photos", getUserPhotos);
-// router.post("trips/:tripId/photos", protect, uploadMultiplePhotos, uploadTripPhotos);
-// router.delete("trips/:tripId/photos/:photoId", protect, deleteTripPhoto);
 // router.get("photos/:photoId", getPhotoById);

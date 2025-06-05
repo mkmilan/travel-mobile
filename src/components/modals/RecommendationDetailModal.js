@@ -1,15 +1,15 @@
 import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
 import PhotoGallery from "@/src/components/trip/PhotoGallery";
+import { deleteRecommendationPhoto } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { Feather, Ionicons } from "@expo/vector-icons"; // Added Ionicons
 import { useRouter } from "expo-router"; // Import useRouter
 import { forwardRef } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
 import Avatar from "../ui/Avatar";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
-
 /* ------------------------------------------------------------------ */
 /* helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -37,7 +37,19 @@ const TagChip = ({ label }) => (
 /* main component                                                     */
 /* ------------------------------------------------------------------ */
 const RecommendationDetailModal = forwardRef(
-	({ isVisible, onClose, recommendation, tripUserId, onEdit, tripRouteCoordinates }, ref) => {
+	(
+		{
+			isVisible,
+			onClose,
+			recommendation,
+			tripUserId,
+			onEdit,
+			tripRouteCoordinates,
+			onRefresh,
+			onOptimisticPhotoDelete,
+		},
+		ref
+	) => {
 		/* run hooks unconditionally */
 		const { user: currentUser } = useAuthStore();
 		const router = useRouter();
@@ -92,6 +104,52 @@ const RecommendationDetailModal = forwardRef(
 		const handleEdit = () => {
 			onClose();
 			onEdit?.(recommendation);
+		};
+		const handleRemovePhoto = async (photoId) => {
+			try {
+				// 1. IMMEDIATE FEEDBACK - Update UI optimistically
+				if (onOptimisticPhotoDelete) {
+					onOptimisticPhotoDelete(recommendation._id, photoId);
+				}
+
+				// 2. API CALL - Delete from server
+				await deleteRecommendationPhoto(_id, photoId);
+
+				// 3. SUCCESS FEEDBACK
+				Alert.alert("Success", "Photo deleted successfully");
+
+				// 4. SYNC - Refresh to ensure consistency
+				if (onRefresh) {
+					onRefresh();
+				}
+			} catch (e) {
+				// 5. ERROR HANDLING - Revert optimistic update
+				Alert.alert("Delete failed", e.message);
+
+				// Revert the optimistic update by refreshing
+				if (onRefresh) {
+					onRefresh();
+				}
+			}
+
+			// try {
+			// 	await deleteRecommendationPhoto(_id, photoId);
+			// 	// setSelectedRecommendation((prev) =>
+			// 	// 	prev
+			// 	// 		? {
+			// 	// 				...prev,
+			// 	// 				photos: prev.photos.filter((id) => id !== photoId),
+			// 	// 		  }
+			// 	// 		: prev
+			// 	// );
+
+			// 	Alert.alert("Success", "Photo deleted successfully");
+			// 	if (onRefresh) {
+			// 		onRefresh();
+			// 	}
+			// } catch (e) {
+			// 	Alert.alert("Delete failed", e.message);
+			// }
 		};
 		const handleNavigateToTrip = () => {
 			if (associatedTrip) {
@@ -195,7 +253,7 @@ const RecommendationDetailModal = forwardRef(
 					{photos.length > 0 && (
 						<View style={styles.section}>
 							<Text style={styles.sectionTitle}>Gallery</Text>
-							<PhotoGallery photoIds={photos} canDelete={false} />
+							<PhotoGallery photoIds={photos} canDelete={canEdit} onDelete={handleRemovePhoto} />
 						</View>
 					)}
 				</ScrollView>

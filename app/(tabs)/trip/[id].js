@@ -476,6 +476,41 @@ export default function TripDetailScreen() {
 		}
 	};
 
+	// Optimistic photo deletion handler
+	const handleOptimisticPhotoDelete = (recommendationId, photoId) => {
+		// Update trip state immediately for instant UI feedback
+		setTrip((prevTrip) => {
+			if (!prevTrip) return prevTrip;
+
+			const updatedRecommendations =
+				prevTrip.recommendations?.map((rec) => {
+					if (rec._id === recommendationId) {
+						return {
+							...rec,
+							photos: rec.photos?.filter((id) => id !== photoId) || [],
+						};
+					}
+					return rec;
+				}) || [];
+
+			return {
+				...prevTrip,
+				recommendations: updatedRecommendations,
+			};
+		});
+
+		// Also update selectedRecommendation if it's the same one
+		setSelectedRecommendation((prevSelected) => {
+			if (prevSelected?._id === recommendationId) {
+				return {
+					...prevSelected,
+					photos: prevSelected.photos?.filter((id) => id !== photoId) || [],
+				};
+			}
+			return prevSelected;
+		});
+	};
+
 	return (
 		<ScrollView style={styles.container} nestedScrollEnabled={true}>
 			<View style={styles.header}>
@@ -650,6 +685,8 @@ export default function TripDetailScreen() {
 				tripUserId={trip?.user?._id}
 				onEdit={handleEditRecommendation}
 				tripRouteCoordinates={mapCoords}
+				onRefresh={() => fetchTripDetails(true)}
+				onOptimisticPhotoDelete={handleOptimisticPhotoDelete}
 			/>
 			<LikersModal
 				isVisible={isLikersModalVisible}
