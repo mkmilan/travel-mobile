@@ -1,10 +1,12 @@
+import TripPhotoThumb from "@/src/components/ui/TripPhotoThumb";
 import { travelModeOptions, tripVisibilityOptions } from "@/src/constants/settingsOptions";
+import usePhotoManager from "@/src/hooks/usePhotoManager";
 import { getTripJsonById, updateTripJson } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TransportIcon from "../../../../src/components/TransportIcon";
 
@@ -41,9 +43,26 @@ export default function EditTripScreen() {
 	const [visibility, setVisibility] = useState("public");
 	const [transportMode, setTransportMode] = useState("car");
 
+	/* ► PHOTO MANAGER  ◄ */
+	const stableInitialPhotos = useMemo(() => [], []);
+	const {
+		photos, // array of ids   (read-only)
+		setPhotos, // setter we’ll call once after fetch
+		uploading,
+		addPhotos,
+		removePhoto,
+		uploadPendingPhotos,
+	} = usePhotoManager({
+		context: "trip",
+		id: tripId,
+		max: 5,
+		initial: stableInitialPhotos, // start empty – we’ll hydrate later
+	});
+
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState(null);
+	// console.log("EditTripScreen mounted with trip:", trip);
 
 	useEffect(() => {
 		if (tripId) {
@@ -70,6 +89,8 @@ export default function EditTripScreen() {
 			setDescription(data.description || "");
 			setVisibility(data.defaultTripVisibility || "public");
 			setTransportMode(data.defaultTravelMode || "car");
+			if (Array.isArray(data.photos)) setPhotos(data.photos);
+			// setPhotos(data.photos || []);
 		} catch (err) {
 			console.error("Failed to fetch trip details for editing:", err);
 			setError(err.message || "Could not load trip details.");
@@ -84,14 +105,21 @@ export default function EditTripScreen() {
 		setSaving(true);
 		setError(null);
 
-		const payload = {
-			title: title.trim(),
-			description: description.trim(),
-			defaultTripVisibility: visibility,
-			defaultTravelMode: transportMode,
-		};
-
 		try {
+			// STEP 1: Upload any pending photos first
+			await uploadPendingPhotos(tripId);
+
+			// STEP 2: Get the final photo list (now all should be server IDs)
+			// const finalPhotoIds = photos.filter((id) => !id.startsWith("file://"));
+
+			const payload = {
+				title: title.trim(),
+				description: description.trim(),
+				defaultTripVisibility: visibility,
+				defaultTravelMode: transportMode,
+				// photos: finalPhotoIds, // ← Add this line i think we dont need this for now server dont expect it
+			};
+
 			await updateTripJson(tripId, payload);
 			Alert.alert("Success", "Trip updated successfully!");
 			router.back();
@@ -207,18 +235,40 @@ export default function EditTripScreen() {
 					</Chip>
 				))}
 			</View>
+			{/* Photos (max 5) */}
+			<Text style={styles.label}>Photos ({photos.length}/5)</Text>
+			<View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+				{photos.map((id) => (
+					<TripPhotoThumb
+						key={id}
+						photoId={id}
+						onPress={() =>
+							Alert.alert("Remove photo?", "", [
+								{ text: "Cancel", style: "cancel" },
+								{ text: "Delete", style: "destructive", onPress: () => removePhoto(id) },
+							])
+						}
+					/>
+				))}
+				{/* add-button */}
+				{photos.length < 5 && (
+					<Pressable onPress={addPhotos} style={[styles.addBox, uploading && { opacity: 0.5 }]} disabled={uploading}>
+						<Feather name="plus" size={24} color={theme.colors.textMuted} />
+					</Pressable>
+				)}
+			</View>
 
 			{/* Buttons */}
 			<Pressable
 				style={({ pressed }) => [
 					styles.buttonPrimary,
 					pressed && styles.buttonPressed,
-					saving && styles.buttonDisabled,
+					(saving || uploading) && styles.buttonDisabled, // ← Add uploading check
 				]}
 				onPress={handleSaveChanges}
-				disabled={saving}
+				disabled={saving || uploading}
 			>
-				<Text style={styles.buttonPrimaryText}>{saving ? "Saving..." : "Save"}</Text>
+				<Text style={styles.buttonPrimaryText}> {saving || uploading ? "Saving..." : "Save"} </Text>
 			</Pressable>
 
 			<Pressable
@@ -370,5 +420,16 @@ const styles = StyleSheet.create({
 	},
 	buttonDisabled: {
 		opacity: 0.5,
+	},
+	addBox: {
+		width: 80,
+		height: 80,
+		borderRadius: 4,
+		borderWidth: 1,
+		borderColor: theme.colors.inputBorder,
+		alignItems: "center",
+		justifyContent: "center",
+		marginRight: theme.space.sm,
+		marginBottom: theme.space.sm,
 	},
 });

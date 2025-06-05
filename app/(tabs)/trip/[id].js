@@ -8,6 +8,7 @@ import AddRecommendationModal from "@/src/components/modals/AddRecommendationMod
 import LikersModal from "@/src/components/modals/LikersModal";
 import RecommendationDetailModal from "@/src/components/modals/RecommendationDetailModal";
 import IconStatDisplay from "@/src/components/trip/IconStatDisplay";
+import PhotoGallery from "@/src/components/trip/PhotoGallery";
 import Section from "@/src/components/trip/Section";
 import SocialButton from "@/src/components/trip/SocialButton";
 import Avatar from "@/src/components/ui/Avatar";
@@ -15,6 +16,7 @@ import {
 	addRecommendation,
 	addTripComment,
 	deleteTripComment,
+	deleteTripPhoto,
 	getTripComments,
 	getTripJsonById,
 	getTripLikers,
@@ -360,31 +362,54 @@ export default function TripDetailScreen() {
 		addRecommendationModalRef.current?.openEdit(recommendation);
 	};
 
-	const handleRecommendationSubmit = async (recommendationData, isEditMode = false) => {
+	const handleRecommendationSubmit = async (
+		recommendationData,
+		isEditMode = false,
+		shouldRefreshImmediately = true
+	) => {
 		try {
 			if (isEditMode) {
-				await updateRecommendation(recommendationData._id, recommendationData);
-				Alert.alert("Success", "Recommendation updated successfully!");
+				const updatedRecommendation = await updateRecommendation(recommendationData._id, recommendationData);
+				fetchTripDetails(); // Refresh trip data to show updated recommendation
+				// return updatedRecommendation;
+				return {
+					...updatedRecommendation,
+					refreshCallback: () => fetchTripDetails(), // Callback for modal to trigger refresh after uploads
+				};
 			} else {
-				await addRecommendation({ ...recommendationData, tripId });
-				Alert.alert("Success", "Recommendation added successfully!");
+				const newRecommendation = await addRecommendation({ ...recommendationData, tripId });
+
+				// Only refresh immediately if no photos are being uploaded
+				if (shouldRefreshImmediately) {
+					fetchTripDetails(); // Refresh trip data to show new recommendation
+				}
+
+				setRecCount(tripId, (prev) => (trip?.recommendations?.length || 0) + 1);
+
+				// Return recommendation with refresh callback for delayed refresh
+				return {
+					...newRecommendation,
+					refreshCallback: () => fetchTripDetails(), // Callback for modal to trigger refresh after uploads
+				};
 			}
-			fetchTripDetails(); // Refresh trip data to show new/updated recommendation
-			// setRecCount(tripId, (prev) => (isEdit ? prev : (trip?.recommendations?.length || 0) + 1));
-			setRecCount(tripId, (prev) => (isEdit ? prev : (trip?.recommendations?.length || 0) + 1));
 		} catch (error) {
 			console.error("Failed to save recommendation:", error);
 			Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
+			throw error;
 		}
 	};
 
 	const handleShare = () => Alert.alert("Share", "Share functionality to be implemented.");
 
 	const handleViewRecommendationDetail = (rec) => {
-		setSelectedRecommendation(rec);
+		// setSelectedRecommendation(rec);
+		// setIsRecDetailModalVisible(true);
+		const freshRec = trip.recommendations?.find((r) => r._id === rec._id) || rec;
+		console.log("🔍 Opening recommendation detail:", freshRec.name, "photos:", freshRec.photos?.length || 0);
+		setSelectedRecommendation(freshRec);
 		setIsRecDetailModalVisible(true);
 	};
-
+	// console.log("Trip details TRIP{ID} PAGE:", trip?.recommendations);
 	if (loading && !trip) {
 		// Show loading only if trip is not yet set
 		return (
@@ -440,6 +465,16 @@ export default function TripDetailScreen() {
 
 	const recommendations = trip.recommendations || [];
 	const pois = trip.pointsOfInterest || []; // Corrected from your JSON: pointsOfInterest
+
+	/* helper only for owner */
+	const handleRemovePhoto = async (photoId) => {
+		try {
+			await deleteTripPhoto(tripId, photoId);
+			setTrip((t) => ({ ...t, photos: (t.photos || []).filter((id) => id !== photoId) }));
+		} catch (e) {
+			Alert.alert("Delete failed", e.message);
+		}
+	};
 
 	return (
 		<ScrollView style={styles.container} nestedScrollEnabled={true}>
@@ -591,7 +626,11 @@ export default function TripDetailScreen() {
 			</Section>
 
 			<Section title="Photo Gallery">
-				<Text style={styles.placeholderText}>[Photo Gallery Placeholder - Coming Soon]</Text>
+				{trip.photos?.length ? (
+					<PhotoGallery photoIds={trip.photos} canDelete={isOwner} onDelete={handleRemovePhoto} />
+				) : (
+					<Text style={styles.emptySectionText}>No photos yet.</Text>
+				)}
 			</Section>
 
 			<View style={{ height: 50 }} />

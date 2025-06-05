@@ -1,33 +1,9 @@
-// filepath: /home/mkmilan/Documents/my/travel-2/mobile/src/components/CommentList.js
 import { theme } from "@/src/theme";
 import { isoToDate } from "@/src/utils/format"; // Assuming this formats date nicely
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
-// Assuming ProfilePicture component from LikersModal or similar
-const ProfilePicture = ({ uri, size = 32, style }) => {
-	if (uri) {
-		return <Image source={{ uri }} style={[{ width: size, height: size, borderRadius: size / 2 }, style]} />;
-	}
-	return (
-		<View
-			style={[
-				{
-					width: size,
-					height: size,
-					borderRadius: size / 2,
-					backgroundColor: theme.colors.inputBorder,
-					justifyContent: "center",
-					alignItems: "center",
-				},
-				style,
-			]}
-		>
-			<Feather name="user" size={size * 0.6} color={theme.colors.textMuted} />
-		</View>
-	);
-};
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Avatar from "./ui/Avatar";
 
 export default function CommentList({ comments = [], currentUserId, onDeleteComment }) {
 	const router = useRouter();
@@ -49,7 +25,14 @@ export default function CommentList({ comments = [], currentUserId, onDeleteComm
 		return (
 			<View style={styles.commentItem}>
 				<TouchableOpacity onPress={() => handleUserPress(userId)}>
-					<ProfilePicture uri={profilePictureUrl} size={32} style={styles.commentAvatar} />
+					{/* <ProfilePicture uri={profilePictureUrl} size={32} style={styles.commentAvatar} /> */}
+					<Avatar
+						user={item.user}
+						profilePictureUrl={profilePictureUrl}
+						size={26}
+						style={styles.commentAvatar}
+						onPress={() => handleUserPress(userId)}
+					/>
 				</TouchableOpacity>
 				<View style={styles.commentContent}>
 					<View style={styles.commentHeader}>

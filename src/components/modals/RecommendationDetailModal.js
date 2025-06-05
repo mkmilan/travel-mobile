@@ -1,4 +1,5 @@
 import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
+import PhotoGallery from "@/src/components/trip/PhotoGallery";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { Feather, Ionicons } from "@expo/vector-icons"; // Added Ionicons
@@ -40,6 +41,7 @@ const RecommendationDetailModal = forwardRef(
 		/* run hooks unconditionally */
 		const { user: currentUser } = useAuthStore();
 		const router = useRouter();
+		// console.log("RecommendationDetailModal rec", {  recommendation });
 
 		/* if nothing to show just render an empty modal (keeps hook order) */
 		if (!recommendation) {
@@ -188,21 +190,12 @@ const RecommendationDetailModal = forwardRef(
 						</View>
 					) : null}
 
-					{/* gallery placeholder -------------------------------------- */}
-					{(photos.length > 0 || canEdit) && (
+					{/* gallery -------------------------------------- */}
+
+					{photos.length > 0 && (
 						<View style={styles.section}>
 							<Text style={styles.sectionTitle}>Gallery</Text>
-							{photos.length ? (
-								<View style={styles.galleryPlaceholder}>
-									<Feather name="image" size={40} color={theme.colors.textMuted} />
-									<Text style={styles.placeholderText}>{photos.length} image(s)</Text>
-								</View>
-							) : (
-								<Pressable style={styles.addPhotosButton} onPress={() => alert("Add photos – TBI")}>
-									<Feather name="plus-circle" size={20} color={theme.colors.primary} />
-									<Text style={styles.addPhotosButtonText}>Add Photos</Text>
-								</Pressable>
-							)}
+							<PhotoGallery photoIds={photos} canDelete={false} />
 						</View>
 					)}
 				</ScrollView>

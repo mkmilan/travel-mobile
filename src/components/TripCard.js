@@ -83,14 +83,16 @@ export default function TripCard({
 				{/* Header: User, Title, Visibility */}
 				<View style={styles.headerContainer}>
 					<View style={styles.titleUserContainer}>
-						<Avatar
-							user={user} // if you have the user object
-							photoId={user?.profilePictureUrl} // or raw id
-							size={28}
-						/>
-						<Text style={styles.userName} numberOfLines={1}>
-							{userName}
-						</Text>
+						<View style={styles.userRow}>
+							<Avatar
+								user={user} // if you have the user object
+								photoId={user?.profilePictureUrl} // or raw id
+								size={28}
+							/>
+							<Text style={styles.userName} numberOfLines={1}>
+								{userName}
+							</Text>
+						</View>
 						<Text style={styles.title} numberOfLines={2}>
 							{title}
 						</Text>
@@ -212,11 +214,18 @@ const styles = StyleSheet.create({
 		flex: 1,
 		marginRight: theme.space.sm,
 	},
+	userRow: {
+		// New style for Avatar and userName
+		flexDirection: "row",
+		alignItems: "center",
+		marginBottom: 2, // To maintain spacing before the title
+	},
 	userName: {
 		fontSize: theme.fontSize.sm,
 		color: theme.colors.textMuted,
 		fontWeight: "500",
-		marginBottom: 2,
+		// marginBottom: 2, // Removed: Spacing is now handled by userRow's marginBottom
+		marginLeft: theme.space.sm, // Added: Space between Avatar and userName
 	},
 	title: {
 		fontSize: theme.fontSize.lg,

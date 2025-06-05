@@ -1,6 +1,8 @@
-import BottomModal from "@/src/components/modals/BottomModal"; // <- shared wrapper
+import BottomModal from "@/src/components/modals/BottomModal";
 import ModalHeader from "@/src/components/modals/ModalHeader";
+import TripPhotoThumb from "@/src/components/ui/TripPhotoThumb";
 import { RECOMMENDATION_CATEGORIES, RECOMMENDATION_TAGS } from "@/src/constants/recommendationConstants";
+import usePhotoManager from "@/src/hooks/usePhotoManager";
 import { theme } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { forwardRef, useImperativeHandle, useState } from "react";
@@ -20,9 +22,7 @@ import { StarRating } from "../helpers/StarRating";
 
 // Category Selector Component
 const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
-	const [showCategories, setShowCategories] = useState(false);
 	const [open, setOpen] = useState(false);
-
 	const selectedCategoryLabel =
 		RECOMMENDATION_CATEGORIES.find((cat) => cat.value === selectedCategory)?.label || "Select Category";
 
@@ -30,7 +30,6 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 		<View>
 			<Text style={styles.label}>Category</Text>
 			<Pressable
-				// onPress={() => setShowCategories(true)}
 				onPress={() => setOpen(true)}
 				style={[
 					styles.input,
@@ -51,7 +50,6 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 				</Text>
 				<Ionicons name="chevron-down" size={20} color={theme.colors.textMuted} />
 			</Pressable>
-			{/* bottom-sheet */}
 			<BottomModal visible={open} onClose={() => setOpen(false)}>
 				<ModalHeader title="Select Category" onClose={() => setOpen(false)} />
 				<View style={styles.categoryModal}>
@@ -95,7 +93,6 @@ const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
 
 // Tags Selector Component
 const TagsSelector = ({ selectedTags, onTagsChange }) => {
-	const [showTags, setShowTags] = useState(false);
 	const [open, setOpen] = useState(false);
 
 	const toggleTag = (tagValue) => {
@@ -176,11 +173,41 @@ const TagsSelector = ({ selectedTags, onTagsChange }) => {
 	);
 };
 
+// PhotoSection: Renders photos and add button
+const PhotoSection = ({ photos, uploading, addPhotos, removePhoto, maxPhotos = 5 }) => (
+	<View style={styles.field}>
+		<Text style={styles.label}>
+			Photos ({photos.length}/{maxPhotos})
+		</Text>
+		<View style={styles.photoWrap}>
+			{photos.map((photoId) => (
+				<TripPhotoThumb
+					key={photoId}
+					photoId={photoId}
+					onPress={() =>
+						Alert.alert("Remove photo?", "", [
+							{ text: "Cancel", style: "cancel" },
+							{ text: "Delete", style: "destructive", onPress: () => removePhoto(photoId) },
+						])
+					}
+				/>
+			))}
+			{photos.length < maxPhotos && (
+				<Pressable onPress={addPhotos} style={[styles.addBox, uploading && { opacity: 0.4 }]} disabled={uploading}>
+					<Ionicons name="add" size={28} color={theme.colors.textMuted} />
+				</Pressable>
+			)}
+		</View>
+	</View>
+);
+
 const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 	const [visible, setVisible] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false);
-	const [editingRecommendationId, setEditingRecommendationId] = useState(null);
 	const [associatedTrip, setAssociatedTrip] = useState(null);
+	const [editingRecommendationId, setEditingRecommendationId] = useState(null);
+	const [initialPhotosForManager, setInitialPhotosForManager] = useState([]);
+
 	const [formData, setFormData] = useState({
 		name: "",
 		description: "",
@@ -192,18 +219,38 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 	});
 
 	const [mapRegion, setMapRegion] = useState({
-		// Added state for map region
 		latitude: 37.78825,
 		longitude: -122.4324,
 		latitudeDelta: 0.0922,
 		longitudeDelta: 0.0421,
 	});
 
+	const {
+		photos,
+		uploading,
+		addPhotos,
+		removePhoto,
+		setPhotos: setManagerPhotos,
+		uploadPendingPhotos,
+	} = usePhotoManager({
+		context: "recommendation",
+		id: editingRecommendationId,
+		max: 5,
+		initial: initialPhotosForManager,
+	});
+
 	useImperativeHandle(ref, () => ({
 		open(locationData = null, tripId = null) {
+			console.log("🆕 Opening modal for NEW recommendation");
+
 			setIsEditMode(false);
 			setEditingRecommendationId(null);
 			setAssociatedTrip(tripId);
+
+			// Reset photo state
+			setInitialPhotosForManager([]);
+			setManagerPhotos([]);
+
 			const initialLat = locationData?.lat || null;
 			const initialLon = locationData?.lon || null;
 			setFormData({
@@ -216,29 +263,38 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 				lon: initialLon,
 				associatedTrip: tripId || null,
 			});
+
 			if (initialLat && initialLon) {
 				setMapRegion({
-					// Set the whole region object for consistent zoom
 					latitude: initialLat,
 					longitude: initialLon,
-					latitudeDelta: 0.02, // Adjust for a reasonable default zoom
+					latitudeDelta: 0.02,
 					longitudeDelta: 0.02,
 				});
 			} else {
-				// Reset to a default region or fetch trip's region if needed
 				setMapRegion({
-					latitude: 37.78825, // Default latitude
-					longitude: -122.4324, // Default longitude
+					latitude: 37.78825,
+					longitude: -122.4324,
 					latitudeDelta: 0.0922,
 					longitudeDelta: 0.0421,
 				});
 			}
 			setVisible(true);
 		},
+
 		openEdit(recommendation) {
+			console.log("✏️ Opening modal for EDIT recommendation:", recommendation._id);
+
 			setIsEditMode(true);
 			setEditingRecommendationId(recommendation._id);
 			setAssociatedTrip(recommendation.associatedTrip);
+
+			// Set existing photos for editing
+			const existingPhotos = recommendation.photos || [];
+			console.log("Setting existing photos for edit:", existingPhotos);
+			setInitialPhotosForManager(existingPhotos);
+			setManagerPhotos(existingPhotos);
+
 			const initialLat = recommendation.location?.coordinates?.[1] || null;
 			const initialLon = recommendation.location?.coordinates?.[0] || null;
 			setFormData({
@@ -250,9 +306,9 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 				lat: initialLat,
 				lon: initialLon,
 			});
+
 			if (initialLat && initialLon) {
 				setMapRegion({
-					// Also set consistent zoom for edit mode
 					latitude: initialLat,
 					longitude: initialLon,
 					latitudeDelta: 0.02,
@@ -263,40 +319,33 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 		},
 	}));
 
+	const updateField = (field, value) => {
+		setFormData((prev) => ({ ...prev, [field]: value }));
+	};
+
 	const handleMapPress = (e) => {
 		const { latitude, longitude } = e.nativeEvent.coordinate;
 		updateField("lat", latitude);
 		updateField("lon", longitude);
 	};
-	const handleSubmit = () => {
-		// Validation
-		if (!formData.name.trim()) {
-			Alert.alert("Error", "Please enter a name for the recommendation");
-			return;
-		}
-		if (!formData.description.trim()) {
-			Alert.alert("Error", "Please enter a description");
-			return;
-		}
-		if (formData.rating === 0) {
-			Alert.alert("Error", "Please provide a rating");
-			return;
-		}
-		if (!formData.primaryCategory) {
-			Alert.alert("Error", "Please select a category");
-			return;
-		}
-		if (formData.attributeTags.length === 0) {
-			Alert.alert("Error", "Please select at least one feature");
-			return;
-		}
-		if (formData.lat === null || formData.lon === null) {
-			Alert.alert("Error", "Please select a location on the map"); // Updated error message
-			return;
-		}
 
-		// Transform data to match backend expectations
-		const recommendationData = {
+	const handleSubmit = async () => {
+		// Basic validation
+		if (!formData.name.trim()) return Alert.alert("Error", "Please enter a name for the recommendation");
+		if (!formData.description.trim()) return Alert.alert("Error", "Please enter a description");
+		if (formData.rating === 0) return Alert.alert("Error", "Please provide a rating");
+		if (!formData.primaryCategory) return Alert.alert("Error", "Please select a category");
+		if (formData.attributeTags.length === 0) return Alert.alert("Error", "Please select at least one feature");
+		if (formData.lat === null || formData.lon === null)
+			return Alert.alert("Error", "Please select a location on the map");
+
+		if (uploading) return Alert.alert("Please wait", "Photos are still uploading…");
+
+		// Get server photo IDs only (ignore local files for now)
+		const serverPhotoIds = photos.filter((p) => !p.startsWith("file://"));
+		const localFiles = photos.filter((p) => p.startsWith("file://"));
+
+		const buildPayload = (photoIds) => ({
 			latitude: formData.lat,
 			longitude: formData.lon,
 			primaryCategory: formData.primaryCategory,
@@ -304,25 +353,55 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			rating: formData.rating,
 			name: formData.name,
 			description: formData.description,
-			associatedTrip: associatedTrip,
-		};
+			associatedTrip,
+			photoIds,
+		});
 
-		// Add the ID if we're in edit mode
-		if (isEditMode && editingRecommendationId) {
-			recommendationData._id = editingRecommendationId;
+		try {
+			if (isEditMode) {
+				// For editing: include existing server photos
+				const updatedRec = await onSubmit({ ...buildPayload(serverPhotoIds), _id: editingRecommendationId }, true);
+
+				// Upload any new local files
+				if (localFiles.length > 0) {
+					await uploadPendingPhotos(editingRecommendationId);
+				}
+
+				//  Trigger refresh after editing (same pattern as new recommendations)
+				if (typeof updatedRec?.refreshCallback === "function") {
+					updatedRec.refreshCallback();
+				}
+
+				Alert.alert("Success", "Recommendation updated!");
+				setVisible(false);
+				return updatedRec;
+			} else {
+				// For new: create recommendation first
+				const newRec = await onSubmit(buildPayload([]), false, false); // No immediate refresh
+
+				if (newRec?._id) {
+					// Upload photos if any
+					if (localFiles.length > 0) {
+						Alert.alert("Success", "Recommendation saved! Uploading photos...");
+						await uploadPendingPhotos(newRec._id);
+					} else {
+						Alert.alert("Success", "Recommendation saved!");
+					}
+
+					// Trigger refresh and close
+					if (typeof newRec.refreshCallback === "function") {
+						newRec.refreshCallback();
+					}
+					setVisible(false);
+					return newRec;
+				} else {
+					throw new Error("Failed to create recommendation");
+				}
+			}
+		} catch (err) {
+			console.error("Error saving recommendation:", err);
+			Alert.alert("Error", err.message || "Could not save recommendation.");
 		}
-
-		// console.log(
-		// 	isEditMode ? "ADD REC MODAL Updating recommendation:" : "Submitting recommendation:",
-		// 	recommendationData
-		// );
-
-		onSubmit(recommendationData, isEditMode);
-		setVisible(false);
-	};
-
-	const updateField = (field, value) => {
-		setFormData((prev) => ({ ...prev, [field]: value }));
 	};
 
 	return (
@@ -331,15 +410,12 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 				title={isEditMode ? "Edit Recommendation" : "Add Recommendation"}
 				onClose={() => setVisible(false)}
 			/>
-
-			{/* Keyboard handling */}
 			<KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
 				<ScrollView
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={{ paddingBottom: theme.space.lg }}
 					keyboardShouldPersistTaps="handled"
 				>
-					{/* Name ------------------------------------------------ */}
 					<View style={styles.field}>
 						<Text style={styles.label}>Name / Title</Text>
 						<TextInput
@@ -352,7 +428,6 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 						/>
 					</View>
 
-					{/* Description ---------------------------------------- */}
 					<View style={styles.field}>
 						<Text style={styles.label}>Description</Text>
 						<TextInput
@@ -367,7 +442,6 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 						/>
 					</View>
 
-					{/* Map ----------------------------------------------- */}
 					<View style={styles.field}>
 						<Text style={styles.label}>Location</Text>
 						<View style={styles.mapContainer}>
@@ -396,13 +470,11 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 						)}
 					</View>
 
-					{/* Rating -------------------------------------------- */}
 					<View style={styles.field}>
 						<Text style={styles.label}>Rating</Text>
 						<StarRating rating={formData.rating} onRatingChange={(r) => updateField("rating", r)} />
 					</View>
 
-					{/* Category / Tags ----------------------------------- */}
 					<View style={styles.field}>
 						<CategorySelector
 							selectedCategory={formData.primaryCategory}
@@ -413,7 +485,15 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 						<TagsSelector selectedTags={formData.attributeTags} onTagsChange={(t) => updateField("attributeTags", t)} />
 					</View>
 
-					{/* Submit -------------------------------------------- */}
+					<PhotoSection
+						key={editingRecommendationId || "new-photo-section"}
+						photos={photos}
+						uploading={uploading}
+						addPhotos={addPhotos}
+						removePhoto={removePhoto}
+						maxPhotos={5}
+					/>
+
 					<Pressable onPress={handleSubmit} style={[styles.button, { backgroundColor: theme.colors.primary }]}>
 						<Text style={styles.buttonText}>{isEditMode ? "Update Recommendation" : "Save Recommendation"}</Text>
 					</Pressable>
@@ -423,9 +503,6 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 	);
 });
 
-/* ------------------------------------------------------------------ *
- * styles                                                             *
- * ------------------------------------------------------------------ */
 const styles = StyleSheet.create({
 	field: { marginBottom: theme.space.md },
 	label: {
@@ -459,7 +536,8 @@ const styles = StyleSheet.create({
 	button: {
 		borderRadius: theme.radius.md,
 		paddingVertical: theme.space.md,
-		marginTop: theme.space.sm,
+		marginTop: theme.space.lg,
+		marginBottom: theme.space.xl,
 	},
 	buttonText: {
 		color: "#fff",
@@ -470,16 +548,8 @@ const styles = StyleSheet.create({
 	categoryModal: {
 		backgroundColor: theme.colors.background,
 		padding: theme.space.lg,
-		borderTopLeftRadius: theme.space.lg,
-		borderTopRightRadius: theme.space.lg,
-		maxHeight: "80%",
-	},
-	categoryModalTitle: {
-		fontSize: theme.fontSize.lg,
-		fontWeight: "600",
-		marginBottom: theme.space.lg,
-		color: theme.colors.text,
-		textAlign: "center",
+		borderTopLeftRadius: theme.radius.lg,
+		borderTopRightRadius: theme.radius.lg,
 	},
 	categoryItem: {
 		flexDirection: "row",
@@ -493,6 +563,21 @@ const styles = StyleSheet.create({
 	categoryItemText: {
 		fontSize: theme.fontSize.md,
 		color: theme.colors.text,
+	},
+	photoWrap: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		gap: theme.space.sm,
+	},
+	addBox: {
+		width: 64,
+		height: 64,
+		borderRadius: theme.radius.sm,
+		borderWidth: 1,
+		borderColor: theme.colors.inputBorder,
+		justifyContent: "center",
+		alignItems: "center",
+		backgroundColor: theme.colors.inputBackground,
 	},
 });
 

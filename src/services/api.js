@@ -372,6 +372,76 @@ export const uploadProfilePhoto = async (localUri) => {
 	return data; // e.g. { user: { …profilePictureUrl… } }
 };
 
+/* ───────────────── uploadTripPhoto ✅ ─────────────────
+ *
+ * POST /api/trips/:tripId/photos   (multer field name: photos)
+ * Returns  { photoIds: [ ... ] }
+ */
+export const uploadTripPhoto = async (tripId, localUri) => {
+	const csrfToken = await getCsrfToken();
+	const authToken = await SecureStore.getItemAsync("auth-token");
+
+	const filename = localUri.split("/").pop() || "photo";
+	const ext = (filename.match(/\.\w+$/)?.[0] || ".jpg").slice(1).toLowerCase();
+	const mimeMap = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
+	const mimeType = mimeMap[ext] || "image/jpeg"; // fallback → jpeg
+
+	const form = new FormData();
+	form.append("photos", { uri: localUri, name: `${filename}`, type: mimeType });
+
+	const res = await fetch(`${API_URL}/trips/${tripId}/photos`, {
+		method: "POST",
+		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${authToken}` },
+		body: form,
+	});
+
+	const isJson = res.headers.get("content-type")?.includes("application/json");
+	const data = isJson ? await res.json() : await res.text();
+	if (!res.ok) throw new Error(isJson ? data.message : data);
+
+	return data; // { photoIds:[id] }
+};
+
+/* ───────────────── deleteTripPhoto ✅ ───────────────── */
+export const deleteTripPhoto = async (tripId, photoId) =>
+	apiFetch(`/trips/${tripId}/photos/${photoId}`, { method: "DELETE", csrf: true });
+
+/* ───────────────── uploadRecommendationPhoto ✅ ─────────────────
+ * POST  /api/v2/recommendations/:recId/photos     (field name: photos)
+ * Returns { photoIds:[ ... ] }
+ */
+export const uploadRecommendationPhoto = async (recId, localUri) => {
+	const csrfToken = await getCsrfToken();
+	const authToken = await SecureStore.getItemAsync("auth-token");
+
+	const filename = localUri.split("/").pop() || "photo";
+	const ext = (filename.match(/\.\w+$/)?.[0] || ".jpg").slice(1).toLowerCase();
+	const mimeMap = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
+	const mimeType = mimeMap[ext] || "image/jpeg";
+
+	const form = new FormData();
+	form.append("photos", { uri: localUri, name: filename, type: mimeType });
+
+	const res = await fetch(`${API_URL}/v2/recommendations/${recId}/photos`, {
+		method: "POST",
+		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${authToken}` },
+		body: form,
+	});
+
+	const isJson = res.headers.get("content-type")?.includes("application/json");
+	const data = isJson ? await res.json() : await res.text();
+	if (!res.ok) throw new Error(isJson ? data.message : data);
+
+	return data; // { photoIds:[id] }
+};
+
+/* ───────────────── deleteRecommendationPhoto ✅ ───────────────── */
+export const deleteRecommendationPhoto = async (recId, photoId) =>
+	apiFetch(`/v2/recommendations/${recId}/photos/${photoId}`, {
+		method: "DELETE",
+		csrf: true,
+	});
+
 ///////////////////////////////////////
 // router.get("/search", protect, searchUsers);
 // router.post("users/:userId/follow", protect, followUser);
