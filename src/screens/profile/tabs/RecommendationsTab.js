@@ -2,13 +2,18 @@
 import { useFocusEffect } from "@react-navigation/native";
 // Removed useRouter as it's not used for modal-based editing here
 import { useCallback, useRef, useState } from "react"; // Added useRef
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, RefreshControl, Text, View } from "react-native";
 
 /* --- App utils / components -------------------------------------- */
 import RecommendationCard from "@/src/components/RecommendationCard";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal"; // Added
 import RecommendationDetailModal from "@/src/components/modals/RecommendationDetailModal";
-import { getRecommendationsByUser, getTripJsonById, updateRecommendation } from "@/src/services/api";
+import {
+	deleteRecommendation,
+	getRecommendationsByUser,
+	getTripJsonById,
+	updateRecommendation,
+} from "@/src/services/api";
 import { theme } from "@/src/theme";
 import { lineStringToCoords } from "@/src/utils/geo";
 
@@ -16,7 +21,7 @@ import { lineStringToCoords } from "@/src/utils/geo";
  * List of recommendations for one user.
  * Infinite-scroll + pull-to-refresh.  Opens detail modal onPress.
  */
-export default function RecommendationsTab({ userId }) {
+export default function RecommendationsTab({ userId, isSelf }) {
 	/* ---------------- state ---------------- */
 	const [items, setItems] = useState([]);
 	const [page, setPage] = useState(1);
@@ -108,13 +113,76 @@ export default function RecommendationsTab({ userId }) {
 		setDetailModalOpen(false); // Close detail modal
 		if (addRecModalRef.current && recommendationToEdit) {
 			console.log("[RecommendationsTab] Opening AddRecModal for edit:", recommendationToEdit); // Log data passed to openEdit
-			// Ensure `recommendationToEdit.location.coordinates` is [longitude, latitude]
-			// The log shows it's an array, assuming it's in the correct GeoJSON order.
+
 			// AddRecommendationModal's openEdit expects this.
 			addRecModalRef.current.openEdit(recommendationToEdit);
 		} else {
 			console.warn("[RecommendationsTab] Cannot edit. Modal ref or recommendation missing.");
 		}
+	};
+
+	// ADD THIS: Handle recommendation deletion
+	const handleDeleteRecommendation = async (recommendation) => {
+		if (!isSelf) return; // Only own recommendations can be deleted
+
+		Alert.alert(
+			"Delete Recommendation",
+			`Are you sure you want to delete "${recommendation.name || "this recommendation"}"?`,
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Delete",
+					style: "destructive",
+					onPress: async () => {
+						try {
+							await deleteRecommendation(recommendation._id);
+
+							// Update local state immediately
+							setItems((prevItems) => prevItems.filter((item) => item._id !== recommendation._id));
+
+							Alert.alert("Success", "Recommendation deleted successfully");
+						} catch (error) {
+							console.error("Failed to delete recommendation:", error);
+							Alert.alert("Error", "Failed to delete recommendation");
+						}
+					},
+				},
+			]
+		);
+	};
+
+	// ADD THIS: Handle long press on recommendation card
+	const handleRecommendationLongPress = (rec) => {
+		if (isSelf) {
+			handleDeleteRecommendation(rec);
+		}
+	};
+
+	// ADD THIS: Handle optimistic photo deletion in detail modal
+	const handleOptimisticPhotoDelete = (recommendationId, photoId) => {
+		// Update the selected recommendation immediately
+		setSelRec((prevSelected) => {
+			if (prevSelected?._id === recommendationId) {
+				return {
+					...prevSelected,
+					photos: prevSelected.photos?.filter((id) => id !== photoId) || [],
+				};
+			}
+			return prevSelected;
+		});
+
+		// Update the items list
+		setItems((prevItems) =>
+			prevItems.map((item) => {
+				if (item._id === recommendationId) {
+					return {
+						...item,
+						photos: item.photos?.filter((id) => id !== photoId) || [],
+					};
+				}
+				return item;
+			})
+		);
 	};
 
 	const handleRecommendationSubmitted = async (recommendationData, isEditMode = false) => {
@@ -124,6 +192,12 @@ export default function RecommendationsTab({ userId }) {
 				// Ensure _id is present for updates
 				// console.log("[RecommendationsTab] Calling updateRecommendation API for ID:", recommendationData._id);
 				await updateRecommendation(recommendationData._id, recommendationData);
+
+				// Return refresh callback for edit mode (same pattern as trip page)
+				await fetchPage(1, true); // Refresh data immediately
+				return {
+					refreshCallback: () => fetchPage(1, true),
+				};
 			}
 			await fetchPage(1, true); // Reload data from page 1
 		} catch (error) {
@@ -147,7 +221,13 @@ export default function RecommendationsTab({ userId }) {
 			<FlatList
 				data={items}
 				keyExtractor={(it) => it._id}
-				renderItem={({ item }) => <RecommendationCard rec={item} onPress={() => openDetailModal(item)} />}
+				renderItem={({ item }) => (
+					<RecommendationCard
+						rec={item}
+						onPress={() => openDetailModal(item)}
+						onLongPress={isSelf ? () => handleRecommendationLongPress(item) : undefined}
+					/>
+				)}
 				contentContainerStyle={{ paddingHorizontal: theme.space.sm, paddingTop: theme.space.sm, flexGrow: 1 }}
 				onEndReachedThreshold={0.4}
 				onEndReached={loadMore}
@@ -177,6 +257,8 @@ export default function RecommendationsTab({ userId }) {
 					tripUserId={selRec?.user?._id}
 					tripRouteCoordinates={routeCoords}
 					onEdit={() => handleEditRecommendation(selRec)} // Use the new handler
+					onRefresh={() => fetchPage(1, true)}
+					onOptimisticPhotoDelete={handleOptimisticPhotoDelete}
 				/>
 			)}
 
