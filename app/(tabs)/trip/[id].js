@@ -36,6 +36,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
+	BackHandler,
 	Modal,
 	Pressable,
 	ScrollView,
@@ -104,6 +105,17 @@ export default function TripDetailScreen() {
 	const [isCommentListExpanded, setIsCommentListExpanded] = useState(false);
 
 	const addRecommendationModalRef = useRef(null);
+
+	useEffect(() => {
+		const backAction = () => {
+			router.replace("/(tabs)/trips/");
+			return true; // Prevent default behavior
+		};
+
+		const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
+
+		return () => backHandler.remove();
+	}, []);
 
 	const fetchTripDetails = async (isRefetch = false) => {
 		if (!tripId) {

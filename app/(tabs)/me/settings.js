@@ -91,7 +91,7 @@ export default function SettingsScreen() {
 			const updated = await updateUserSettings(true, s);
 			console.log("[SettingsScreen] save settings before put", s);
 			await updateUser(updated); // bullet-proof merge inside the store
-			router.back();
+			router.push(`/(tabs)/user/${user._id}`);
 		} catch (e) {
 			Alert.alert("Error", e.message);
 		}

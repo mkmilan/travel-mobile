@@ -122,7 +122,8 @@ export default function EditTripScreen() {
 
 			await updateTripJson(tripId, payload);
 			Alert.alert("Success", "Trip updated successfully!");
-			router.back();
+			router.replace(`/(tabs)/trip/${tripId}`); // Redirect to trip detail page after saving
+			// router.back();
 		} catch (err) {
 			console.error("Failed to save trip changes:", err);
 			const errorMessage = err.message || "Could not save changes. Please try again.";
@@ -277,7 +278,8 @@ export default function EditTripScreen() {
 					pressed && styles.buttonPressed,
 					saving && styles.buttonDisabled,
 				]}
-				onPress={() => router.back()}
+				// onPress={() => router.back()}
+				onPress={() => router.replace(`/(tabs)/trip/${tripId}`)}
 				disabled={saving}
 			>
 				<Text style={styles.buttonSecondaryText}>Cancel</Text>
