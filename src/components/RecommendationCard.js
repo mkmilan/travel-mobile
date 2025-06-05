@@ -5,13 +5,13 @@ import Avatar from "./ui/Avatar";
 const avatar = 26;
 
 /** static display – parent decides what happens onPress */
-export default function RecommendationCard({ rec, onPress }) {
+export default function RecommendationCard({ rec, onPress, onLongPress }) {
 	const category = rec.primaryCategory
 		? rec.primaryCategory.charAt(0).toUpperCase() + rec.primaryCategory.slice(1)
 		: undefined;
 
 	return (
-		<Pressable style={styles.card} onPress={onPress}>
+		<Pressable style={styles.card} onPress={onPress} onLongPress={onLongPress}>
 			{/* ---- first row: star + name ---- */}
 			<View style={styles.headerRow}>
 				<Feather name="star" size={18} color={theme.colors.warning} style={{ marginRight: 6 }} />

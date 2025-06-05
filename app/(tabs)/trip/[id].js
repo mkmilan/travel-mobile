@@ -15,6 +15,7 @@ import Avatar from "@/src/components/ui/Avatar";
 import {
 	addRecommendation,
 	addTripComment,
+	deleteRecommendation,
 	deleteTripComment,
 	deleteTripPhoto,
 	getTripComments,
@@ -402,13 +403,62 @@ export default function TripDetailScreen() {
 	const handleShare = () => Alert.alert("Share", "Share functionality to be implemented.");
 
 	const handleViewRecommendationDetail = (rec) => {
-		// setSelectedRecommendation(rec);
-		// setIsRecDetailModalVisible(true);
 		const freshRec = trip.recommendations?.find((r) => r._id === rec._id) || rec;
 		console.log("🔍 Opening recommendation detail:", freshRec.name, "photos:", freshRec.photos?.length || 0);
 		setSelectedRecommendation(freshRec);
 		setIsRecDetailModalVisible(true);
 	};
+
+	// Handle recommendation deletion
+	const handleDeleteRecommendation = async (recommendation) => {
+		if (!isOwner) return; // Only trip owner can delete recommendations
+
+		Alert.alert(
+			"Delete Recommendation",
+			`Are you sure you want to delete "${recommendation.name || "this recommendation"}"?`,
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Delete",
+					style: "destructive",
+					onPress: async () => {
+						try {
+							await deleteRecommendation(recommendation._id);
+
+							// Update trip state immediately
+							setTrip((prevTrip) => {
+								if (!prevTrip) return prevTrip;
+
+								const updatedRecommendations =
+									prevTrip.recommendations?.filter((rec) => rec._id !== recommendation._id) || [];
+
+								return {
+									...prevTrip,
+									recommendations: updatedRecommendations,
+								};
+							});
+
+							// Update store count
+							setRecCount(tripId, (trip?.recommendations?.length || 1) - 1);
+
+							Alert.alert("Success", "Recommendation deleted successfully");
+						} catch (error) {
+							console.error("Failed to delete recommendation:", error);
+							Alert.alert("Error", "Failed to delete recommendation");
+						}
+					},
+				},
+			]
+		);
+	};
+
+	//  Handle long press on recommendation card
+	const handleRecommendationLongPress = (rec) => {
+		if (isOwner) {
+			handleDeleteRecommendation(rec);
+		}
+	};
+
 	// console.log("Trip details TRIP{ID} PAGE:", trip?.recommendations);
 	if (loading && !trip) {
 		// Show loading only if trip is not yet set
@@ -653,7 +703,12 @@ export default function TripDetailScreen() {
 			>
 				{recommendations.length > 0 ? (
 					(showAllRecommendations ? recommendations : recommendations.slice(0, 3)).map((rec) => (
-						<RecommendationCard key={rec._id} rec={rec} onPress={() => handleViewRecommendationDetail(rec)} />
+						<RecommendationCard
+							key={rec._id}
+							rec={rec}
+							onPress={() => handleViewRecommendationDetail(rec)}
+							onLongPress={isOwner ? () => handleRecommendationLongPress(rec) : undefined}
+						/>
 					))
 				) : (
 					<Text style={styles.emptySectionText}>No recommendations added.</Text>

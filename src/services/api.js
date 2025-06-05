@@ -442,6 +442,13 @@ export const deleteRecommendationPhoto = async (recId, photoId) =>
 		csrf: true,
 	});
 
+/* ───────────────── deleteRecommendation ✅ ───────────────── */
+export const deleteRecommendation = async (recommendationId) =>
+	apiFetch(`/v2/recommendations/${recommendationId}`, {
+		method: "DELETE",
+		csrf: true,
+	});
+
 ///////////////////////////////////////
 // router.get("/search", protect, searchUsers);
 // router.post("users/:userId/follow", protect, followUser);
