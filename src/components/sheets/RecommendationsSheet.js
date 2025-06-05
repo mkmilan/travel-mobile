@@ -49,6 +49,7 @@ export default function RecommendationsSheet({ trip, visible, onClose, userId })
 				recommendation={selectedRec}
 				tripUserId={userId}
 				tripRouteCoordinates={lineStringToCoords(trip?.simplifiedRoute) || []}
+				readOnly={true}
 			/>
 		</>
 	);

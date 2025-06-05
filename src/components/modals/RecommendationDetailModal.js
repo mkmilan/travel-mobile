@@ -47,6 +47,7 @@ const RecommendationDetailModal = forwardRef(
 			tripRouteCoordinates,
 			onRefresh,
 			onOptimisticPhotoDelete,
+			readOnly = false,
 		},
 		ref
 	) => {
@@ -81,7 +82,7 @@ const RecommendationDetailModal = forwardRef(
 		} = recommendation;
 		// console.log("RecommendationDetailModal", { recommendation });
 
-		const canEdit = currentUser?._id === tripUserId;
+		const canEdit = !readOnly && currentUser?._id === tripUserId; // we added readonly for rec in rec sheet to be only view
 
 		const categoryLabel = primaryCategory ? primaryCategory.charAt(0).toUpperCase() + primaryCategory.slice(1) : "N/A";
 
@@ -253,7 +254,7 @@ const RecommendationDetailModal = forwardRef(
 					{photos.length > 0 && (
 						<View style={styles.section}>
 							<Text style={styles.sectionTitle}>Gallery</Text>
-							<PhotoGallery photoIds={photos} canDelete={canEdit} onDelete={handleRemovePhoto} />
+							<PhotoGallery photoIds={photos} canDelete={!readOnly && canEdit} onDelete={handleRemovePhoto} />
 						</View>
 					)}
 				</ScrollView>
