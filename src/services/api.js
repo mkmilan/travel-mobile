@@ -449,6 +449,35 @@ export const deleteRecommendation = async (recommendationId) =>
 		csrf: true,
 	});
 
+/* ───────────────── unfollowUser ✅ ───────────────── */
+export const unfollowUser = async (userId) =>
+	apiFetch(`/users/${userId}/follow`, {
+		method: "DELETE",
+		csrf: true,
+	});
+// ───────────────── followUser ✅ ─────────────────
+export const followUser = async (userId) =>
+	apiFetch(`/users/${userId}/follow`, {
+		method: "POST",
+		csrf: true,
+	});
+// router.get("users/:userId/followers", getUserFollowers);
+
+// ───────────────── getUserFollowing ✅ ─────────────────
+export const getUserFollowing = async (userId, page = 1, limit = 10) => {
+	const data = await apiFetch(`/users/${userId}/following`, {
+		method: "GET",
+	});
+	return data;
+};
+// ───────────────── getUserFollowers ✅ ─────────────────
+export const getUserFollowers = async (userId, page = 1, limit = 10) => {
+	const data = await apiFetch(`/users/${userId}/followers`, {
+		method: "GET",
+	});
+	return data;
+};
+
 ///////////////////////////////////////
 // router.get("/search", protect, searchUsers);
 // router.post("users/:userId/follow", protect, followUser);

@@ -4,7 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout }) {
+export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout, onStatPress }) {
 	return (
 		<View>
 			{/* ----- header ----- */}
@@ -29,10 +29,19 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 				]
 					.filter(Boolean)
 					.map(([label, val]) => (
-						<View key={label} style={[styles.statItem, { backgroundColor: colors.inputBackground }]}>
+						// <View key={label} style={[styles.statItem, { backgroundColor: colors.inputBackground }]}>
+						// 	<Text style={[styles.statValue, { color: colors.text }]}>{val}</Text>
+						// 	<Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
+						// </View>
+						<TouchableOpacity
+							key={label}
+							style={[styles.statItem, { backgroundColor: colors.inputBackground }]}
+							activeOpacity={0.7}
+							onPress={() => onStatPress?.(label)}
+						>
 							<Text style={[styles.statValue, { color: colors.text }]}>{val}</Text>
 							<Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
-						</View>
+						</TouchableOpacity>
 					))}
 			</View>
 
