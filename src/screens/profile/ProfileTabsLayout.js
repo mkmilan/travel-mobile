@@ -11,12 +11,23 @@ const TopTabs = createMaterialTopTabNavigator();
 /**
  * Re-usable top-tab layout for “My profile” and “Other profile”.
  */
-export default function ProfileTabsLayout({ isSelf = false, userId, summaryData, topOffset = 0 }) {
+export default function ProfileTabsLayout({
+	isSelf = false,
+	userId,
+	summaryData,
+	topOffset = 0,
+	onProfileStatsChange,
+}) {
 	const insets = useSafeAreaInsets();
 	const [modal, setModal] = useState({ open: false, stat: null });
+	const [stats, setStats] = useState(summaryData.stats);
 
 	const handleStatPress = (label) => {
 		setModal({ open: true, stat: label });
+	};
+
+	const handleStatsUpdate = (updates) => {
+		setStats((prev) => ({ ...prev, ...updates }));
 	};
 
 	return (
@@ -50,6 +61,7 @@ export default function ProfileTabsLayout({ isSelf = false, userId, summaryData,
 				stat={modal.stat}
 				userId={userId}
 				onClose={() => setModal({ open: false, stat: null })}
+				onStatsUpdate={onProfileStatsChange}
 			/>
 		</>
 	);

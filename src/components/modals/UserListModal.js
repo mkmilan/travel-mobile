@@ -7,7 +7,7 @@ import Avatar from "../ui/Avatar";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
 
-export default function UserListModal({ visible, stat, userId, onClose }) {
+export default function UserListModal({ visible, stat, userId, onClose, onStatsUpdate }) {
 	const [loading, setLoading] = useState(false);
 	const [users, setUsers] = useState([]);
 	const [page, setPage] = useState(1);
@@ -70,6 +70,7 @@ export default function UserListModal({ visible, stat, userId, onClose }) {
 						: u
 				)
 			);
+			if (onStatsUpdate) onStatsUpdate();
 		} catch (e) {
 			// Optionally show error
 		}

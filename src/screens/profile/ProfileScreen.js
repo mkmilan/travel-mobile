@@ -99,6 +99,23 @@ export default function ProfileScreen() {
 		}
 	}, [isSelf, authUser]);
 
+	const refetchProfile = async () => {
+		try {
+			const data = isSelf ? await getUserById(profileId) : await getPublicUserById(profileId);
+			setDisplayedUser(data);
+			setStats({
+				totalDistance: data.totalDistance ?? 0,
+				totalTrips: data.totalTrips ?? 0,
+				recommendationCount: data.totalRecommendations ?? 0,
+				followers: data.followersCount ?? 0,
+				following: data.followingCount ?? 0,
+				poi: data.totalPois ?? 0,
+			});
+		} catch (e) {
+			console.warn("Profile refetch failed:", e);
+		}
+	};
+
 	/* loading / error ---------------------------------------------------- */
 	if (loading || !displayedUser) {
 		return (
@@ -127,6 +144,7 @@ export default function ProfileScreen() {
 			userId={profileId}
 			summaryData={summaryData}
 			topOffset={FUTURE_TOP_NAVBAR_HEIGHT}
+			onProfileStatsChange={refetchProfile}
 		/>
 	);
 }
