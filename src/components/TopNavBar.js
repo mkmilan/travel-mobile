@@ -1,7 +1,3 @@
-// src/components/TopNavBar.js
-//
-// Expo 53 – plain JS – no TypeScript
-//
 import { useAuthStore } from "@/src/stores/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";

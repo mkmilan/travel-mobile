@@ -478,13 +478,39 @@ export const getUserFollowers = async (userId, page = 1, limit = 10) => {
 	return data;
 };
 
+/**
+ * Search for users, trips, or recommendations.
+ * @param {string} searchTerm - The query string.
+ * @param {string} searchType - One of "user", "trip", "recommendation".
+ * @returns {Promise<{items: Array}>}
+ */
+
+export const searchApi = async (searchTerm, searchType) => {
+	const params = new URLSearchParams();
+	params.append("q", searchTerm);
+	params.append("type", searchType);
+
+	const data = await apiFetch(`/v2/search?${params.toString()}`, {
+		method: "GET",
+		auth: true,
+		csrf: true,
+	});
+	return Array.isArray(data) ? data : [];
+};
+
+/**
+ * Users-only search (page & limit optional).
+ */
+export const searchUsersApi = async (searchTerm, page = 1, limit = 20) => {
+	const params = new URLSearchParams({ q: searchTerm, page, limit });
+	const data = await apiFetch(`/v2/search/users?${params}`, {
+		// const data = await apiFetch(`/v2/search/users?${params.toString()}`, {
+		method: "GET",
+		auth: true,
+		csrf: true,
+	});
+	return Array.isArray(data) ? data : [];
+};
 ///////////////////////////////////////
 // router.get("/search", protect, searchUsers);
-// router.post("users/:userId/follow", protect, followUser);
-// router.delete("users/:userId/follow", protect, unfollowUser);
 // router.get("users/:userId/pois", getUserPois);
-// router.get("users/:userId/followers", getUserFollowers);
-// router.get("users/:userId/following", getUserFollowing);
-
-// router.get("users/:userId/photos", getUserPhotos);
-// router.get("photos/:photoId", getPhotoById);

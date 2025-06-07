@@ -1,8 +1,10 @@
 import { followUser, getUserFollowers, getUserFollowing, unfollowUser } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from "react-native";
 import Avatar from "../ui/Avatar";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
@@ -15,7 +17,7 @@ export default function UserListModal({ visible, stat, userId, onClose, onStatsU
 	const [refreshing, setRefreshing] = useState(false);
 
 	const authUser = useAuthStore((s) => s.user);
-
+	const router = useRouter();
 	useEffect(() => {
 		if (!visible) return;
 		setUsers([]);
@@ -78,25 +80,52 @@ export default function UserListModal({ visible, stat, userId, onClose, onStatsU
 
 	const renderItem = ({ item }) => {
 		const isFollowing = item.followers?.some((id) => id === authUser._id);
+
+		const handleUserPress = () => {
+			onClose?.();
+			router.push(`/(tabs)/user/${item._id}`);
+		};
+
 		return (
 			<View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10 }}>
-				<Avatar user={item} size={48} style={{ marginRight: 12 }} />
-				<Text style={{ flex: 1, fontSize: 16 }}>{item.username}</Text>
+				<TouchableOpacity
+					style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+					onPress={handleUserPress}
+					activeOpacity={0.7}
+				>
+					<Avatar user={item} size={48} style={{ marginRight: 12 }} />
+					<Text style={{ flex: 1, fontSize: 16 }}>{item.username}</Text>
+				</TouchableOpacity>
 				{item._id !== authUser._id && (
-					<Text
+					<TouchableOpacity
 						onPress={() => handleFollowToggle(item)}
+						activeOpacity={0.8}
 						style={{
-							paddingHorizontal: 16,
-							paddingVertical: 6,
-							borderRadius: 16,
-							backgroundColor: isFollowing ? theme.colors.inputBorder : theme.colors.primary,
-							color: isFollowing ? theme.colors.text : "#fff",
-							fontWeight: "600",
-							overflow: "hidden",
+							flexDirection: "row",
+							alignItems: "center",
+							paddingHorizontal: 10,
+							paddingVertical: 4,
+							borderRadius: 14,
+							backgroundColor: isFollowing ? "#e5e7eb" : theme.colors.primary,
+							marginLeft: 8,
 						}}
 					>
-						{isFollowing ? "Following" : "Follow"}
-					</Text>
+						<Feather
+							name={isFollowing ? "check" : "user-plus"}
+							size={15}
+							color={isFollowing ? theme.colors.textMuted : "#fff"}
+							style={{ marginRight: 4 }}
+						/>
+						<Text
+							style={{
+								fontSize: 13,
+								color: isFollowing ? theme.colors.textMuted : "#fff",
+								fontWeight: "400",
+							}}
+						>
+							{isFollowing ? "Following" : "Follow"}
+						</Text>
+					</TouchableOpacity>
 				)}
 			</View>
 		);

@@ -5,6 +5,15 @@ import { Link } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout, onStatPress }) {
+	const statMeta = {
+		Trips: { icon: "map", color: "#4A90E2" },
+		Distance: { icon: "activity", color: "#50E3C2" },
+		Followers: { icon: "users", color: "#F5A623" },
+		Following: { icon: "user-plus", color: "#B8E986" },
+		Recs: { icon: "star", color: "#F8E71C" },
+		POIs: { icon: "map-pin", color: "#D0021B" },
+	};
+
 	return (
 		<View>
 			{/* ----- header ----- */}
@@ -28,21 +37,30 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 					["POIs", stats.poi],
 				]
 					.filter(Boolean)
-					.map(([label, val]) => (
-						// <View key={label} style={[styles.statItem, { backgroundColor: colors.inputBackground }]}>
-						// 	<Text style={[styles.statValue, { color: colors.text }]}>{val}</Text>
-						// 	<Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
-						// </View>
-						<TouchableOpacity
-							key={label}
-							style={[styles.statItem, { backgroundColor: colors.inputBackground }]}
-							activeOpacity={0.7}
-							onPress={() => onStatPress?.(label)}
-						>
-							<Text style={[styles.statValue, { color: colors.text }]}>{val}</Text>
-							<Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
-						</TouchableOpacity>
-					))}
+					.map(([label, val]) => {
+						const meta = statMeta[label] || {};
+						return (
+							<TouchableOpacity
+								key={label}
+								style={[styles.statItem, { backgroundColor: colors.inputBackground }]}
+								activeOpacity={0.7}
+								onPress={() => onStatPress?.(label)}
+							>
+								<View
+									style={{
+										backgroundColor: meta.color || "#eee",
+										borderRadius: 20,
+										padding: 8,
+										marginBottom: 4,
+									}}
+								>
+									<Feather name={meta.icon} size={20} color="#fff" />
+								</View>
+								<Text style={[styles.statValue, { color: colors.text }]}>{val}</Text>
+								<Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
+							</TouchableOpacity>
+						);
+					})}
 			</View>
 
 			{/* ----- own profile buttons ----- */}
@@ -131,4 +149,19 @@ const styles = StyleSheet.create({
 	btnIcon: { marginRight: base.space.sm - 2 },
 	btnTxt: { fontSize: base.fontSize.sm, fontWeight: "600", color: "#fff" },
 	logoutBtn: { position: "absolute", right: 20, top: 10 + 24, padding: 8, zIndex: 10 },
+	statItem: {
+		alignItems: "center",
+		width: "30%",
+		minWidth: 90,
+		paddingVertical: 8,
+		marginBottom: 8,
+		borderRadius: base.radius.md,
+		// Add shadow for iOS
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		// Add elevation for Android
+		elevation: 2,
+	},
 });
