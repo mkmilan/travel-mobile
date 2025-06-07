@@ -19,7 +19,7 @@ export default function EditProfileScreen() {
 	const authStore = useAuthStore();
 	const user = authStore.user;
 	const isAuth = authStore.isAuthenticated;
-	console.log("EditProfileScreen user:", user);
+	// console.log("EditProfileScreen user:", user);
 
 	const [username, setUsername] = useState(user?.username || "");
 	const [bio, setBio] = useState(user?.bio || "");

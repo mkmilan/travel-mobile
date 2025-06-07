@@ -66,9 +66,14 @@ export default function SearchUsersScreen() {
 						onPress={() => router.push(`/(tabs)/user/${item._id}`)}
 					>
 						<View style={styles.cardHeader}>
-							<Avatar user={item} size={44} style={{ marginRight: 14 }} />
+							<Avatar user={item} size={40} style={{ marginRight: 14 }} />
 							<View style={{ flex: 1 }}>
 								<Text style={styles.userName}>{item.username}</Text>
+								{(item?.city || item?.country) && (
+									<Text style={styles.userId}>
+										{item?.city},{item?.country}
+									</Text>
+								)}
 							</View>
 						</View>
 					</TouchableOpacity>
@@ -117,8 +122,8 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	userName: {
-		fontSize: theme.fontSize.lg,
-		color: theme.colors.primary,
+		fontSize: theme.fontSize.md,
+		color: theme.colors.default,
 		fontWeight: "700",
 	},
 	userId: {
