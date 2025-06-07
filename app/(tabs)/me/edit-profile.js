@@ -19,12 +19,15 @@ export default function EditProfileScreen() {
 	const authStore = useAuthStore();
 	const user = authStore.user;
 	const isAuth = authStore.isAuthenticated;
+	console.log("EditProfileScreen user:", user);
 
 	const [username, setUsername] = useState(user?.username || "");
 	const [bio, setBio] = useState(user?.bio || "");
 	const [avatarId, setAvatarId] = useState(user?.profilePictureUrl || "");
 	const [saving, setSaving] = useState(false);
 	const [avatarUploading, setAvatarUploading] = useState(false); // NEW
+	const [city, setCity] = useState(user?.city || "");
+	const [country, setCountry] = useState(user?.country || "");
 
 	/* ---------- redirect if not logged-in ---------- */
 	useEffect(() => {
@@ -60,7 +63,7 @@ export default function EditProfileScreen() {
 	const save = async () => {
 		try {
 			setSaving(true);
-			const payload = { username, bio, profilePictureUrl: avatarId };
+			const payload = { username, bio, profilePictureUrl: avatarId, city, country };
 			const updated = await updateUserById(true, payload);
 			authStore.updateUser(updated);
 			// router.back();
@@ -86,6 +89,8 @@ export default function EditProfileScreen() {
 
 			{/* form fields */}
 			<FormField label="Username" value={username} onChange={setUsername} />
+			<FormField label="City" value={city} onChange={setCity} />
+			<FormField label="Country" value={country} onChange={setCountry} />
 			<FormField label="Bio" value={bio} onChange={setBio} multiline />
 
 			<TouchableOpacity style={styles.button} onPress={save} disabled={saving}>

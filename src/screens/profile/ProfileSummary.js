@@ -16,15 +16,28 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 
 	return (
 		<View>
-			{/* ----- header ----- */}
-			<View style={[styles.profileHeader, { borderBottomColor: colors.inputBorder }]}>
-				<Avatar user={displayedUser} photoId={displayedUser.profilePictureUrl} size={100} />
-
-				<Text style={[styles.username, { color: colors.text }]}>{displayedUser.username}</Text>
-				{displayedUser.bio?.length > 0 && (
-					<Text style={[styles.bio, { color: colors.textMuted }]}>{displayedUser.bio}</Text>
-				)}
+			<View style={[styles.profileHeaderRow, { borderBottomColor: colors.inputBorder }]}>
+				<Avatar user={displayedUser} photoId={displayedUser.profilePictureUrl} size={84} />
+				<View style={styles.profileInfoCol}>
+					<Text style={[styles.username, { color: colors.text }]} numberOfLines={2} ellipsizeMode="tail">
+						{displayedUser.username}
+					</Text>
+					{(displayedUser.city || displayedUser.country) && (
+						<Text style={[styles.location, { color: colors.textMuted }]} numberOfLines={1}>
+							{displayedUser.city || ""}
+							{displayedUser.city && displayedUser.country ? ", " : ""}
+							{displayedUser.country || ""}
+						</Text>
+					)}
+				</View>
 			</View>
+			{/* ----- bio row ----- */}
+			{displayedUser?.bio?.length > 0 && (
+				<View style={styles.bioSection}>
+					<Text style={styles.bioTitle}>Bio</Text>
+					<Text style={[styles.bio, { color: colors.text }]}>{displayedUser.bio}</Text>
+				</View>
+			)}
 
 			{/* ----- stats grid ----- */}
 			<View style={styles.statsSection}>
@@ -94,16 +107,49 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 /* ---------- styles ---------- */
 const base = baseTheme;
 const styles = StyleSheet.create({
-	profileHeader: {
+	// profileHeader: {
+	// 	alignItems: "center",
+	// 	paddingTop: base.space.lg,
+	// 	paddingBottom: base.space.lg,
+	// 	borderBottomWidth: 1,
+	// },
+	profileHeaderRow: {
+		flexDirection: "row",
 		alignItems: "center",
 		paddingTop: base.space.lg,
-		paddingBottom: base.space.lg,
-		borderBottomWidth: 1,
+		paddingBottom: base.space.md,
+		paddingHorizontal: base.space.md,
+		// borderBottomWidth: 1,
+		gap: base.space.md,
+	},
+	profileInfoCol: {
+		flex: 1,
+		justifyContent: "center",
 	},
 	profilePicture: { width: 100, height: 100, borderRadius: 50, marginBottom: base.space.md },
 	placeholder: { justifyContent: "center", alignItems: "center" },
-	username: { fontSize: base.fontSize.lg + 2, fontWeight: "bold", marginBottom: 4 },
-	bio: { fontSize: base.fontSize.sm, textAlign: "center", paddingHorizontal: base.space.lg },
+	username: { fontSize: base.fontSize.lg, fontWeight: "bold", marginBottom: 2, flexWrap: "wrap" },
+	location: { fontSize: base.fontSize.sm, color: base.colors.textMuted },
+	bioSection: {
+		paddingHorizontal: base.space.md,
+		paddingTop: base.space.sm,
+		paddingBottom: base.space.md,
+		borderBottomWidth: 1,
+		borderBlockColor: base.colors.inputBorder,
+		marginBottom: base.space.md,
+		// gap: base.space.md,
+	},
+	bioTitle: {
+		fontSize: base.fontSize.sm,
+		fontWeight: "bold",
+		// color: base.colors.textMuted,
+		marginBottom: 2,
+		letterSpacing: 0.5,
+	},
+	bio: {
+		fontSize: base.fontSize.sm,
+		lineHeight: 20,
+	},
 	statsSection: {
 		flexDirection: "row",
 		flexWrap: "wrap",
