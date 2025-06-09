@@ -42,8 +42,8 @@ export const runMigrations = async () => {
       trip_id TEXT,
       lat REAL,
       lon REAL,
-      category TEXT,
-      tags TEXT,
+      primaryCategory TEXT,
+      attributeTags TEXT,
       rating INTEGER,
       note TEXT
     );
@@ -63,6 +63,8 @@ export const runMigrations = async () => {
 		// Recommendations table additions - add name and description columns
 		`ALTER TABLE recommendations ADD COLUMN name TEXT;`,
 		`ALTER TABLE recommendations ADD COLUMN description TEXT;`,
+		// `ALTER TABLE recommendations ADD COLUMN primaryCategory TEXT;`,
+		// `ALTER TABLE recommendations ADD COLUMN attributeTags TEXT;`,
 	];
 
 	for (const sql of alters) {

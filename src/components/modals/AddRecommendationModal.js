@@ -201,7 +201,7 @@ const PhotoSection = ({ photos, uploading, addPhotos, removePhoto, maxPhotos = 5
 	</View>
 );
 
-const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
+const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, ref) => {
 	const [visible, setVisible] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false);
 	const [associatedTrip, setAssociatedTrip] = useState(null);
@@ -241,8 +241,6 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 
 	useImperativeHandle(ref, () => ({
 		open(locationData = null, tripId = null) {
-			console.log("🆕 Opening modal for NEW recommendation");
-
 			setIsEditMode(false);
 			setEditingRecommendationId(null);
 			setAssociatedTrip(tripId);
@@ -283,15 +281,12 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 		},
 
 		openEdit(recommendation) {
-			console.log("✏️ Opening modal for EDIT recommendation:", recommendation._id);
-
 			setIsEditMode(true);
 			setEditingRecommendationId(recommendation._id);
 			setAssociatedTrip(recommendation.associatedTrip);
 
 			// Set existing photos for editing
 			const existingPhotos = recommendation.photos || [];
-			console.log("Setting existing photos for edit:", existingPhotos);
 			setInitialPhotosForManager(existingPhotos);
 			setManagerPhotos(existingPhotos);
 
@@ -361,7 +356,6 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 			if (isEditMode) {
 				// For editing: include existing server photos
 				const updatedRec = await onSubmit({ ...buildPayload(serverPhotoIds), _id: editingRecommendationId }, true);
-
 				// Upload any new local files
 				if (localFiles.length > 0) {
 					await uploadPendingPhotos(editingRecommendationId);
@@ -484,15 +478,20 @@ const AddRecommendationModal = forwardRef(({ onSubmit }, ref) => {
 					<View style={styles.field}>
 						<TagsSelector selectedTags={formData.attributeTags} onTagsChange={(t) => updateField("attributeTags", t)} />
 					</View>
+					{!disablePhotos && (
+						<PhotoSection
+							key={editingRecommendationId || "new-photo-section"}
+							photos={photos}
+							uploading={uploading}
+							addPhotos={addPhotos}
+							removePhoto={removePhoto}
+							maxPhotos={5}
+						/>
+					)}
 
-					<PhotoSection
-						key={editingRecommendationId || "new-photo-section"}
-						photos={photos}
-						uploading={uploading}
-						addPhotos={addPhotos}
-						removePhoto={removePhoto}
-						maxPhotos={5}
-					/>
+					{disablePhotos && (
+						<Text style={{ color: "orange", marginTop: 8 }}>You can add images after uploading the trip.</Text>
+					)}
 
 					<Pressable onPress={handleSubmit} style={[styles.button, { backgroundColor: theme.colors.primary }]}>
 						<Text style={styles.buttonText}>{isEditMode ? "Update Recommendation" : "Save Recommendation"}</Text>

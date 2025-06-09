@@ -27,6 +27,10 @@ import * as TaskManager from "expo-task-manager";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+//5000, 10 = 5sec 10 meters
+const TIME_INTERVAL = 1000;
+const DISTANCE_INTERVAL = 1;
+
 export default function RecordScreen() {
 	// ─────── state ────────────────────────────────────────────────────────────
 	const [status, setStatus] = useState("idle"); // idle | recording | paused | stopped
@@ -84,8 +88,8 @@ export default function RecordScreen() {
 		locationWatcher.current = await Location.watchPositionAsync(
 			{
 				accuracy: Location.Accuracy.High,
-				timeInterval: 5000,
-				distanceInterval: 10,
+				timeInterval: TIME_INTERVAL,
+				distanceInterval: DISTANCE_INTERVAL,
 			},
 			(loc) => {
 				const { latitude, longitude } = loc.coords;
@@ -131,8 +135,8 @@ export default function RecordScreen() {
 			// background updates (write points to SQLite)
 			await Location.startLocationUpdatesAsync(TASK_NAME, {
 				accuracy: Location.Accuracy.High,
-				timeInterval: 5000,
-				distanceInterval: 10,
+				timeInterval: TIME_INTERVAL,
+				distanceInterval: DISTANCE_INTERVAL,
 				showsBackgroundLocationIndicator: true,
 				foregroundService: {
 					notificationTitle: "Recording trip",
@@ -179,8 +183,8 @@ export default function RecordScreen() {
 			// resume background updates
 			await Location.startLocationUpdatesAsync(TASK_NAME, {
 				accuracy: Location.Accuracy.High,
-				timeInterval: 5000,
-				distanceInterval: 10,
+				timeInterval: TIME_INTERVAL,
+				distanceInterval: DISTANCE_INTERVAL,
 				showsBackgroundLocationIndicator: true,
 				foregroundService: {
 					notificationTitle: "Recording trip",
@@ -293,6 +297,7 @@ export default function RecordScreen() {
 	// Handle recommendation submission
 	const handleRecommendationSubmit = async (recommendationData) => {
 		if (!tripId || (status !== "recording" && status !== "paused")) {
+			console.warn("[RecordScreen] No active trip to add recommendation to", { tripId, status });
 			toast({
 				type: "error",
 				title: "No active trip to add recommendation to",
@@ -301,12 +306,13 @@ export default function RecordScreen() {
 		}
 
 		try {
-			await addRecommendation(tripId, recommendationData);
+			const newRec = await addRecommendation(tripId, recommendationData);
 			toast({
 				type: "success",
 				title: "Recommendation saved",
 				subtitle: "Added to current trip",
 			});
+			return newRec ? { _id: newRec } : null;
 		} catch (error) {
 			console.error("Failed to save recommendation:", error);
 			toast({ type: "error", title: "Failed to save recommendation" });
@@ -426,7 +432,11 @@ export default function RecordScreen() {
 
 			<TripSaveModal ref={sheetRef} onConfirm={handleSaveMeta} />
 			<AddPoiModal ref={poiModalRef} />
-			<AddRecommendationModal ref={addRecommendationModalRef} onSubmit={handleRecommendationSubmit} />
+			<AddRecommendationModal
+				ref={addRecommendationModalRef}
+				onSubmit={handleRecommendationSubmit}
+				disablePhotos={true}
+			/>
 		</View>
 	);
 }

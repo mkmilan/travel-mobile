@@ -5,16 +5,9 @@ import { openDatabase } from "./openDatabase";
  * Creates the standardized payload structure for backend API
  * This ensures consistency between what we store and what we send
  */
-const createTripPayload = (
-	trip,
-	segments,
-	pois = [],
-	recommendations = [],
-	userSettings = {}
-) => {
+const createTripPayload = (trip, segments, pois = [], recommendations = [], userSettings = {}) => {
 	// Reliable ISO for fallbacks
-	const isoStart =
-		trip.start_time || segments[0]?.startTime || new Date().toISOString();
+	const isoStart = trip.start_time || segments[0]?.startTime || new Date().toISOString();
 
 	return {
 		title: trip.title || `Trip on ${isoStart.substring(0, 10)}`,
@@ -30,22 +23,22 @@ const createTripPayload = (
 			note: poi.note,
 		})),
 		recommendations: recommendations.map((rec) => ({
-			// Map from local DB column names (lat, lon, category, tags)
-			// to server-expected names (latitude, longitude, primaryCategory, attributeTags)
 			latitude: rec.lat,
 			longitude: rec.lon,
-			primaryCategory: rec.category,
-			attributeTags: rec.tags ? rec.tags.split(",") : [],
+			primaryCategory: rec.primaryCategory || rec.category, // <-- FIXED
+			attributeTags: rec.attributeTags
+				? Array.isArray(rec.attributeTags)
+					? rec.attributeTags
+					: rec.attributeTags.split(",")
+				: rec.tags
+				? rec.tags.split(",")
+				: [],
 			rating: rec.rating,
 			name: rec.name,
-			description: rec.description,
+			description: rec.description || rec.note || "",
 		})),
-		defaultTripVisibility:
-			trip.default_trip_visibility ||
-			userSettings.defaultTripVisibility ||
-			"public",
-		defaultTravelMode:
-			trip.default_transport_mode || userSettings.defaultTravelMode || "car",
+		defaultTripVisibility: trip.default_trip_visibility || userSettings.defaultTripVisibility || "public",
+		defaultTravelMode: trip.default_transport_mode || userSettings.defaultTravelMode || "car",
 	};
 };
 
@@ -54,10 +47,7 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 	const db = await openDatabase();
 
 	// ---- points → segments --------------------------------------------------
-	const rows = await db.getAllAsync(
-		`SELECT * FROM track_points WHERE trip_id = ? ORDER BY timestamp ASC`,
-		[tripId]
-	);
+	const rows = await db.getAllAsync(`SELECT * FROM track_points WHERE trip_id = ? ORDER BY timestamp ASC`, [tripId]);
 
 	const segmentMap = {};
 	for (const p of rows) {
@@ -78,21 +68,13 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 	}));
 
 	// ---- trip row -----------------------------------------------------------
-	const [trip] = await db.getAllAsync(`SELECT * FROM trips WHERE id = ?`, [
-		tripId,
-	]);
+	const [trip] = await db.getAllAsync(`SELECT * FROM trips WHERE id = ?`, [tripId]);
 	if (!trip) throw new Error("Trip not found in local DB");
 
 	// ---- pois and recommendations -------------------------------------------
-	const pois = await db.getAllAsync(
-		`SELECT * FROM pois WHERE trip_id = ? ORDER BY timestamp ASC`,
-		[tripId]
-	);
+	const pois = await db.getAllAsync(`SELECT * FROM pois WHERE trip_id = ? ORDER BY timestamp ASC`, [tripId]);
 
-	const recommendations = await db.getAllAsync(
-		`SELECT * FROM recommendations WHERE trip_id = ?`,
-		[tripId]
-	);
+	const recommendations = await db.getAllAsync(`SELECT * FROM recommendations WHERE trip_id = ?`, [tripId]);
 
 	return createTripPayload(trip, segments, pois, recommendations, userSettings);
 };
@@ -113,15 +95,7 @@ export const startTrip = async (userId) => {
 
 export const finishTrip = async (
 	tripId,
-	{
-		endTime,
-		title,
-		description,
-		startName,
-		endName,
-		defaultTransportMode,
-		defaultTripVisibility,
-	}
+	{ endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility }
 ) => {
 	const db = await openDatabase();
 	await db.runAsync(
@@ -135,26 +109,13 @@ export const finishTrip = async (
            default_transport_mode = ?,
            default_trip_visibility = ?
      WHERE id = ?`,
-		[
-			endTime,
-			title,
-			description,
-			startName,
-			endName,
-			defaultTransportMode,
-			defaultTripVisibility,
-			tripId,
-		]
+		[endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility, tripId]
 	);
 };
 
 export const startSegment = () => uuidv4();
 
-export const insertTrackPoint = async (
-	tripId,
-	segmentId,
-	{ lat, lon, timestamp, speed, accuracy }
-) => {
+export const insertTrackPoint = async (tripId, segmentId, { lat, lon, timestamp, speed, accuracy }) => {
 	const db = await openDatabase();
 	await db.runAsync(
 		`INSERT INTO track_points
@@ -176,34 +137,17 @@ export const addPoi = async (tripId, { lat, lon, note }) => {
 };
 export const addRecommendation = async (
 	tripId,
-	{
-		latitude,
-		longitude,
-		primaryCategory,
-		attributeTags,
-		rating,
-		name,
-		description,
-	}
+	{ latitude, longitude, primaryCategory, attributeTags, rating, name, description }
 ) => {
 	const db = await openDatabase();
-	const tagsString = Array.isArray(attributeTags)
-		? attributeTags.join(",")
-		: "";
-	await db.runAsync(
-		`INSERT INTO recommendations (trip_id, lat, lon, category, tags, rating, name, description)
+	const tagsString = Array.isArray(attributeTags) ? attributeTags.join(",") : "";
+
+	const res = await db.runAsync(
+		`INSERT INTO recommendations (trip_id, lat, lon, primaryCategory, attributeTags, rating, name, description)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		[
-			tripId,
-			latitude,
-			longitude,
-			primaryCategory,
-			tagsString,
-			rating,
-			name,
-			description,
-		]
+		[tripId, latitude, longitude, primaryCategory, tagsString, rating, name, description]
 	);
+	return res?.lastInsertRowId || null;
 };
 
 // ─────── queries ──────────────────────────────────────────────────────────
@@ -221,9 +165,7 @@ export const getPendingTrips = async () => {
 
 export const markTripUploaded = async (tripId) => {
 	const db = await openDatabase();
-	await db.runAsync(`UPDATE trips SET status = 'uploaded' WHERE id = ?`, [
-		tripId,
-	]);
+	await db.runAsync(`UPDATE trips SET status = 'uploaded' WHERE id = ?`, [tripId]);
 };
 
 export const deleteTrip = async (tripId) => {

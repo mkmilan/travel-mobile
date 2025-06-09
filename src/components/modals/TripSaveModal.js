@@ -41,7 +41,6 @@ const Chip = ({ label, selected, onPress, children }) => (
 const TripSaveModal = forwardRef(({ onConfirm }, ref) => {
 	const user = useAuthStore((s) => s.user) || {};
 	const defaults = user?.settings || {};
-	console.log("TripSaveModal  user.settings:", user.settings);
 
 	const [visible, setVisible] = useState(false);
 	const [title, setTitle] = useState("");

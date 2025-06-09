@@ -80,7 +80,6 @@ const RecommendationDetailModal = forwardRef(
 			user, // Destructure user from recommendation
 			associatedTrip,
 		} = recommendation;
-		// console.log("RecommendationDetailModal", { recommendation });
 
 		const canEdit = !readOnly && currentUser?._id === tripUserId; // we added readonly for rec in rec sheet to be only view
 
