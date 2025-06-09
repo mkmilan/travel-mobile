@@ -28,8 +28,8 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 //5000, 10 = 5sec 10 meters
-const TIME_INTERVAL = 1000;
-const DISTANCE_INTERVAL = 1;
+const TIME_INTERVAL = 5000;
+const DISTANCE_INTERVAL = 10;
 
 export default function RecordScreen() {
 	// ─────── state ────────────────────────────────────────────────────────────
