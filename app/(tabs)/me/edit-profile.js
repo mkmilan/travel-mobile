@@ -109,6 +109,7 @@ const styles = StyleSheet.create({
 	avatarWrapper: {
 		alignItems: "center",
 		marginBottom: theme.space.lg,
+		marginTop: theme.space.md,
 	},
 
 	avatar: {

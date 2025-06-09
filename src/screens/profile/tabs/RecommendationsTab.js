@@ -1,9 +1,6 @@
-/* --- React / nav -------------------------------------------------- */
-import { useFocusEffect } from "@react-navigation/native";
-// Removed useRouter as it's not used for modal-based editing here
-import { useCallback, useRef, useState } from "react"; // Added useRef
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import { useCallback, useEffect, useRef, useState } from "react"; // Added useRef
 import { ActivityIndicator, Alert, FlatList, RefreshControl, Text, View } from "react-native";
-
 /* --- App utils / components -------------------------------------- */
 import RecommendationCard from "@/src/components/RecommendationCard";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal"; // Added
@@ -29,6 +26,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	const [refreshing, setRefresh] = useState(false);
 	const [hasNext, setHasNext] = useState(true);
 	const [error, setError] = useState(null);
+	const [pendingRecId, setPendingRecId] = useState(null); // remember “open this id” until list is ready
 
 	/* modal */
 	const [detailModalOpen, setDetailModalOpen] = useState(false); // Renamed for clarity
@@ -36,6 +34,61 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	const [routeCoords, setRouteCoords] = useState([]); // array of {lat,lon}
 
 	const addRecModalRef = useRef(null); // Ref for AddRecommendationModal
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	const navigation = useNavigation();
+	const route = useRoute();
+
+	/* ------------------------------------------------------------ */
+	/* open modal automatically when Gallery sent us openRecId      */
+	/* ------------------------------------------------------------ */
+	// useEffect(() => {
+	// 	const recId = route.params?.openRecId;
+	// 	if (!recId) return;
+
+	// 	// try to find it in already-loaded items
+	// 	const found = items.find((r) => r._id === recId);
+	// 	if (found) {
+	// 		openDetailModal(found);
+	// 		navigation.setParams({ openRecId: undefined }); // clear once handled
+	// 		return;
+	// 	}
+
+	// 	// if not in list yet, make sure first page is fetched then retry
+	// 	(async () => {
+	// 		if (items.length === 0) await fetchPage(1, true);
+	// 		const again = items.find((r) => r._id === recId);
+	// 		if (again) openDetailModal(again);
+	// 		navigation.setParams({ openRecId: undefined });
+	// 	})();
+	// 	// eslint-disable-next-line react-hooks/exhaustive-deps
+	// }, [route.params?.openRecId, items]);
+
+	/* — watch for ?openRecId sent by Gallery — */
+	useEffect(() => {
+		const recId = route.params?.openRecId;
+		if (!recId) return; // nothing sent
+
+		setPendingRecId(recId); // keep it until we can open modal
+		if (items.length === 0) fetchPage(1, true); // guarantee we have data
+		/* NOTE: we do NOT clear the nav param yet – we clear it only after opening */
+	}, [route.params?.openRecId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	/* — open modal as soon as that record is present — */
+	useEffect(() => {
+		if (!pendingRecId) return; // nothing pending
+
+		const found = items.find((r) => r._id === pendingRecId);
+		if (!found) return; // not in list yet
+
+		openDetailModal(found); // your existing helper
+
+		/* cleanup so next jumps work normally */
+		setPendingRecId(null);
+		navigation.setParams({ openRecId: undefined });
+	}, [items, pendingRecId]); // runs whenever list updates
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	/* ---------------- fetch helpers ---------------- */
 	const fetchPage = useCallback(

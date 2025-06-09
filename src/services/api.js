@@ -484,7 +484,7 @@ export const getUserFollowers = async (userId, page = 1, limit = 10) => {
  * @param {string} searchType - One of "user", "trip", "recommendation".
  * @returns {Promise<{items: Array}>}
  */
-
+//NOT IN USE NOW
 export const searchApi = async (searchTerm, searchType) => {
 	const params = new URLSearchParams();
 	params.append("q", searchTerm);
@@ -506,11 +506,26 @@ export const searchUsersApi = async (searchTerm, page = 1, limit = 20) => {
 	const data = await apiFetch(`/v2/search/users?${params}`, {
 		// const data = await apiFetch(`/v2/search/users?${params.toString()}`, {
 		method: "GET",
-		auth: true,
+		// auth: true,
 		csrf: true,
 	});
 	return Array.isArray(data) ? data : [];
 };
+
+/**
+ * Paginated gallery for a given user.
+ * Falls back to [] if API returns non-array.
+ */
+export const fetchUserPhotosApi = async (userId, page = 1, limit = 20) => {
+	const params = new URLSearchParams({ page, limit });
+	const data = await apiFetch(`/users/v2/${userId}/photos?${params}`, {
+		method: "GET",
+		auth: true,
+		csrf: true,
+	});
+	return data?.data ?? []; // API shape: { data, page, ... }
+};
 ///////////////////////////////////////
 // router.get("/search", protect, searchUsers);
 // router.get("users/:userId/pois", getUserPois);
+// `${API_URL}/photos/${entry.photoId}`;

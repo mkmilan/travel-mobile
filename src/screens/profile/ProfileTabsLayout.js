@@ -1,4 +1,6 @@
 import UserListModal from "@/src/components/modals/UserListModal";
+import ProfileGallery from "@/src/components/ProfileGallery";
+import { Feather } from "@expo/vector-icons";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +23,8 @@ export default function ProfileTabsLayout({
 	const insets = useSafeAreaInsets();
 	const [modal, setModal] = useState({ open: false, stat: null });
 	const [stats, setStats] = useState(summaryData.stats);
+	const [galleryPhotos, setGalleryPhotos] = useState([]);
+	const [galleryLoaded, setGalleryLoaded] = useState(false);
 
 	const handleStatPress = (label) => {
 		setModal({ open: true, stat: label });
@@ -39,21 +43,39 @@ export default function ProfileTabsLayout({
 					tabBarIndicatorStyle: { backgroundColor: "#4A90E2", height: 3 },
 					tabBarActiveTintColor: "#111",
 					tabBarInactiveTintColor: "#666",
-					tabBarStyle: { paddingTop: insets.top ? insets.top / 2 : 4, marginTop: topOffset },
-					tabBarLabelStyle: { fontWeight: "600", textTransform: "none" },
+					tabBarStyle: { paddingTop: insets.top ? insets.top / 3 : 3, marginTop: topOffset },
+					tabBarLabelStyle: { fontSize: 10, fontWeight: "300", textTransform: "none" },
+					// tabBarLabelStyle: false,
 					swipeEnabled: false,
 				}}
 			>
-				<TopTabs.Screen name="Overview" options={{ title: "Overview" }}>
+				<TopTabs.Screen
+					name="Overview"
+					options={{ tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} /> }}
+				>
 					{() => <OverviewTab summaryData={summaryData} onStatPress={handleStatPress} />}
 				</TopTabs.Screen>
 
-				<TopTabs.Screen name="Trips" options={{ title: "Trips" }}>
+				<TopTabs.Screen
+					name="Trips"
+					options={{ tabBarIcon: ({ color }) => <Feather name="map" size={22} color={color} /> }}
+				>
+					{/* <TopTabs.Screen name="Trips" options={{ title: "Trips" }}> */}
 					{() => <TripsTab userId={userId} isSelf={isSelf} />}
 				</TopTabs.Screen>
 
-				<TopTabs.Screen name="Recs" options={{ title: "Recs" }}>
+				<TopTabs.Screen
+					name="Recs"
+					options={{ tabBarIcon: ({ color }) => <Feather name="star" size={22} color={color} /> }}
+				>
+					{/* <TopTabs.Screen name="Recs" options={{ title: "Recs" }}> */}
 					{() => <RecommendationsTab userId={userId} isSelf={isSelf} />}
+				</TopTabs.Screen>
+				<TopTabs.Screen
+					name="Gallery"
+					options={{ tabBarIcon: ({ color }) => <Feather name="image" size={22} color={color} /> }}
+				>
+					{() => <ProfileGallery userId={userId} />}
 				</TopTabs.Screen>
 			</TopTabs.Navigator>
 			<UserListModal

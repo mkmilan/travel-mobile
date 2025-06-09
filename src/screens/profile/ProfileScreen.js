@@ -53,6 +53,9 @@ export default function ProfileScreen() {
 	/* fetch whenever profileId changes ----------------------------------- */
 	useEffect(() => {
 		let cancelled = false;
+		// fetchUserPhotosApi(userId ? userId : authUser?._id, 1, 20)
+		// 	.then((photos) => console.log("Gallery payload →", photos))
+		// 	.catch((err) => console.error("Gallery fetch error", err));
 		(async () => {
 			setLoading(true);
 			try {
