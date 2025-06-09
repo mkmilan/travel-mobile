@@ -3,7 +3,7 @@ import TripMapThumbnail from "@/src/components/TripMapThumbnail";
 import { theme } from "@/src/theme";
 import { Feather } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import Avatar from "./ui/Avatar";
+import UserHeader from "./ui/UserHeader";
 
 export default function TripCard({
 	user,
@@ -83,7 +83,7 @@ export default function TripCard({
 				{/* Header: User, Title, Visibility */}
 				<View style={styles.headerContainer}>
 					<View style={styles.titleUserContainer}>
-						<View style={styles.userRow}>
+						{/* <View style={styles.userRow}>
 							<Avatar
 								user={user} // if you have the user object
 								photoId={user?.profilePictureUrl} // or raw id
@@ -92,7 +92,8 @@ export default function TripCard({
 							<Text style={styles.userName} numberOfLines={1}>
 								{userName}
 							</Text>
-						</View>
+						</View> */}
+						<UserHeader user={user} navigateOnPress showLocation={true} size={36} />
 						<Text style={styles.title} numberOfLines={2}>
 							{title}
 						</Text>
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
 		marginLeft: theme.space.sm, // Added: Space between Avatar and userName
 	},
 	title: {
-		fontSize: theme.fontSize.lg,
+		fontSize: theme.fontSize.md,
 		fontWeight: "600",
 		color: theme.colors.text,
 	},

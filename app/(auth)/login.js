@@ -3,8 +3,8 @@ import { loginRequest } from "@/src/services/auth";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity } from "react-native";
 
 export default function LoginScreen() {
 	// local form state
@@ -15,6 +15,13 @@ export default function LoginScreen() {
 	const router = useRouter();
 	// Zustand actions
 	const login = useAuthStore((s) => s.login);
+	const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+	useEffect(() => {
+		if (isAuthenticated) {
+			router.replace("/(tabs)/trips");
+		}
+	}, [isAuthenticated, router]);
 
 	async function handleLogin() {
 		setSubmitting(true);
@@ -23,7 +30,7 @@ export default function LoginScreen() {
 			const user = await loginRequest(email, password);
 			await login(user); // persists to SecureStore + Zustand
 
-			router.replace("/(tabs)/feed"); // go to main app
+			// router.replace("/(tabs)/feed"); // go to main app
 		} catch (err) {
 			setError(err.message);
 		} finally {
@@ -45,9 +52,11 @@ export default function LoginScreen() {
 					backgroundColor: theme.colors.primary,
 					padding: theme.space.md,
 					borderRadius: theme.radius.md,
+					opacity: submitting ? 0.7 : 1,
 				}}
+				disabled={submitting}
 			>
-				<Text
+				{/* <Text
 					style={{
 						color: "#fff",
 						textAlign: "center",
@@ -55,7 +64,20 @@ export default function LoginScreen() {
 					}}
 				>
 					Login
-				</Text>
+				</Text> */}
+				{submitting ? (
+					<ActivityIndicator color="#fff" />
+				) : (
+					<Text
+						style={{
+							color: "#fff",
+							textAlign: "center",
+							fontSize: theme.fontSize.md,
+						}}
+					>
+						Login
+					</Text>
+				)}
 			</TouchableOpacity>
 			{error && <Text style={styles.error}>{error}</Text>}
 			<TouchableOpacity onPress={() => router.push("/register")} style={{ marginTop: theme.space.md }}>

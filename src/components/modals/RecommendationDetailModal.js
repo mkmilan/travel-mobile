@@ -173,16 +173,16 @@ const RecommendationDetailModal = forwardRef(
 
 				<ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: theme.space.lg }}>
 					{/* header row ------------------------------------------------ */}
-					<View style={styles.headerRow}>
-						<View style={{ flex: 1 }} />
+					{/* <View style={styles.headerRow}> */}
+					{/* <View style={{ flex: 1 }} />
 						{canEdit && (
 							<Pressable onPress={handleEdit} style={styles.editIcon}>
 								<Feather name="edit-2" size={22} color={theme.colors.primary} />
 							</Pressable>
 						)}
-					</View>
+					</View> */}
 					{/* Author Info */}
-					{user?._id && ( // Check if user and user._id exist
+					{/* {user?._id && ( // Check if user and user._id exist
 						<Pressable onPress={handleNavigateToUserProfile} style={styles.authorSection}>
 							{user.profilePictureUrl ? (
 								<Avatar
@@ -200,11 +200,38 @@ const RecommendationDetailModal = forwardRef(
 								{user.username || "Anonymous"}
 							</Text>
 						</Pressable>
+					)} */}
+					{/* Author Info + Edit Icon */}
+					{user?._id && (
+						<View style={styles.authorRow}>
+							<Pressable onPress={handleNavigateToUserProfile} style={styles.authorSection}>
+								{user.profilePictureUrl ? (
+									<Avatar
+										user={user}
+										profilePictureUrl={user.profilePictureUrl}
+										size={26}
+										style={{ marginRight: theme.space.sm }}
+									/>
+								) : (
+									<View style={[styles.authorAvatar, styles.avatarFallback]}>
+										<Text style={styles.avatarFallbackText}>{user.username?.[0]?.toUpperCase() || "?"}</Text>
+									</View>
+								)}
+								<Text style={styles.authorName} numberOfLines={1}>
+									{user.username || "Anonymous"}
+								</Text>
+							</Pressable>
+							{canEdit && (
+								<Pressable onPress={handleEdit} style={styles.editIconInline}>
+									<Feather name="edit-2" size={20} color={theme.colors.primary} />
+								</Pressable>
+							)}
+						</View>
 					)}
 					{/* map ------------------------------------------------------- */}
 					{tripRouteCoordinates?.length > 0 && recPoi.length > 0 && (
 						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Location on Route</Text>
+							{/* <Text style={styles.sectionTitle}>Location on Route</Text> */}
 							<InteractiveTripMap
 								routeCoords={tripRouteCoordinates}
 								pois={recPoi}
@@ -215,16 +242,24 @@ const RecommendationDetailModal = forwardRef(
 					{/* Link to Associated Trip */}
 					{associatedTrip && (
 						<Pressable onPress={handleNavigateToTrip} style={styles.tripLinkButton}>
-							<Ionicons name="map-outline" size={20} color={theme.colors.primary} style={{ marginRight: 8 }} />
-							<Text style={styles.tripLinkText}>View Associated Trip</Text>
+							<Ionicons name="map-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
+							<Text style={styles.tripLinkTextSmall}>View Associated Trip</Text>
 						</Pressable>
 					)}
 
 					{/* meta row -------------------------------------------------- */}
-					<View style={styles.metaContainer}>
+					{/* <View style={styles.metaContainer}>
 						<View style={styles.categoryContainer}>
 							<Feather name="tag" size={18} color={theme.colors.textMuted} />
 							<Text style={styles.detailText}>{categoryLabel}</Text>
+						</View>
+						<StarRatingDisplay rating={rating} />
+					</View> */}
+					<Text style={styles.sectionTitle}>Category</Text>
+					<View style={styles.metaContainer}>
+						<View style={styles.categoryChip}>
+							<Feather name="tag" size={16} color={theme.colors.primary} />
+							<Text style={styles.categoryChipText}>{categoryLabel}</Text>
 						</View>
 						<StarRatingDisplay rating={rating} />
 					</View>
@@ -232,7 +267,7 @@ const RecommendationDetailModal = forwardRef(
 					{/* description ---------------------------------------------- */}
 					{description ? (
 						<View style={styles.section}>
-							<Text style={styles.sectionTitle}>Description</Text>
+							{/* <Text style={styles.sectionTitle}>Description</Text> */}
 							<Text style={styles.descriptionText}>{description}</Text>
 						</View>
 					) : null}
@@ -289,7 +324,7 @@ const styles = StyleSheet.create({
 	},
 	section: { marginBottom: theme.space.lg },
 	sectionTitle: {
-		fontSize: theme.fontSize.lg,
+		fontSize: theme.fontSize.md,
 		fontWeight: "600",
 		color: theme.colors.text,
 		marginBottom: theme.space.sm,
@@ -304,11 +339,32 @@ const styles = StyleSheet.create({
 		flexWrap: "wrap",
 		gap: theme.space.sm,
 	},
+	categoryChip: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: `${theme.colors.primary}22`,
+		paddingHorizontal: theme.space.md,
+		paddingVertical: theme.space.xs,
+		borderRadius: theme.radius.sm,
+	},
+	categoryChipText: {
+		color: theme.colors.primary,
+		fontWeight: "400",
+		fontSize: theme.fontSize.md,
+		marginLeft: theme.space.xs,
+	},
+	tripLinkTextSmall: {
+		color: theme.colors.primary ?? "#2563eb",
+		fontSize: theme.fontSize.sm,
+		fontWeight: "400",
+		letterSpacing: 0.2,
+		textTransform: "none",
+	},
 	tagChip: {
-		backgroundColor: `${theme.colors.primary}20`,
+		backgroundColor: `${theme.colors.primary}15`,
 		paddingHorizontal: theme.space.sm,
 		paddingVertical: theme.space.xs,
-		borderRadius: theme.radius.full,
+		borderRadius: theme.radius.xs, // Less rounded
 	},
 	tagChipText: { color: theme.colors.primary, fontSize: theme.fontSize.sm },
 	galleryPlaceholder: {
@@ -343,14 +399,11 @@ const styles = StyleSheet.create({
 		fontSize: theme.fontSize.sm,
 	},
 	authorSection: {
-		// This style will make the whole row pressable
 		flexDirection: "row",
 		alignItems: "center",
 		paddingVertical: theme.space.sm,
-		paddingHorizontal: theme.space.md, // Added padding
-		marginBottom: theme.space.md,
-		// You can add a background color on hover/press if desired for Pressable
-		// backgroundColor: theme.colors.background, // Example
+		paddingHorizontal: 0,
+		marginBottom: 0,
 	},
 	authorAvatar: {
 		width: 32,
@@ -373,22 +426,33 @@ const styles = StyleSheet.create({
 		fontSize: theme.fontSize.md,
 		color: theme.colors.text,
 		fontWeight: "500",
-		flexShrink: 1, // Allow name to shrink if too long
+		flexShrink: 1,
 	},
 	tripLinkButton: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: theme.colors.primary + "15",
+		backgroundColor: theme.colors.primary + "10",
 		paddingVertical: theme.space.sm,
-		paddingHorizontal: theme.space.md,
-		borderRadius: theme.radius.md,
+		paddingHorizontal: 0,
+		borderRadius: theme.radius.sm,
 		justifyContent: "center",
 		marginBottom: theme.space.lg,
-		marginHorizontal: theme.space.md, // Added horizontal margin for the button
+		marginHorizontal: 0,
 	},
 	tripLinkText: {
 		color: theme.colors.primary,
 		fontSize: theme.fontSize.md,
-		fontWeight: "600",
+		fontWeight: "400",
+	},
+	authorRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingHorizontal: 0,
+		marginBottom: theme.space.md,
+	},
+	editIconInline: {
+		padding: theme.space.xs,
+		marginLeft: theme.space.sm,
 	},
 });

@@ -1,7 +1,7 @@
 import { theme } from "@/src/theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Avatar from "./ui/Avatar";
+import UserHeader from "./ui/UserHeader";
 const avatar = 26;
 
 /** static display – parent decides what happens onPress */
@@ -14,31 +14,34 @@ export default function RecommendationCard({ rec, onPress, onLongPress }) {
 		<Pressable style={styles.card} onPress={onPress} onLongPress={onLongPress}>
 			{/* ---- first row: star + name ---- */}
 			<View style={styles.headerRow}>
-				<Feather name="star" size={18} color={theme.colors.warning} style={{ marginRight: 6 }} />
-				<Text numberOfLines={1} style={styles.name}>
-					{rec.name || "Unnamed place"}
-				</Text>
+				<UserHeader user={rec.user} showLocation={true} size={30} />
 			</View>
 
 			{/* ---- author + meta row ---- */}
 			<View style={styles.metaRow}>
 				{/* author */}
 				{rec.user && (
+					// <View style={styles.author}>
+					// 	{rec.user?.profilePictureUrl ? (
+					// 		<Avatar
+					// 			user={rec.user}
+					// 			profilePictureUrl={rec.user.profilePictureUrl}
+					// 			size={26}
+					// 			style={{ marginRight: theme.space.sm }}
+					// 		/>
+					// 	) : (
+					// 		<View style={styles.avatarFallback}>
+					// 			<Text style={styles.avatarTxt}>{rec.user.username?.[0]?.toUpperCase() || "?"}</Text>
+					// 		</View>
+					// 	)}
+					// 	<Text style={styles.authorTxt} numberOfLines={1}>
+					// 		{rec.user.username}
+					// 	</Text>
+					// </View>
 					<View style={styles.author}>
-						{rec.user?.profilePictureUrl ? (
-							<Avatar
-								user={rec.user}
-								profilePictureUrl={rec.user.profilePictureUrl}
-								size={26}
-								style={{ marginRight: theme.space.sm }}
-							/>
-						) : (
-							<View style={styles.avatarFallback}>
-								<Text style={styles.avatarTxt}>{rec.user.username?.[0]?.toUpperCase() || "?"}</Text>
-							</View>
-						)}
-						<Text style={styles.authorTxt} numberOfLines={1}>
-							{rec.user.username}
+						<Feather name="star" size={18} color={theme.colors.warning} style={{ marginRight: 6 }} />
+						<Text numberOfLines={1} style={styles.name}>
+							{rec.name || "Unnamed place"}
 						</Text>
 					</View>
 				)}

@@ -1,7 +1,8 @@
 // tiny, isolated component ─ reuse it anywhere
 import { buildPhotoUrl } from "@/src/services/api";
 import { useState } from "react";
-import { Alert, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet } from "react-native";
+import { Alert, Dimensions, FlatList, Image, Pressable, StyleSheet } from "react-native";
+import ImageViewing from "react-native-image-viewing";
 
 const { width } = Dimensions.get("window");
 const GAP = 6;
@@ -45,13 +46,21 @@ export default function PhotoGallery({ photoIds = [], canDelete = false, onDelet
 				columnWrapperStyle={{ gap: GAP }}
 				contentContainerStyle={{ gap: GAP }}
 			/>
-
+			{/* full-screen preview with ImageViewing */}
+			<ImageViewing
+				images={photoIds.map((id) => ({ uri: buildPhotoUrl(id) }))}
+				imageIndex={openId ? photoIds.indexOf(openId) : 0}
+				visible={!!openId}
+				onRequestClose={() => setOpenId(null)}
+				swipeToCloseEnabled={true}
+				doubleTapToZoomEnabled={false}
+			/>
 			{/* full-screen preview */}
-			<Modal visible={!!openId} transparent onRequestClose={() => setOpenId(null)}>
+			{/* <Modal visible={!!openId} transparent onRequestClose={() => setOpenId(null)}>
 				<Pressable style={styles.modalBg} onPress={() => setOpenId(null)}>
 					{openId && <Image source={{ uri: buildPhotoUrl(openId) }} style={styles.fullImage} resizeMode="contain" />}
 				</Pressable>
-			</Modal>
+			</Modal> */}
 		</>
 	);
 }

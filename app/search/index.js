@@ -1,4 +1,4 @@
-import Avatar from "@/src/components/ui/Avatar";
+import UserHeader from "@/src/components/ui/UserHeader";
 import { searchUsersApi } from "@/src/services/api";
 import { theme } from "@/src/theme";
 import { debounce } from "@/src/utils/debounce";
@@ -66,15 +66,7 @@ export default function SearchUsersScreen() {
 						onPress={() => router.push(`/(tabs)/user/${item._id}`)}
 					>
 						<View style={styles.cardHeader}>
-							<Avatar user={item} size={40} style={{ marginRight: 14 }} />
-							<View style={{ flex: 1 }}>
-								<Text style={styles.userName}>{item.username}</Text>
-								{(item?.city || item?.country) && (
-									<Text style={styles.userId}>
-										{item?.city},{item?.country}
-									</Text>
-								)}
-							</View>
+							<UserHeader user={item} showLocation={true} size={40} />
 						</View>
 					</TouchableOpacity>
 				)}
