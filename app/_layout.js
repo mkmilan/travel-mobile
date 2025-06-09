@@ -4,8 +4,8 @@
 import TopNavBar from "@/src/components/TopNavBar";
 import { useAuthStore } from "@/src/stores/auth";
 import { SystemUI, configureAndroidNavBar } from "@/src/utils/systemUI"; /////////////////////////////////
-import { SplashScreen, Stack } from "expo-router";
-import { useEffect } from "react";
+import { SplashScreen, Stack, useRouter } from "expo-router";
+import { useEffect, useRef } from "react";
 import { ActivityIndicator, View } from "react-native";
 import FlashMessage from "react-native-flash-message";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -22,11 +22,25 @@ const tabsScreenOptions = { header: topHeader };
 export default function RootLayout() {
 	/* Auth hydration */
 	const { isAuthenticated, loading, syncFromStorage } = useAuthStore();
+	const router = useRouter();
+	const hasMounted = useRef(false);
 
 	useEffect(() => {
 		syncFromStorage().finally(() => SplashScreen.hideAsync());
 		configureAndroidNavBar(); ////////////////////////////////////
 	}, [syncFromStorage]);
+
+	useEffect(() => {
+		if (!loading && hasMounted.current) {
+			if (isAuthenticated) {
+				router.replace("/(tabs)/trips");
+			} else {
+				router.replace("/(auth)/login");
+			}
+		} else {
+			hasMounted.current = true;
+		}
+	}, [isAuthenticated, loading, router]);
 
 	/* While loading SecureStore */
 	if (loading) {

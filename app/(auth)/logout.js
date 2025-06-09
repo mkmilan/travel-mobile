@@ -1,5 +1,4 @@
 import { useAuthStore } from "@/src/stores/auth";
-import { router } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 
@@ -9,7 +8,7 @@ export default function LogoutScreen() {
 	useEffect(() => {
 		async function performLogout() {
 			await logout();
-			router.replace("/(auth)/login");
+			// router.replace("/(auth)/login");
 		}
 		performLogout();
 	}, [logout]);

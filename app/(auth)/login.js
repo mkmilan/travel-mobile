@@ -3,7 +3,7 @@ import { loginRequest } from "@/src/services/auth";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity } from "react-native";
 
 export default function LoginScreen() {
@@ -15,13 +15,6 @@ export default function LoginScreen() {
 	const router = useRouter();
 	// Zustand actions
 	const login = useAuthStore((s) => s.login);
-	const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-
-	useEffect(() => {
-		if (isAuthenticated) {
-			router.replace("/(tabs)/trips");
-		}
-	}, [isAuthenticated, router]);
 
 	async function handleLogin() {
 		setSubmitting(true);

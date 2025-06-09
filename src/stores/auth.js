@@ -1,5 +1,4 @@
 import * as authService from "@/src/services/auth";
-import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
 
@@ -21,6 +20,7 @@ export const useAuthStore = create((set, get) => ({
 
 	/* ─────────────────── LOGIN ─────────────────── */
 	login: async (userData) => {
+		// console.log("LOGIN CALLED", userData);
 		// Persist
 		await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(userData));
 		await SecureStore.setItemAsync(STORAGE_KEYS.token, userData.token);
@@ -62,8 +62,9 @@ export const useAuthStore = create((set, get) => ({
 			isAuthenticated: false,
 			theme: "system",
 			language: "en",
+			loading: false,
 		});
-		router.replace("/login");
+		// router.replace("/login");
 	},
 
 	/* ─────────────────── HYDRATE ─────────────────── */
