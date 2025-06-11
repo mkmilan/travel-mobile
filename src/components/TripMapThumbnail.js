@@ -1,56 +1,3 @@
-// import { theme } from "@/src/theme";
-// import { StyleSheet, View } from "react-native";
-// import MapView, { Polyline } from "react-native-maps";
-
-// /**
-//  * coords = [{ latitude, longitude }, …]  (min 2 points)
-//  */
-// export default function TripMapThumbnail({ coords = [] }) {
-// 	if (coords.length < 2) {
-// 		return <View style={[styles.box, styles.empty]} />;
-// 	}
-
-// 	/* simple bounds calc */
-// 	const lats = coords.map((c) => c.latitude);
-// 	const lngs = coords.map((c) => c.longitude);
-// 	const region = {
-// 		latitude: (Math.min(...lats) + Math.max(...lats)) / 2,
-// 		longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2,
-// 		latitudeDelta: Math.max(...lats) - Math.min(...lats) + 0.1,
-// 		longitudeDelta: Math.max(...lngs) - Math.min(...lngs) + 0.1,
-// 	};
-
-// 	return (
-// 		<MapView
-// 			style={styles.box}
-// 			pointerEvents="none"
-// 			initialRegion={region}
-// 			scrollEnabled={false}
-// 			zoomEnabled={false}
-// 			pitchEnabled={false}
-// 			rotateEnabled={false}
-// 			liteMode // Android perf boost
-// 		>
-// 			<Polyline
-// 				coordinates={coords}
-// 				strokeColor={theme.colors.primary}
-// 				strokeWidth={3}
-// 			/>
-// 		</MapView>
-// 	);
-// }
-
-// const styles = StyleSheet.create({
-// 	box: {
-// 		width: "100%",
-// 		height: 180,
-// 		borderTopLeftRadius: theme.radius.md,
-// 		borderTopRightRadius: theme.radius.md,
-// 		marginBottom: theme.space.sm,
-// 		overflow: "hidden",
-// 	},
-// 	empty: { backgroundColor: theme.colors.inputBorder },
-// });
 import { theme } from "@/src/theme";
 // import { getFitRegion } from "@/src/utils/geo";
 import { useMemo } from "react";
@@ -64,13 +11,7 @@ function sanitize(raw = []) {
 			lat: p.lat ?? p.latitude,
 			lon: p.lon ?? p.longitude,
 		}))
-		.filter(
-			(p) =>
-				Number.isFinite(p.lat) &&
-				Number.isFinite(p.lon) &&
-				Math.abs(p.lat) <= 90 &&
-				Math.abs(p.lon) <= 180
-		);
+		.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180);
 }
 
 /** Compute a safe region that fits all points with padding */
@@ -99,6 +40,20 @@ function getFitRegion(points, pad = 1.35) {
 	const longitude = (minLon + maxLon) / 2;
 	const latitudeDelta = Math.max(0.002, (maxLat - minLat) * pad);
 	const longitudeDelta = Math.max(0.002, (maxLon - minLon) * pad);
+	// const latitude = (minLat + maxLat) / 2;
+	// const longitude = (minLon + maxLon) / 2;
+	// const latSpan = maxLat - minLat;
+	// const lonSpan = maxLon - minLon;
+
+	// // Dynamic padding: less for long routes, more for short
+	// let dynamicPad = pad;
+	// const maxSpan = Math.max(latSpan, lonSpan);
+	// if (maxSpan > 2) dynamicPad = 1.05;
+	// else if (maxSpan > 0.5) dynamicPad = 1.15;
+	// else if (maxSpan > 0.1) dynamicPad = 1.25;
+
+	// const latitudeDelta = Math.max(0.01, latSpan * dynamicPad);
+	// const longitudeDelta = Math.max(0.01, lonSpan * dynamicPad);
 
 	return { latitude, longitude, latitudeDelta, longitudeDelta };
 }

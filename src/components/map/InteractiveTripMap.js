@@ -14,13 +14,7 @@ function sanitize(raw = []) {
 			lat: p.lat ?? p.latitude,
 			lon: p.lon ?? p.longitude,
 		}))
-		.filter(
-			(p) =>
-				Number.isFinite(p.lat) &&
-				Number.isFinite(p.lon) &&
-				Math.abs(p.lat) <= 90 &&
-				Math.abs(p.lon) <= 180
-		);
+		.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180);
 }
 
 /** Derive a region that fits all points with padding */
@@ -49,6 +43,20 @@ function getFitRegion(points, pad = 1.35) {
 	const longitude = (minLon + maxLon) / 2;
 	const latitudeDelta = Math.max(0.002, (maxLat - minLat) * pad);
 	const longitudeDelta = Math.max(0.002, (maxLon - minLon) * pad);
+	// const latitude = (minLat + maxLat) / 2;
+	// const longitude = (minLon + maxLon) / 2;
+	// const latSpan = maxLat - minLat;
+	// const lonSpan = maxLon - minLon;
+
+	// // Dynamic padding: less for long routes, more for short
+	// let dynamicPad = pad;
+	// const maxSpan = Math.max(latSpan, lonSpan);
+	// if (maxSpan > 2) dynamicPad = 1.05;
+	// else if (maxSpan > 0.5) dynamicPad = 1.15;
+	// else if (maxSpan > 0.1) dynamicPad = 1.25;
+
+	// const latitudeDelta = Math.max(0.01, latSpan * dynamicPad);
+	// const longitudeDelta = Math.max(0.01, lonSpan * dynamicPad);
 
 	return { latitude, longitude, latitudeDelta, longitudeDelta };
 }
@@ -63,11 +71,7 @@ function getFitRegion(points, pad = 1.35) {
  *  • pois             [{ lat, lon, note, _id }]
  *  • style            ViewStyle (optional)
  */
-export default function InteractiveTripMap({
-	routeCoords = [],
-	pois = [],
-	style,
-}) {
+export default function InteractiveTripMap({ routeCoords = [], pois = [], style }) {
 	const cleanRoute = useMemo(() => sanitize(routeCoords), [routeCoords]);
 	const cleanPois = useMemo(() => sanitize(pois), [pois]);
 
@@ -111,7 +115,8 @@ export default function InteractiveTripMap({
 
 const styles = StyleSheet.create({
 	wrapper: {
-		height: 300 /* ≈ half a phone screen */,
+		// height: 300 /* ≈ half a phone screen */,
+		flex: 1,
 		borderRadius: theme.radius.md,
 		overflow: "hidden",
 		backgroundColor: theme.colors.inputBorder,

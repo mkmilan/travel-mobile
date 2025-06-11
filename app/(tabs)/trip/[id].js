@@ -2,10 +2,12 @@
 import CommentList from "@/src/components/CommentList";
 import RecommendationCard from "@/src/components/RecommendationCard";
 import TransportIcon from "@/src/components/TransportIcon";
-import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
+// import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
+import TripMapThumbnail from "@/src/components/TripMapThumbnail";
 import AddCommentModal from "@/src/components/modals/AddCommentModal";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal";
 import LikersModal from "@/src/components/modals/LikersModal";
+import MapModal from "@/src/components/modals/MapModal";
 import RecommendationDetailModal from "@/src/components/modals/RecommendationDetailModal";
 import IconStatDisplay from "@/src/components/trip/IconStatDisplay";
 import PhotoGallery from "@/src/components/trip/PhotoGallery";
@@ -103,6 +105,8 @@ export default function TripDetailScreen() {
 	const [isAddCommentModalVisible, setIsAddCommentModalVisible] = useState(false);
 	const [isCommentsSectionVisible, setIsCommentsSectionVisible] = useState(false);
 	const [isCommentListExpanded, setIsCommentListExpanded] = useState(false);
+	// --- Map Modal State ---
+	const [isMapModalVisible, setMapModalVisible] = useState(false);
 
 	const addRecommendationModalRef = useRef(null);
 
@@ -603,7 +607,10 @@ export default function TripDetailScreen() {
 			{trip.description && <Text style={styles.description}>{trip.description}</Text>}
 
 			<Section title="Route Map">
-				<InteractiveTripMap routeCoords={mapCoords} pois={pois} style={{ marginBottom: theme.space.md }} />
+				{/* <InteractiveTripMap routeCoords={mapCoords} pois={pois} style={{ marginBottom: theme.space.md }} /> */}
+				<TouchableOpacity onPress={() => setMapModalVisible(true)}>
+					<TripMapThumbnail coords={mapCoords} style={{ height: 300, marginBottom: theme.space.md }} />
+				</TouchableOpacity>
 			</Section>
 
 			<View style={styles.statsGrid}>
@@ -766,6 +773,12 @@ export default function TripDetailScreen() {
 				isVisible={isAddCommentModalVisible}
 				onClose={() => setIsAddCommentModalVisible(false)}
 				onSubmit={handleAddCommentSubmit}
+			/>
+			<MapModal
+				visible={isMapModalVisible}
+				onClose={() => setMapModalVisible(false)}
+				routeCoords={mapCoords}
+				pois={pois}
 			/>
 		</ScrollView>
 	);
