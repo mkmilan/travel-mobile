@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+import uuid from "react-native-uuid";
 import { openDatabase } from "./openDatabase";
 
 /**
@@ -81,16 +81,22 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 
 // ─────── lifecycle helpers ────────────────────────────────────────────────
 export const startTrip = async (userId) => {
-	const db = await openDatabase();
-	const tripId = uuidv4();
-	const startTime = new Date().toISOString();
-
-	await db.runAsync(
-		`INSERT INTO trips (id, user_id, start_time, status)
+	try {
+		const db = await openDatabase();
+		const tripId = uuid.v4();
+		const startTime = new Date().toISOString();
+		console.log("About to insert trip TRIP DAO", tripId, userId, startTime);
+		await db.runAsync(
+			`INSERT INTO trips (id, user_id, start_time, status)
      VALUES (?, ?, ?, ?)`,
-		[tripId, userId, startTime, "recording"]
-	);
-	return tripId;
+			[tripId, userId, startTime, "recording"]
+		);
+		console.log("TRIP DAO Trip insert successful");
+		return tripId;
+	} catch (err) {
+		console.error("startTrip error:", err);
+		throw err;
+	}
 };
 
 export const finishTrip = async (
@@ -113,7 +119,7 @@ export const finishTrip = async (
 	);
 };
 
-export const startSegment = () => uuidv4();
+export const startSegment = () => uuid.v4();
 
 export const insertTrackPoint = async (tripId, segmentId, { lat, lon, timestamp, speed, accuracy }) => {
 	const db = await openDatabase();

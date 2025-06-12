@@ -85,6 +85,8 @@ export default function RecordScreen() {
 	};
 
 	const startLocationWatcher = async () => {
+		console.log("Starting location watcher...");
+
 		locationWatcher.current = await Location.watchPositionAsync(
 			{
 				accuracy: Location.Accuracy.High,
@@ -114,22 +116,29 @@ export default function RecordScreen() {
 			toast({ type: "danger", title: "Location permission required" });
 			return;
 		}
+		console.log("Location permission granted");
 
 		// 2 — create trip & first segment ---------------------------------------
 		const uid = user?._id || "test-user";
+		console.log("UID:", uid);
 		const tid = await startTrip(uid);
+		console.log("Trip started:", tid);
 		const seg = startSegment();
+		console.log("Segment started:", seg);
 
 		setTripId(tid);
 		setSegment(seg);
 		setStatus("recording");
+		console.log("State set");
 
 		// 3 — persist ids so TaskManager knows where to write
 		await setActiveTrip(tid, seg);
-
+		console.log("Active trip set");
 		// 4 — start foreground & background tracking ----------------------------
 		try {
 			// foreground watcher (only updates first/last point refs)
+			console.log("Starting try before start loc watcher...");
+
 			await startLocationWatcher();
 
 			// background updates (write points to SQLite)
@@ -147,6 +156,8 @@ export default function RecordScreen() {
 			toast({ type: "success", title: "Recording started" });
 		} catch (err) {
 			// rollback if either watcher fails ------------------------------------
+			console.log("Error starting location updates:", err);
+
 			await stopLocationWatcher();
 			await Location.stopLocationUpdatesAsync(TASK_NAME).catch(() => {});
 			await clearActiveTrip();

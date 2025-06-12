@@ -17,6 +17,7 @@ export const useAuthStore = create((set, get) => ({
 	language: "en",
 	loading: false,
 	isAuthenticated: false,
+	isHydrating: true,
 
 	/* ─────────────────── LOGIN ─────────────────── */
 	login: async (userData) => {
@@ -90,6 +91,7 @@ export const useAuthStore = create((set, get) => ({
 			console.error("AuthStore: syncFromStorage failed", err);
 		} finally {
 			set({ loading: false });
+			set({ isHydrating: false });
 		}
 	},
 

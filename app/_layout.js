@@ -3,7 +3,7 @@
 
 import TopNavBar from "@/src/components/TopNavBar";
 import { useAuthStore } from "@/src/stores/auth";
-import { SystemUI, configureAndroidNavBar } from "@/src/utils/systemUI"; /////////////////////////////////
+import { SystemUI } from "@/src/utils/systemUI"; /////////////////////////////////
 import { SplashScreen, Stack, useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -21,14 +21,19 @@ const tabsScreenOptions = { header: topHeader };
 
 export default function RootLayout() {
 	/* Auth hydration */
-	const { isAuthenticated, loading, syncFromStorage } = useAuthStore();
+	const { isAuthenticated, loading, syncFromStorage, isHydrating } = useAuthStore();
 	const router = useRouter();
 	const hasMounted = useRef(false);
 
+	// useEffect(() => {
+	// 	syncFromStorage().finally(() => SplashScreen.hideAsync());
+	// 	configureAndroidNavBar(); ////////////////////////////////////
+	// }, [syncFromStorage]);
+
 	useEffect(() => {
-		syncFromStorage().finally(() => SplashScreen.hideAsync());
-		configureAndroidNavBar(); ////////////////////////////////////
-	}, [syncFromStorage]);
+		// ① Hydrate auth store ONCE, splash stays visible for now
+		syncFromStorage();
+	}, []);
 
 	useEffect(() => {
 		if (!loading && hasMounted.current) {
@@ -41,6 +46,16 @@ export default function RootLayout() {
 			hasMounted.current = true;
 		}
 	}, [isAuthenticated, loading, router]);
+
+	useEffect(() => {
+		if (!isHydrating) {
+			SplashScreen.hideAsync().catch(() => {});
+		}
+	}, [isHydrating]);
+
+	if (isHydrating) {
+		return null;
+	}
 
 	/* While loading SecureStore */
 	if (loading) {
