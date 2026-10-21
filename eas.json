@@ -11,7 +11,7 @@
         "buildType": "apk"
       },
       "env": {
-        "APP_ENV": "production"
+        "APP_ENV": "development"
       }
     },
     "preview": {
@@ -20,12 +20,15 @@
         "buildType": "apk"
       },
       "env": {
-        "APP_ENV": "production"
+        "APP_ENV": "development"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "APP_ENV": "production"
       }
     },
     "testing": {
@@ -35,10 +38,7 @@
         "buildType": "apk"
       },
       "env": {
-        "APP_ENV": "production",
-        "NODE_ENV": "production",
-        "API_URL": "https://travel-server-fdxh.onrender.com/api",
-        "GOOGLE_MAPS_KEY": "$GOOGLE_MAPS_KEY"
+        "APP_ENV": "development"
       }
     }
   }

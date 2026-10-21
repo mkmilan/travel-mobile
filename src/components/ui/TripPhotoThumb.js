@@ -1,12 +1,12 @@
-import { buildPhotoUrl } from "@/src/services/api";
+import { usePhotoSource } from "@/src/hooks/usePhotoSource";
 import { theme } from "@/src/theme";
 import { Image, Pressable, StyleSheet } from "react-native";
 
 export default function TripPhotoThumb({ photoId, size = 80, onPress }) {
-	const uri = photoId.startsWith("file://") ? photoId : buildPhotoUrl(photoId);
+	const { getPhotoSource, mediaKey } = usePhotoSource();
 	return (
 		<Pressable onPress={onPress} style={[styles.wrapper, { width: size, height: size }]}>
-			<Image source={{ uri }} style={{ width: size, height: size, borderRadius: 4 }} />
+			<Image key={`${mediaKey}-${photoId}`} source={getPhotoSource(photoId)} style={{ width: size, height: size, borderRadius: 4 }} />
 		</Pressable>
 	);
 }

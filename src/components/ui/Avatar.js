@@ -1,5 +1,5 @@
 // src/components/ui/Avatar.js
-import { buildPhotoUrl } from "@/src/services/api"; // helper added earlier
+import { usePhotoSource } from "@/src/hooks/usePhotoSource";
 import { theme } from "@/src/theme";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -17,7 +17,8 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 export default function Avatar({ user, photoId, size = 32, onPress, style }) {
 	/* resolve source ---------------------------------------------------- */
 	const id = photoId || user?.profilePictureUrl || "";
-	const uri = buildPhotoUrl(id);
+	const { getPhotoSource, mediaKey } = usePhotoSource();
+	const source = getPhotoSource(id);
 	const name = user?.username || "";
 
 	/* styles ------------------------------------------------------------ */
@@ -44,7 +45,7 @@ export default function Avatar({ user, photoId, size = 32, onPress, style }) {
 		</View>
 	);
 
-	const Img = uri ? <Image source={{ uri }} style={sx} /> : renderFallback();
+	const Img = source ? <Image key={`${mediaKey}-${id}`} source={source} style={sx} /> : renderFallback();
 
 	/* wrap with touchable if needed ------------------------------------ */
 	return onPress ? (

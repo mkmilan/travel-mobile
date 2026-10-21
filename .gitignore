@@ -50,3 +50,6 @@ ios/
 *.keystore
 /mobile/build-*
 *.apk
+
+# Commit placeholders only, never real environment files.
+!.env.example

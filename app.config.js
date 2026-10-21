@@ -28,7 +28,7 @@ export default {
 					"Allow background location so your trip continues when the app is in the background.",
 				UIBackgroundModes: ["location"],
 				NSAppTransportSecurity: {
-					NSAllowsArbitraryLoads: true,
+					NSAllowsArbitraryLoads: !isProd,
 				},
 			},
 		},
@@ -43,7 +43,7 @@ export default {
 					apiKey: process.env.GOOGLE_MAPS_KEY,
 				},
 			},
-			usesCleartextTraffic: true,
+			usesCleartextTraffic: !isProd,
 			edgeToEdgeEnabled: true,
 			permissions: [
 				"android.permission.FOREGROUND_SERVICE",
@@ -79,7 +79,7 @@ export default {
 		},
 		extra: {
 			API_URL: process.env.API_URL,
-			APP_ENV: process.env.APP_ENV,
+			APP_ENV: isProd ? "production" : "development",
 			eas: {
 				projectId: "0cefaf69-249a-41a9-98b4-71f6eff5d7d3",
 			},

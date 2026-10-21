@@ -1,4 +1,5 @@
-import { buildPhotoUrl, fetchUserPhotosApi } from "@/src/services/api";
+import { fetchUserPhotosApi } from "@/src/services/api";
+import { usePhotoSource } from "@/src/hooks/usePhotoSource";
 import { useIsFocused, useNavigation } from "@react-navigation/native";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
@@ -7,6 +8,7 @@ import { ActivityIndicator, FlatList, Image, Pressable, Text, useWindowDimension
 import ImageViewing from "react-native-image-viewing";
 
 export default function ProfileGallery({ userId }) {
+	const { getPhotoSource, mediaKey } = usePhotoSource();
 	/* ---------- state ---------- */
 	const [photos, setPhotos] = useState([]);
 	const [page, setPage] = useState(1);
@@ -16,20 +18,26 @@ export default function ProfileGallery({ userId }) {
 	const [viewerOpen, setViewerOpen] = useState(false);
 	const [chosen, setChosen] = useState(null); // { photoId, context … }
 
+	useEffect(() => { setViewerOpen(false); setChosen(null); setPhotos([]); }, [mediaKey]);
+
 	/* ---------- helpers ---------- */
 	const PAGE_SIZE = 20;
 	const router = useRouter();
 	const nav = useNavigation();
 	const isFocused = useIsFocused();
 	const listRef = useRef(null);
+	const activeMediaKey = useRef(mediaKey);
+	activeMediaKey.current = mediaKey;
 	const offsetRef = useRef(0); // remember scroll Y offset
 	const thumb = (useWindowDimensions().width - 3 * 4) / 2;
 
 	const fetchPage = async (p, replace = false) => {
-		if (loading || (!hasMore && !replace)) return;
+		if ((loading && !replace) || (!hasMore && !replace)) return;
+		const requestMediaKey = mediaKey;
 		setLoad(true);
 		try {
 			const batch = await fetchUserPhotosApi(userId, p, PAGE_SIZE);
+			if (activeMediaKey.current !== requestMediaKey) return;
 			setPhotos((prev) => (replace ? batch : [...prev, ...batch]));
 			setPage(p + 1);
 			setMore(batch.length === PAGE_SIZE);
@@ -52,7 +60,7 @@ export default function ProfileGallery({ userId }) {
 		if (!isFocused) return;
 		// always refetch first page; keeps data current but never shows blank
 		fetchPage(1, true);
-	}, [isFocused, userId]);
+	}, [isFocused, userId, mediaKey]);
 
 	/* ---------- link from viewer footer ---------- */
 	const openSource = () => {
@@ -86,6 +94,7 @@ export default function ProfileGallery({ userId }) {
 	return (
 		<>
 			<FlatList
+				key={mediaKey}
 				ref={listRef}
 				data={photos}
 				keyExtractor={(it) => it.photoId}
@@ -106,7 +115,8 @@ export default function ProfileGallery({ userId }) {
 						style={{ marginVertical: 4 }}
 					>
 						<Image
-							source={{ uri: buildPhotoUrl(item.photoId) }}
+							key={`${mediaKey}-${item.photoId}`}
+							source={getPhotoSource(item.photoId)}
 							style={{ width: thumb, height: thumb, borderRadius: 10 }}
 							resizeMode="cover"
 						/>
@@ -116,11 +126,12 @@ export default function ProfileGallery({ userId }) {
 			/>
 
 			<ImageViewing
+				key={mediaKey}
 				images={
 					chosen
 						? [
 								{
-									uri: buildPhotoUrl(chosen.photoId),
+									...getPhotoSource(chosen.photoId),
 									title: chosen.context,
 								},
 						  ]

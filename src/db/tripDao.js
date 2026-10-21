@@ -43,8 +43,9 @@ const createTripPayload = (trip, segments, pois = [], recommendations = [], user
 };
 
 // ─────── helpers for upload ───────────────────────────────────────────────
-export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
+export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId) => {
 	const db = await openDatabase();
+	const trip = await getOwnedTrip(db, tripId, userId);
 
 	// ---- points → segments --------------------------------------------------
 	const rows = await db.getAllAsync(`SELECT * FROM track_points WHERE trip_id = ? ORDER BY timestamp ASC`, [tripId]);
@@ -68,8 +69,7 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 	}));
 
 	// ---- trip row -----------------------------------------------------------
-	const [trip] = await db.getAllAsync(`SELECT * FROM trips WHERE id = ?`, [tripId]);
-	if (!trip) throw new Error("Trip not found in local DB");
+
 
 	// ---- pois and recommendations -------------------------------------------
 	const pois = await db.getAllAsync(`SELECT * FROM pois WHERE trip_id = ? ORDER BY timestamp ASC`, [tripId]);
@@ -79,8 +79,26 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}) => {
 	return createTripPayload(trip, segments, pois, recommendations, userSettings);
 };
 
+// Fail closed for legacy unowned records; never claim them for the next login.
+const requireUserId = (userId) => {
+	if (typeof userId !== "string" || !userId) throw new Error("Sign in to access local trips");
+};
+const getOwnedTrip = async (db, tripId, userId) => {
+	requireUserId(userId);
+	const [trip] = await db.getAllAsync(`SELECT * FROM trips WHERE id = ? AND user_id = ?`, [tripId, userId]);
+	if (!trip) throw new Error("Local trip not found for this account");
+	return trip;
+};
+export const ownsLocalTrip = async (tripId, userId) => {
+	if (!userId || !tripId) return false;
+	const db = await openDatabase();
+	const [trip] = await db.getAllAsync(`SELECT id FROM trips WHERE id = ? AND user_id = ?`, [tripId, userId]);
+	return Boolean(trip);
+};
+
 // ─────── lifecycle helpers ────────────────────────────────────────────────
 export const startTrip = async (userId) => {
+	requireUserId(userId);
 	try {
 		const db = await openDatabase();
 		const tripId = uuid.v4();
@@ -157,25 +175,28 @@ export const addRecommendation = async (
 };
 
 // ─────── queries ──────────────────────────────────────────────────────────
-export const getPendingTrips = async () => {
+export const getPendingTrips = async (userId) => {
+	if (!userId) return [];
 	const db = await openDatabase();
 	return await db.getAllAsync(`
     SELECT t.*, COUNT(p.id) AS pointsCount
     FROM trips t
     LEFT JOIN track_points p ON p.trip_id = t.id
-    WHERE t.status IN ('recording','paused','stopped')
+    WHERE t.user_id = ? AND t.status IN ('recording','paused','stopped')
     GROUP BY t.id
     ORDER BY t.start_time DESC
-  `);
+  `, [userId]);
 };
 
-export const markTripUploaded = async (tripId) => {
+export const markTripUploaded = async (tripId, userId) => {
+	requireUserId(userId);
 	const db = await openDatabase();
-	await db.runAsync(`UPDATE trips SET status = 'uploaded' WHERE id = ?`, [tripId]);
+	await db.runAsync(`UPDATE trips SET status = 'uploaded' WHERE id = ? AND user_id = ?`, [tripId, userId]);
 };
 
-export const deleteTrip = async (tripId) => {
+export const deleteTrip = async (tripId, userId) => {
 	const db = await openDatabase();
+	await getOwnedTrip(db, tripId, userId);
 	await db.runAsync(`DELETE FROM trips WHERE id = ?`, [tripId]);
 	await db.runAsync(`DELETE FROM track_points WHERE trip_id = ?`, [tripId]);
 	await db.runAsync(`DELETE FROM pois WHERE trip_id = ?`, [tripId]);

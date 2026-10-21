@@ -1,6 +1,7 @@
 import * as authService from "@/src/services/auth";
 import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
+import { stopActiveRecording } from "../utils/stopActiveRecording";
 
 const STORAGE_KEYS = {
 	user: "user-data",
@@ -21,6 +22,7 @@ export const useAuthStore = create((set, get) => ({
 
 	/* ─────────────────── LOGIN ─────────────────── */
 	login: async (userData) => {
+		if (get().user?._id && get().user._id !== userData._id) await stopActiveRecording();
 		// console.log("LOGIN CALLED", userData);
 		// Persist
 		await SecureStore.setItemAsync(STORAGE_KEYS.user, JSON.stringify(userData));
@@ -50,6 +52,8 @@ export const useAuthStore = create((set, get) => ({
 
 	/* ─────────────────── LOGOUT ─────────────────── */
 	logout: async () => {
+		// Keep unsynced trips in SQLite for their owner, but stop location collection.
+		await stopActiveRecording();
 		// 1. clear every social cache so mounted screens stop poking the API
 		try {
 			require("@/src/stores/tripSocialStore").useTripSocialStore.getState().reset();

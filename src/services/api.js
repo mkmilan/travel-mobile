@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { createPhotoSource } from "../utils/photoSource";
 import * as SecureStore from "expo-secure-store";
 import * as Updates from "expo-updates";
 import { getCsrfToken } from "./csrf";
@@ -28,7 +29,7 @@ if (!API_URL) {
 /* ------------------------------------------------------------------ *
  * core fetch wrapper
  * ------------------------------------------------------------------ */
-export async function apiFetch(path, { method = "GET", auth = true, csrf = false, ...options } = {}) {
+export async function apiFetch(path, { method = "GET", auth = true, csrf = false, expectedUserId, ...options } = {}) {
 	const headers = {
 		"Content-Type": "application/json",
 		...(options.headers || {}),
@@ -43,6 +44,12 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 	/* attach JWT if authenticated route */
 	if (auth) {
 		const token = await SecureStore.getItemAsync("auth-token");
+		if (expectedUserId) {
+			const storedUser = JSON.parse((await SecureStore.getItemAsync("user-data")) || "null");
+			if (storedUser?._id !== expectedUserId || storedUser?.token !== token) {
+				throw new Error("Account changed; upload cancelled");
+			}
+		}
 		if (token) headers["Authorization"] = `Bearer ${token}`;
 	}
 
@@ -90,6 +97,7 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
  *   <Image source={{ uri }} />
  */
 export const buildPhotoUrl = (photoId) => (photoId ? `${API_URL}/photos/${photoId}` : "");
+export const buildAuthenticatedPhotoSource = (photoId, token, cacheKey) => createPhotoSource(photoId, API_URL, token, cacheKey);
 
 /* ------------------------------------------------------------------ *
  * typed helpers for upcoming screens
@@ -180,12 +188,13 @@ export const updateUserSettings = async (csrf = true, payload) => {
 // ───────────────── V2 routes   ✅ ─────────────────
 
 // ───────────────── uploadTripJson ✅ ─────────────────
-export const uploadTripJson = async (payload, csrf = true) => {
+export const uploadTripJson = async (payload, csrf = true, expectedUserId) => {
 	// console.log("[api] uploadTripJson payload", payload);
 
 	return await apiFetch(`/v2/trips/json`, {
 		method: "POST",
 		csrf,
+		expectedUserId,
 		body: JSON.stringify(payload),
 	});
 };

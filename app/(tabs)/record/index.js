@@ -12,6 +12,7 @@ import {
 	finishTrip,
 	getPendingTrips,
 	markTripUploaded,
+	ownsLocalTrip,
 	startSegment,
 	startTrip,
 } from "@/src/db/tripDao";
@@ -54,26 +55,38 @@ export default function RecordScreen() {
 
 	// ─────── migrations + first load ─────────────────────────────────────────
 	useEffect(() => {
+		let cancelled = false;
+		setPending([]);
+		setStatus("idle");
+		setTripId(null);
+		setSegment(null);
 		(async () => {
 			await runMigrations();
 			await refreshPending();
 			// Restore background tracking state if OS relaunched the app
 			const running = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
 			if (running) {
-				const { tripId: tid, segmentId: seg } = await getActiveTrip();
-				if (tid && seg) {
+				const { tripId: tid, segmentId: seg, userId: ownerId } = await getActiveTrip();
+				if (tid && seg && ownerId === user?._id && await ownsLocalTrip(tid, user._id) && !cancelled) {
 					setTripId(tid);
 					setSegment(seg);
 					setStatus("recording");
 					await startLocationWatcher();
+					if (cancelled) await stopLocationWatcher();
 				}
 			}
 		})();
-	}, []);
+		return () => {
+			cancelled = true;
+			locationWatcher.current?.remove();
+			locationWatcher.current = null;
+		};
+	}, [user?._id]);
 
 	const refreshPending = async () => {
-		const rows = await getPendingTrips();
-		setPending(rows);
+		const uid = user?._id;
+		const rows = await getPendingTrips(uid);
+		if (useAuthStore.getState().user?._id === uid) setPending(rows);
 	};
 
 	// ─────── location helpers ────────────────────────────────────────────────
@@ -119,7 +132,8 @@ export default function RecordScreen() {
 		console.log("Location permission granted");
 
 		// 2 — create trip & first segment ---------------------------------------
-		const uid = user?._id || "test-user";
+		const uid = user?._id;
+		if (!uid) return;
 		console.log("UID:", uid);
 		const tid = await startTrip(uid);
 		console.log("Trip started:", tid);
@@ -132,7 +146,7 @@ export default function RecordScreen() {
 		console.log("State set");
 
 		// 3 — persist ids so TaskManager knows where to write
-		await setActiveTrip(tid, seg);
+		await setActiveTrip(tid, seg, uid);
 		console.log("Active trip set");
 		// 4 — start foreground & background tracking ----------------------------
 		try {
@@ -189,7 +203,7 @@ export default function RecordScreen() {
 			setSegment(seg);
 			setStatus("recording");
 
-			await setActiveTrip(tripId, seg);
+			await setActiveTrip(tripId, seg, user?._id);
 
 			// resume background updates
 			await Location.startLocationUpdatesAsync(TASK_NAME, {
@@ -277,10 +291,11 @@ export default function RecordScreen() {
 		try {
 			toast({ type: "info", title: "Packaging trip…" });
 			// const payload = await buildTripJsonForUpload(tid);
-			const payload = await buildTripJsonForUpload(tid, user?.settings || {});
+			const payload = await buildTripJsonForUpload(tid, user?.settings || {}, user?._id);
 
-			await uploadTripJson(payload);
-			await markTripUploaded(tid); // keeps it for history but not in pending
+			if (useAuthStore.getState().user?._id !== user?._id) throw new Error("Account changed; upload cancelled");
+			await uploadTripJson(payload, true, user?._id);
+			await markTripUploaded(tid, user?._id); // keeps it for history but not in pending
 			toast({ type: "success", title: "Uploaded!" });
 
 			await refreshPending();
@@ -432,7 +447,7 @@ export default function RecordScreen() {
 								uploadingTripId={uploadingTripId}
 								onUpload={() => handleUpload(item.id)}
 								onDelete={async () => {
-									await deleteTrip(item.id);
+									await deleteTrip(item.id, user?._id);
 									await refreshPending();
 								}}
 							/>

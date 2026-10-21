@@ -1,6 +1,6 @@
 // tiny, isolated component ─ reuse it anywhere
-import { buildPhotoUrl } from "@/src/services/api";
-import { useState } from "react";
+import { usePhotoSource } from "@/src/hooks/usePhotoSource";
+import { useEffect, useState } from "react";
 import { Alert, Dimensions, FlatList, Image, Pressable, StyleSheet } from "react-native";
 import ImageViewing from "react-native-image-viewing";
 
@@ -10,6 +10,8 @@ const ITEM = (width - GAP * 4) / 3; // 3-col grid
 
 export default function PhotoGallery({ photoIds = [], canDelete = false, onDelete = () => {} }) {
 	const [openId, setOpenId] = useState(null);
+	const { getPhotoSource, mediaKey } = usePhotoSource();
+	useEffect(() => setOpenId(null), [mediaKey]);
 
 	/* render single thumb */
 	const renderItem = ({ item }) => (
@@ -30,7 +32,7 @@ export default function PhotoGallery({ photoIds = [], canDelete = false, onDelet
 			}
 			style={styles.thumbWrap}
 		>
-			<Image source={{ uri: buildPhotoUrl(item) }} style={styles.thumb} resizeMode="cover" />
+			<Image key={`${mediaKey}-${item}`} source={getPhotoSource(item)} style={styles.thumb} resizeMode="cover" />
 			{/* {canDelete && <Feather name="x-circle" size={18} color={theme.colors.error} style={styles.deleteBadge} />} */}
 		</Pressable>
 	);
@@ -38,6 +40,7 @@ export default function PhotoGallery({ photoIds = [], canDelete = false, onDelet
 	return (
 		<>
 			<FlatList
+				key={mediaKey}
 				data={photoIds}
 				keyExtractor={(id) => id}
 				renderItem={renderItem}
@@ -48,7 +51,8 @@ export default function PhotoGallery({ photoIds = [], canDelete = false, onDelet
 			/>
 			{/* full-screen preview with ImageViewing */}
 			<ImageViewing
-				images={photoIds.map((id) => ({ uri: buildPhotoUrl(id) }))}
+				key={mediaKey}
+				images={photoIds.map(getPhotoSource).filter(Boolean)}
 				imageIndex={openId ? photoIds.indexOf(openId) : 0}
 				visible={!!openId}
 				onRequestClose={() => setOpenId(null)}
@@ -58,7 +62,7 @@ export default function PhotoGallery({ photoIds = [], canDelete = false, onDelet
 			{/* full-screen preview */}
 			{/* <Modal visible={!!openId} transparent onRequestClose={() => setOpenId(null)}>
 				<Pressable style={styles.modalBg} onPress={() => setOpenId(null)}>
-					{openId && <Image source={{ uri: buildPhotoUrl(openId) }} style={styles.fullImage} resizeMode="contain" />}
+					{openId && <Image source={getPhotoSource(openId)} style={styles.fullImage} resizeMode="contain" />}
 				</Pressable>
 			</Modal> */}
 		</>

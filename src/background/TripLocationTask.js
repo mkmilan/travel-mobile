@@ -1,6 +1,7 @@
 // src/background/TripLocationTask.js
 import { insertTrackPoint } from "@/src/db/tripDao";
 import { getActiveTrip } from "@/src/utils/activeTrip";
+import * as SecureStore from "expo-secure-store";
 import * as TaskManager from "expo-task-manager";
 
 export const TASK_NAME = "trip-location-task";
@@ -12,8 +13,9 @@ export const TASK_NAME = "trip-location-task";
 TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
 	if (error || !data) return;
 
-	const { tripId, segmentId } = await getActiveTrip();
-	if (!tripId) return; // nothing active → ignore
+	const { tripId, segmentId, userId } = await getActiveTrip();
+	const user = JSON.parse((await SecureStore.getItemAsync("user-data")) || "null");
+	if (!tripId || !userId || user?._id !== userId) return; // nothing active → ignore
 
 	for (const loc of data.locations) {
 		const { latitude: lat, longitude: lon, speed, accuracy } = loc.coords;
