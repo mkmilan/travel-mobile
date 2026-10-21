@@ -1,6 +1,6 @@
 import { fetchUserPhotosApi } from "@/src/services/api";
 import { usePhotoSource } from "@/src/hooks/usePhotoSource";
-import { useIsFocused, useNavigation } from "@react-navigation/native";
+import { useIsFocused, useNavigation } from "expo-router/react-navigation";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";

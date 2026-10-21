@@ -25,7 +25,7 @@ export default function usePhotoManager({ context, id: initialIdProp, max = 5, i
 		if (remaining <= 0) return;
 
 		const res = await ImagePicker.launchImageLibraryAsync({
-			mediaTypes: ImagePicker.MediaTypeOptions.Images,
+			mediaTypes: ["images"],
 			allowsMultipleSelection: true,
 			selectionLimit: remaining,
 			quality: 0.9,

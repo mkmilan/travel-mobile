@@ -1,7 +1,7 @@
 import UserListModal from "@/src/components/modals/UserListModal";
 import ProfileGallery from "@/src/components/ProfileGallery";
 import { Feather } from "@expo/vector-icons";
-import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
+import { createMaterialTopTabNavigator } from "expo-router/js-top-tabs";
 import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import OverviewTab from "./tabs/OverviewTab";

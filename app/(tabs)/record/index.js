@@ -22,6 +22,7 @@ import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { clearActiveTrip, getActiveTrip, setActiveTrip } from "@/src/utils/activeTrip";
 import { toast } from "@/src/utils/toast";
+import { ensureRecordingPermissions } from "@/src/utils/recordingPermissions";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
@@ -43,6 +44,7 @@ export default function RecordScreen() {
 	const [uploadingTripId, setUploadingTripId] = useState(null); //just for showing upload proggress
 
 	const locationWatcher = useRef(null);
+	const permissionPending = useRef(false);
 	const firstPoint = useRef(null);
 	const lastPoint = useRef(null);
 	const sheetRef = useRef(null);
@@ -122,14 +124,47 @@ export default function RecordScreen() {
 	};
 
 	// ─────── actions ─────────────────────────────────────────────────────────
-	const handleStart = async () => {
-		// 1 — ask permission ----------------------------------------------------
-		const { status: perm } = await Location.requestForegroundPermissionsAsync();
-		if (perm !== "granted") {
-			toast({ type: "danger", title: "Location permission required" });
-			return;
+	const requestRecordingAccess = async () => {
+		if (permissionPending.current) return false;
+		const { user: currentUser, token } = useAuthStore.getState();
+		if (!currentUser?._id || currentUser._id !== user?._id || !token) return false;
+		const isCurrentSession = () => {
+			const current = useAuthStore.getState();
+			return current.user?._id === currentUser._id && current.token === token;
+		};
+		permissionPending.current = true;
+		try {
+			return await ensureRecordingPermissions({
+				location: Location,
+				isCurrentSession,
+				confirmBackground: () => new Promise((resolve) => Alert.alert(
+					"Allow background trip recording?",
+					"To keep recording while your screen is locked or you use another app, allow background location in the next permission screen. On Android this may open Settings. You can cancel without starting a track.",
+					[
+						{ text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+						{ text: "Continue", onPress: () => resolve(true) },
+					],
+					{ cancelable: true, onDismiss: () => resolve(false) }
+				)),
+				onBlocked: (kind, settingsRequired) => toast({
+					type: "warning",
+					title: kind === "background" ? "Background location required" : "Location permission required",
+					msg: settingsRequired
+						? "Enable location access in your device Settings, then try again. Recording has not started."
+						: "Permission was not granted. Recording has not started.",
+				}),
+			});
+		} catch (error) {
+			if (isCurrentSession()) toast({ type: "danger", title: "Could not check location permissions", msg: error.message });
+			return false;
+		} finally {
+			permissionPending.current = false;
 		}
-		console.log("Location permission granted");
+	};
+
+	const handleStart = async () => {
+		// No trip or active marker is created until both permissions are granted.
+		if (!(await requestRecordingAccess())) return;
 
 		// 2 — create trip & first segment ---------------------------------------
 		const uid = user?._id;
@@ -198,7 +233,11 @@ export default function RecordScreen() {
 			setStatus("paused");
 			toast({ type: "info", title: "Paused" });
 		} else {
-			//resuming
+			// Recheck permissions and session before resuming a saved track.
+			if (!(await requestRecordingAccess())) return;
+			const uid = useAuthStore.getState().user?._id;
+			if (!uid || uid !== user?._id || !(await ownsLocalTrip(tripId, uid))) return;
+			if (useAuthStore.getState().user?._id !== uid) return;
 			const seg = startSegment();
 			setSegment(seg);
 			setStatus("recording");

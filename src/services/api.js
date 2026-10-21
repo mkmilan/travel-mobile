@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { createPhotoFormData } from "../utils/photoFormData";
 import { createPhotoSource } from "../utils/photoSource";
 import * as SecureStore from "expo-secure-store";
 import * as Updates from "expo-updates";
@@ -353,17 +354,7 @@ export const uploadProfilePhoto = async (localUri) => {
 	const csrfToken = await getCsrfToken();
 	const authToken = await SecureStore.getItemAsync("auth-token");
 
-	// 2. Build FormData (no import needed – global in RN)
-	const filename = localUri.split("/").pop() || "avatar.jpg";
-	const ext = (filename.match(/\.\w+$/)?.[0] || ".jpg").slice(1).toLowerCase();
-	const mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
-
-	const form = new FormData();
-	form.append("photo", {
-		uri: localUri,
-		name: filename,
-		type: mimeType,
-	});
+	const form = await createPhotoFormData("photo", localUri);
 
 	// 3. Direct fetch (we **don’t** use apiFetch so we avoid the JSON header)
 	const res = await fetch(`${API_URL}/users/me`, {
@@ -396,13 +387,7 @@ export const uploadTripPhoto = async (tripId, localUri) => {
 	const csrfToken = await getCsrfToken();
 	const authToken = await SecureStore.getItemAsync("auth-token");
 
-	const filename = localUri.split("/").pop() || "photo";
-	const ext = (filename.match(/\.\w+$/)?.[0] || ".jpg").slice(1).toLowerCase();
-	const mimeMap = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
-	const mimeType = mimeMap[ext] || "image/jpeg"; // fallback → jpeg
-
-	const form = new FormData();
-	form.append("photos", { uri: localUri, name: `${filename}`, type: mimeType });
+	const form = await createPhotoFormData("photos", localUri);
 
 	const res = await fetch(`${API_URL}/trips/${tripId}/photos`, {
 		method: "POST",
@@ -429,13 +414,7 @@ export const uploadRecommendationPhoto = async (recId, localUri) => {
 	const csrfToken = await getCsrfToken();
 	const authToken = await SecureStore.getItemAsync("auth-token");
 
-	const filename = localUri.split("/").pop() || "photo";
-	const ext = (filename.match(/\.\w+$/)?.[0] || ".jpg").slice(1).toLowerCase();
-	const mimeMap = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" };
-	const mimeType = mimeMap[ext] || "image/jpeg";
-
-	const form = new FormData();
-	form.append("photos", { uri: localUri, name: filename, type: mimeType });
+	const form = await createPhotoFormData("photos", localUri);
 
 	const res = await fetch(`${API_URL}/v2/recommendations/${recId}/photos`, {
 		method: "POST",

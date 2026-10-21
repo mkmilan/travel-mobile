@@ -1,4 +1,4 @@
-import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "expo-router/react-navigation";
 import { useCallback, useEffect, useRef, useState } from "react"; // Added useRef
 import { ActivityIndicator, Alert, FlatList, RefreshControl, Text, View } from "react-native";
 /* --- App utils / components -------------------------------------- */

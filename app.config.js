@@ -5,6 +5,7 @@ const isProd = process.env.APP_ENV === "production";
 // Load env file dynamically
 dotenv.config({
 	path: isProd ? ".env.production" : ".env.development",
+	quiet: true,
 });
 
 export default {
@@ -16,7 +17,6 @@ export default {
 		icon: "./assets/images/icon.png",
 		scheme: "mobile",
 		userInterfaceStyle: "automatic",
-		newArchEnabled: true,
 		ios: {
 			supportsTablet: true,
 			infoPlist: {
@@ -38,13 +38,6 @@ export default {
 				backgroundColor: "#ffffff",
 			},
 			package: "com.mkmilanmilan.travelmobile",
-			config: {
-				googleMaps: {
-					apiKey: process.env.GOOGLE_MAPS_KEY,
-				},
-			},
-			usesCleartextTraffic: !isProd,
-			edgeToEdgeEnabled: true,
 			permissions: [
 				"android.permission.FOREGROUND_SERVICE",
 				"android.permission.FOREGROUND_SERVICE_LOCATION",
@@ -52,10 +45,6 @@ export default {
 				"android.permission.ACCESS_FINE_LOCATION",
 				"android.permission.ACCESS_BACKGROUND_LOCATION",
 			],
-			foregroundService: {
-				notificationTitle: "Recording trip",
-				notificationBody: "Motorhome Mapper is tracking your route.",
-			},
 		},
 		web: {
 			bundler: "metro",
@@ -64,6 +53,26 @@ export default {
 		},
 		plugins: [
 			"expo-router",
+			"expo-font",
+			"expo-image",
+			["expo-build-properties", { android: { usesCleartextTraffic: !isProd } }],
+			["react-native-maps", { androidGoogleMapsApiKey: process.env.GOOGLE_MAPS_KEY }],
+			"expo-secure-store",
+			"expo-sqlite",
+			"expo-web-browser",
+			["expo-status-bar", { style: "dark" }],
+			["expo-navigation-bar", { style: "dark", enforceContrast: false }],
+			["expo-image-picker", {
+				photosPermission: "Choose photos to attach to your trips and profile.",
+				cameraPermission: false,
+				microphonePermission: false,
+			}],
+			["expo-location", {
+				locationAlwaysAndWhenInUsePermission: "Allow background location to record your trip while the app is in the background.",
+				isIosBackgroundLocationEnabled: true,
+				isAndroidBackgroundLocationEnabled: true,
+				isAndroidForegroundServiceEnabled: true,
+			}],
 			[
 				"expo-splash-screen",
 				{
