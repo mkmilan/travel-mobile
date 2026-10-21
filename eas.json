@@ -40,6 +40,19 @@
       "env": {
         "APP_ENV": "development"
       }
+    },
+    "travel-test": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_VARIANT": "test",
+        "APP_ENV": "production",
+        "API_URL": "https://travel-server-test.onrender.com/api"
+      }
     }
   }
 }

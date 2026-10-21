@@ -1,21 +1,32 @@
 import * as dotenv from "dotenv";
 
+// Variant selection is explicit and independent of NODE_ENV (release JS is production).
+const isTest = process.env.APP_VARIANT === "test";
 const isProd = process.env.APP_ENV === "production";
+const testApiUrl = "https://travel-server-test.onrender.com/api";
+if (process.env.EAS_BUILD_PROFILE === "travel-test" && !isTest) {
+	throw new Error("travel-test requires APP_VARIANT=test");
+}
+if (isTest && process.env.EAS_BUILD === "true" && !process.env.TEST_GOOGLE_MAPS_KEY?.trim()) {
+	throw new Error("Travel Test requires a restricted TEST_GOOGLE_MAPS_KEY before a cloud build");
+}
 
 // Load env file dynamically
-dotenv.config({
+if (!isTest) dotenv.config({
 	path: isProd ? ".env.production" : ".env.development",
 	quiet: true,
 });
 
 export default {
 	expo: {
-		name: "Travel mobile",
+		name: isTest ? "Travel Test" : "Travel mobile",
 		slug: "travel-mobile",
 		version: "1.0.0",
 		orientation: "portrait",
 		icon: "./assets/images/icon.png",
-		scheme: "mobile",
+		scheme: isTest ? "travel-test" : "mobile",
+		// This side-by-side APK only runs its embedded bundle. Never publish to the old app.
+		...(isTest ? { updates: { enabled: false }, runtimeVersion: "travel-test-sdk57-v1" } : {}),
 		userInterfaceStyle: "automatic",
 		ios: {
 			supportsTablet: true,
@@ -37,7 +48,7 @@ export default {
 				foregroundImage: "./assets/images/adaptive-icon.png",
 				backgroundColor: "#ffffff",
 			},
-			package: "com.mkmilanmilan.travelmobile",
+			package: isTest ? "com.mkmilanmilan.travelmobile.test" : "com.mkmilanmilan.travelmobile",
 			permissions: [
 				"android.permission.FOREGROUND_SERVICE",
 				"android.permission.FOREGROUND_SERVICE_LOCATION",
@@ -52,11 +63,12 @@ export default {
 			favicon: "./assets/images/favicon.png",
 		},
 		plugins: [
+			...(isTest ? [["expo-dev-client", { addGeneratedScheme: false }]] : []),
 			"expo-router",
 			"expo-font",
 			"expo-image",
-			["expo-build-properties", { android: { usesCleartextTraffic: !isProd } }],
-			["react-native-maps", { androidGoogleMapsApiKey: process.env.GOOGLE_MAPS_KEY }],
+			["expo-build-properties", { android: { usesCleartextTraffic: !(isProd || isTest) } }],
+			["react-native-maps", { androidGoogleMapsApiKey: isTest ? process.env.TEST_GOOGLE_MAPS_KEY : process.env.GOOGLE_MAPS_KEY }],
 			"expo-secure-store",
 			"expo-sqlite",
 			"expo-web-browser",
@@ -87,8 +99,8 @@ export default {
 			typedRoutes: false,
 		},
 		extra: {
-			API_URL: process.env.API_URL,
-			APP_ENV: isProd ? "production" : "development",
+			API_URL: isTest ? testApiUrl : process.env.API_URL,
+			APP_ENV: isTest ? "test" : isProd ? "production" : "development",
 			eas: {
 				projectId: "0cefaf69-249a-41a9-98b4-71f6eff5d7d3",
 			},

@@ -41,3 +41,32 @@ At this checkpoint 36 automated tests and 21/21 Expo Doctor checks pass. Android
 `npm audit` reports 23 affected package nodes: 20 high, 3 moderate, 0 critical (down from 212 before migration). These propagate from three advisories: `braces` <=3.0.3 (Metro pattern processing), `node-forge` <=1.4.0 (Expo signing/tooling chain), and `decode-uri-component` <=0.4.2 (Router/query-string). At review time the first two packages had no newer stable registry release; Router's decoder cannot be bumped compatibly within its existing range. No incompatible forced downgrade or override was used to make the count look clean. This is NOT a clean security audit, and exposure must be assessed before release.
 
 Release gates: actual Android/iOS development build; background location allow/deny/settings/kill/relaunch; start/pause/resume/stop and account switching; SQLite existing-trip persistence; maps, gestures and bottom sheets; Gallery→Recs navigation; photo picking/resizing/upload and private image caching; production cookie/HTTPS behavior. The app still has no explicit iOS bundle identifier configured: confirm the intended identifier before an iOS build. Unused `src/services/imageUploader.js` remains a historical placeholder, not an active upload path.
+
+## Separate Android Travel Test APK (configuration only)
+
+The explicit `travel-test` EAS profile produces a standalone internal **release APK**, not a development client: it runs its embedded JS without Metro or Android Studio. Its EAS environment is `preview`; `APP_ENV=production` selects release transport behavior but `extra.APP_ENV=test` identifies the isolated backend. Do not set `NODE_ENV=development` for this build—Expo's release export uses production JS semantics.
+
+| Setting | Travel Test | Existing app (unchanged) |
+| --- | --- | --- |
+| Android package | `com.mkmilanmilan.travelmobile.test` | `com.mkmilanmilan.travelmobile` |
+| Launcher name | Travel Test | Travel mobile |
+| Deep-link scheme | `travel-test` | `mobile` |
+| Runtime | `travel-test-sdk57-v1` | Existing config |
+| OTA updates | Disabled; embedded bundle only | Existing config |
+| API | `https://travel-server-test.onrender.com/api` (fixed, ignores API_URL overrides) | Existing environment setting |
+
+The test variant skips this config's dotenv loading and never falls back to `GOOGLE_MAPS_KEY`. The extra generated `exp+travel-mobile` dev-client scheme is disabled for this standalone variant, avoiding a shared deep-link handler. Project slug/EAS project linking are retained; no new Expo project is created. The original production profile is untouched. A separate Android package isolates app-private SQLite and credentials: keep the working old app installed, do not clear its storage, and do not migrate or import its routes yet. This test app starts with its own local data and the separate staging database, not old production users/routes.
+
+### Before an APK build (not performed by this change)
+
+1. Approve the cloud build and use the existing authorized Expo account/project. Verify the exact review commit and select **Android / travel-test**, not `testing`, `preview`, or `production`. Review any signing-credential prompt before proceeding; no key or account permission has been created here.
+2. Select/approve a signing certificate for the new test package. Configure a test-only Android Google Maps key as `TEST_GOOGLE_MAPS_KEY` in the approved EAS **preview** environment. Restrict it to package `com.mkmilanmilan.travelmobile.test` plus the actual APK signing certificate's SHA-1, and to Maps SDK for Android. No fingerprint is known yet. Do not relax the original key's restrictions or copy database/Render secrets into the app. The Maps key is embedded in the APK (not a confidential server secret); configure billing/API access only with approval. A cloud test build fails early if the test key is absent.
+3. After the above approval/setup, the intended command is `eas build --platform android --profile travel-test`. **Do not run it as part of config checks.** No APK has been built or installed by this change.
+4. Arrange synthetic staging login accounts through an approved process. Staging email delivery is disabled; do not assume signup email verification is usable or that old production logins exist there.
+5. Verify the delivered APK package/name/certificate before installation. Check both apps remain installed and old local routes remain intact. Then test staging login, maps, existing route loading, recording start/pause/resume/stop, background permissions/relaunch, uploads and account switching. Real GPS/routing remains a phone acceptance gate.
+
+Safe local checks: `npm test`; `APP_VARIANT=test APP_ENV=production EXPO_NO_DOTENV=1 npx expo config --type introspect`; same environment with `npx expo-doctor` and `npx expo export --platform android --output-dir /tmp/travel-test-export`. These checks require no real Maps key and prove configuration/JS compatibility only, not native compilation or device behavior. Use a writable CLI HOME if the execution environment has no home directory.
+
+References: https://docs.expo.dev/build-reference/variants/ ; https://docs.expo.dev/eas/json/ ; https://docs.expo.dev/build-reference/apk/ ; https://docs.expo.dev/versions/latest/config/app/ ; https://docs.expo.dev/versions/latest/sdk/map-view/
+
+Validation for this variant: 41/41 automated tests pass, including actual Android manifest introspection (test package, sole test scheme, cleartext disabled, updates disabled, dummy Maps key wiring); Expo Doctor 21/21; Android JS/Hermes export passes. No APK compilation, signing, install, emulator or physical-device check was performed. Existing dependency-audit exceptions above remain open.
