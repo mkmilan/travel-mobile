@@ -117,3 +117,52 @@ test('all native shared media components use the authenticated source hook',()=>
     assert.match(source,/usePhotoSource/); assert.doesNotMatch(source,/buildPhotoUrl\(/);
   }
 });
+
+test('late 401 from an old token cannot log out a newer account',async()=> {
+  let token='alice-token'; let loggedOut=false;
+  const {apiFetch}=load('src/services/api.js',['apiFetch'],{
+    Constants:{expoConfig:{extra:{API_URL:'http://fixture.invalid/api',APP_ENV:'test'}}}, Updates:{},
+    SecureStore:{getItemAsync:async()=>token},
+    require:()=>({useAuthStore:{getState:()=>({token,logout:async()=>{loggedOut=true;}})}}),
+    fetch:async()=>{token='bob-token';return {status:401,ok:false,headers:{get:()=> 'application/json'},json:async()=>({message:'Expired'})};}
+  });
+  await assert.rejects(apiFetch('/trips'),/Expired/); assert.equal(loggedOut,false);
+});
+test('401 for the current authenticated session still logs out',async()=> {
+  let loggedOut=false;
+  const {apiFetch}=load('src/services/api.js',['apiFetch'],{
+    Constants:{expoConfig:{extra:{API_URL:'http://fixture.invalid/api',APP_ENV:'test'}}}, Updates:{},
+    SecureStore:{getItemAsync:async()=> 'alice-token'},
+    require:()=>({useAuthStore:{getState:()=>({token:'alice-token',logout:async()=>{loggedOut=true;}})}}),
+    fetch:async()=>({status:401,ok:false,headers:{get:()=> 'application/json'},json:async()=>({message:'Expired'})})
+  });
+  await assert.rejects(apiFetch('/trips'),/Expired/); assert.equal(loggedOut,true);
+});
+test('public request 401 never clears a signed-in account',async()=> {
+  let accessedStore=false;
+  const {apiFetch}=load('src/services/api.js',['apiFetch'],{
+    Constants:{expoConfig:{extra:{API_URL:'http://fixture.invalid/api',APP_ENV:'test'}}}, Updates:{},
+    require:()=>{accessedStore=true;},
+    fetch:async()=>({status:401,ok:false,headers:{get:()=> 'text/plain'},text:async()=> 'Unauthorized'})
+  });
+  await assert.rejects(apiFetch('/auth/login',{auth:false}),/Unauthorized/); assert.equal(accessedStore,false);
+});
+test('background batch stops writing after recording marker is cleared',async()=> {
+  let callback; let count=0; let active={tripId:'trip-a',segmentId:'segment',userId:'alice'};
+  load('src/background/TripLocationTask.js',[],{
+    TaskManager:{defineTask:(name,fn)=>{callback=fn;}},getActiveTrip:async()=>active,
+    SecureStore:{getItemAsync:async()=>JSON.stringify({_id:'alice'})},
+    insertTrackPoint:async()=>{count++; active={};}
+  });
+  const point={coords:{latitude:1,longitude:2},timestamp:0};
+  await callback({data:{locations:[point,point]}}); assert.equal(count,1);
+});
+test('corrupt stored user cannot cause a background GPS write',async()=> {
+  let callback; let count=0;
+  load('src/background/TripLocationTask.js',[],{
+    TaskManager:{defineTask:(name,fn)=>{callback=fn;}},
+    getActiveTrip:async()=>({tripId:'trip-a',segmentId:'segment',userId:'alice'}),
+    SecureStore:{getItemAsync:async()=> '{bad'}, insertTrackPoint:async()=>{count++;}
+  });
+  await callback({data:{locations:[{coords:{latitude:1,longitude:2},timestamp:0}]}}); assert.equal(count,0);
+});

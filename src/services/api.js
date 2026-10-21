@@ -41,9 +41,11 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 		options.credentials = "include"; // ADDED
 	}
 
-	/* attach JWT if authenticated route */
+	/* Capture the request session so a late 401 cannot sign out a newer login. */
+	let requestToken = null;
 	if (auth) {
 		const token = await SecureStore.getItemAsync("auth-token");
+		requestToken = token;
 		if (expectedUserId) {
 			const storedUser = JSON.parse((await SecureStore.getItemAsync("user-data")) || "null");
 			if (storedUser?._id !== expectedUserId || storedUser?.token !== token) {
@@ -67,10 +69,14 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 	const res = await fetch(`${API_URL}${path}`, { method, headers, ...options });
 
 	/* ─── automatic logout on 401 ─── */
-	if (res.status === 401) {
+	if (res.status === 401 && requestToken) {
 		try {
-			const { logout } = require("@/src/stores/auth").useAuthStore.getState();
-			await logout(); // clear SecureStore + state
+			const store = require("@/src/stores/auth").useAuthStore;
+			const currentToken = await SecureStore.getItemAsync("auth-token");
+			const state = store.getState();
+			if (currentToken === requestToken && state.token === requestToken) {
+				await state.logout();
+			}
 		} catch {
 			/* ignore */
 		}
