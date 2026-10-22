@@ -1,3 +1,4 @@
+import { recordAuthDiagnostic } from "@/src/utils/authDiagnostics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
@@ -84,7 +85,7 @@ export default function MyTrips() {
 	/* render                                                           */
 	/* ---------------------------------------------------------------- */
 	return (
-		<View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+		<View onLayout={() => recordAuthDiagnostic("trips:layout")} style={{ flex: 1, backgroundColor: theme.colors.background }}>
 			<FlatList
 				data={items}
 				keyExtractor={(t) => t._id}

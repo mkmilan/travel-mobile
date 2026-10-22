@@ -74,7 +74,7 @@ export const useAuthStore = create((set, get) => ({
 
 	/* ─────────────────── HYDRATE ─────────────────── */
 	syncFromStorage: async () => {
-		set({ loading: true });
+		set({ isHydrating: true });
 		try {
 			const userStr = await SecureStore.getItemAsync(STORAGE_KEYS.user);
 			const token = await SecureStore.getItemAsync(STORAGE_KEYS.token);
@@ -94,7 +94,6 @@ export const useAuthStore = create((set, get) => ({
 		} catch (err) {
 			console.error("AuthStore: syncFromStorage failed", err);
 		} finally {
-			set({ loading: false });
 			set({ isHydrating: false });
 		}
 	},

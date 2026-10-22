@@ -101,6 +101,7 @@ export default {
 		extra: {
 			API_URL: isTest ? testApiUrl : process.env.API_URL,
 			APP_ENV: isTest ? "test" : isProd ? "production" : "development",
+			AUTH_DIAGNOSTICS: isTest,
 			eas: {
 				projectId: "0cefaf69-249a-41a9-98b4-71f6eff5d7d3",
 			},

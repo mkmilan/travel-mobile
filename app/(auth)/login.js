@@ -1,9 +1,10 @@
+import { recordAuthDiagnostic } from "@/src/utils/authDiagnostics";
 import AuthInput from "@/src/components/AuthInput";
 import { loginRequest } from "@/src/services/auth";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity } from "react-native";
 
 export default function LoginScreen() {
@@ -16,15 +17,22 @@ export default function LoginScreen() {
 	// Zustand actions
 	const login = useAuthStore((s) => s.login);
 
+	useEffect(() => {
+		recordAuthDiagnostic("login:mounted");
+		return () => recordAuthDiagnostic("login:unmounted");
+	}, []);
+
 	async function handleLogin() {
+		recordAuthDiagnostic("login:request");
 		setSubmitting(true);
 		setError(null);
 		try {
 			const user = await loginRequest(email, password);
-			await login(user); // persists to SecureStore + Zustand
+			await login(user); // Protected guards react to the persisted session.
+			recordAuthDiagnostic("login:success");
 
-			// router.replace("/(tabs)/feed"); // go to main app
 		} catch (err) {
+			recordAuthDiagnostic("login:failure");
 			setError(err.message);
 		} finally {
 			setSubmitting(false);

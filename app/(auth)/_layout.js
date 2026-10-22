@@ -1,12 +1,6 @@
 import { Stack } from "expo-router";
 
+export const unstable_settings = { initialRouteName: "login" };
 export default function AuthLayout() {
-	return (
-		<Stack
-			screenOptions={{ headerShown: false }}
-			// initialRouteName="register"
-		>
-			{/* every file in (auth) is auto-registered */}
-		</Stack>
-	);
+	return <Stack initialRouteName="login" screenOptions={{ headerShown: false }} />;
 }

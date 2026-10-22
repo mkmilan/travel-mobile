@@ -1,12 +1,10 @@
 // app/(tabs)/_layout.js
-import AuthGate from "@/src/components/AuthGate";
 import { IconSymbol } from "@/src/components/ui/IconSymbol";
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
 
 export default function TabLayout() {
 	return (
-		<AuthGate>
 			<Tabs
 				initialRouteName="trips/index"
 				screenOptions={{
@@ -56,6 +54,5 @@ export default function TabLayout() {
 					<Tabs.Screen key={name} name={name} options={{ href: null, headerShown: false }} />
 				))}
 			</Tabs>
-		</AuthGate>
 	);
 }

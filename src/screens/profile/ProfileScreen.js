@@ -3,7 +3,7 @@ import useRequireAuth from "@/src/hooks/useRequireAuth";
 import { getPublicUserById, getUserById } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { darkTheme, theme as lightTheme } from "@/src/theme";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, useColorScheme } from "react-native";
 import ProfileTabsLayout from "./ProfileTabsLayout";
@@ -15,13 +15,11 @@ const FUTURE_TOP_NAVBAR_HEIGHT = 0;
 export default function ProfileScreen() {
 	/* ─── step 1: guard ───────────────────────────────────────── */
 	const ready = useRequireAuth();
-	if (!ready) return <View style={styles.blank} />;
 
 	/* routing & auth ----------------------------------------------------- */
 	const { userId } = useLocalSearchParams(); // /user/[userId] – undefined on “Me”
 	const authUser = useAuthStore((s) => s.user);
 	const doLogout = useAuthStore((s) => s.logout);
-	const router = useRouter();
 
 	const profileId = userId || authUser?._id;
 	const isSelf = authUser && profileId === authUser._id;
@@ -52,6 +50,7 @@ export default function ProfileScreen() {
 
 	/* fetch whenever profileId changes ----------------------------------- */
 	useEffect(() => {
+		if (!ready || !profileId) return;
 		let cancelled = false;
 		// fetchUserPhotosApi(userId ? userId : authUser?._id, 1, 20)
 		// 	.then((photos) => console.log("Gallery payload →", photos))
@@ -82,7 +81,7 @@ export default function ProfileScreen() {
 		return () => {
 			cancelled = true;
 		};
-	}, [profileId, isSelf]);
+	}, [ready, profileId, isSelf]);
 
 	useEffect(() => {
 		if (isSelf) {
@@ -119,6 +118,8 @@ export default function ProfileScreen() {
 		}
 	};
 
+	if (!ready || !authUser) return <View style={styles.centered} />;
+
 	/* loading / error ---------------------------------------------------- */
 	if (loading || !displayedUser) {
 		return (
@@ -136,7 +137,6 @@ export default function ProfileScreen() {
 		isSelf,
 		onLogout: async () => {
 			await doLogout();
-			router.replace("/(auth)/login");
 		},
 	};
 

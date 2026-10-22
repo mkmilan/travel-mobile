@@ -8,7 +8,6 @@ export default function LogoutScreen() {
 	useEffect(() => {
 		async function performLogout() {
 			await logout();
-			// router.replace("/(auth)/login");
 		}
 		performLogout();
 	}, [logout]);
