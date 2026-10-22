@@ -52,6 +52,7 @@ export default function RecordScreen() {
 	const addRecommendationModalRef = useRef(null);
 
 	const pendingNames = useRef({ startName: "Unknown", endName: "Unknown" });
+	const tripEndTime = useRef(null);
 
 	const user = useAuthStore((s) => s.user);
 
@@ -171,6 +172,7 @@ export default function RecordScreen() {
 		if (!uid) return;
 		console.log("UID:", uid);
 		const tid = await startTrip(uid);
+		tripEndTime.current = null;
 		console.log("Trip started:", tid);
 		const seg = startSegment();
 		console.log("Segment started:", seg);
@@ -274,6 +276,7 @@ export default function RecordScreen() {
 					await Location.stopLocationUpdatesAsync(TASK_NAME);
 					await clearActiveTrip();
 					//--------------------------------//
+					tripEndTime.current = new Date().toISOString();
 					setIsResolvingLocation(true);
 					try {
 						const { startName, endName } = await getTripLocationNames({
@@ -307,7 +310,8 @@ export default function RecordScreen() {
 	};
 
 	const handleSaveMeta = async ({ title, mode, visibility, description }) => {
-		const endTime = new Date().toISOString();
+		const endTime = tripEndTime.current ?? new Date().toISOString();
+		tripEndTime.current = endTime;
 
 		await finishTrip(tripId, {
 			endTime,
@@ -315,7 +319,7 @@ export default function RecordScreen() {
 			description,
 			startName: pendingNames.current.startName,
 			endName: pendingNames.current.endName,
-			defaultTravelMode: mode,
+			defaultTransportMode: mode,
 			defaultTripVisibility: visibility,
 		});
 
@@ -354,6 +358,7 @@ export default function RecordScreen() {
 		setSegment(null);
 		firstPoint.current = null;
 		lastPoint.current = null;
+		tripEndTime.current = null;
 	};
 
 	// secondary buttons
@@ -463,6 +468,9 @@ export default function RecordScreen() {
 
 			{status === "stopped" && (
 				<>
+					<TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit trip details" onPress={() => sheetRef.current?.reopen()} disabled={isUploading} style={{ marginBottom: 24 }}>
+						<Text style={{ color: theme.colors.link, fontSize: 16 }}>Edit trip details</Text>
+					</TouchableOpacity>
 					<CircleButton icon="cloud-upload" color="green" onPress={() => handleUpload()} />
 					<TouchableOpacity onPress={resetState} style={{ marginTop: 24 }} disabled={isUploading}>
 						<Text style={{ color: theme.colors.link, fontSize: 16 }}>Start a new trip</Text>
