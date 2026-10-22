@@ -31,6 +31,7 @@ export default function RootLayout() {
 					transitionStart: () => recordAuthDiagnostic("transition:start"),
 					transitionEnd: () => recordAuthDiagnostic("transition:end"),
 				}}>
+					<Stack.Screen name="index" options={{ headerShown: false }} />
 					<Stack.Protected guard={!isAuthenticated}>
 						<Stack.Screen name="(auth)" options={{ headerShown: false }} />
 					</Stack.Protected>
