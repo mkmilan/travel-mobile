@@ -80,3 +80,70 @@ test('Trips sheets are hidden immediately when profile/session identity changes'
   tree=screen.render();assert.equal(nodes(tree,'CommentsSheet')[0].props.visible,true);
   identity={};tree=screen.render();assert.equal(nodes(tree,'CommentsSheet')[0].props.visible,false);assert.equal(nodes(tree,'CommentsSheet')[0].props.trip,null);
 });
+
+function recommendationsFixture(loader,routeParams={},dependencies={}) {
+  let list=createPagedList(loader);const route={params:routeParams};const effects=[];let effectIndex=0;const queued=[];const alerts=[];
+  const nativeDeps={...native,theme,RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',RecommendationCard:'RecommendationCard',RecommendationDetailModal:'RecommendationDetailModal',AddRecommendationModal:'AddRecommendationModal',getRecommendationsByUser:()=>{},lineStringToCoords:coords=>coords,
+    getTripJsonById:async()=>({}),deleteRecommendation:async()=>{},updateRecommendation:async()=>{},Alert:{alert:(...args)=>alerts.push(args)},
+    useNavigation:()=>({setParams:params=>Object.assign(route.params,params)}),useRoute:()=>route,
+    useProfileList:()=>({...list.getSnapshot(),identity:list,initialLoading:!list.getSnapshot().loaded,ensureLoaded:list.ensureLoaded,refresh:list.refresh,loadMore:list.loadMore,setItems:list.setItems}),
+    useEffect:(callback,deps)=>{const index=effectIndex++;if(!effects[index]||deps.some((value,i)=>value!==effects[index][i])){effects[index]=deps;queued.push(callback);}},
+    ...dependencies,
+  };
+  const screen=fixture('src/screens/profile/tabs/RecommendationsTab.js','RecommendationsTab',{userId:'fixture',isSelf:true},nativeDeps);
+  return {alerts,route,get list(){return list;},switchList(next){list=next;},render(){effectIndex=0;return screen.render();},effects(){while(queued.length)queued.shift()();}};
+}
+test('Recommendations focus plus gallery intent share one slow request and repeated same-ID navigation still opens',async()=>{
+  const pending=deferred();let calls=0;
+  const screen=recommendationsFixture(()=>{calls++;return pending.promise;},{openRecId:'target',ts:1});
+  let tree=screen.render();assert.equal(nodes(tree,'FlatList')[0].props.ListEmptyComponent.props.loading,true);
+  const focus=screen.list.ensureLoaded();screen.effects();screen.render();screen.effects();await tick();assert.equal(calls,1);
+  pending.resolve({data:[{_id:'target',name:'Fixture'}],totalPages:1});await focus;
+  screen.render();screen.effects();tree=screen.render();assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.isVisible,true);assert.equal(screen.route.params.openRecId,undefined);
+  nodes(tree,'RecommendationDetailModal')[0].props.onClose();screen.render();
+  screen.route.params={openRecId:'target',ts:2};screen.render();screen.effects();screen.render();screen.effects();tree=screen.render();
+  assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.isVisible,true);assert.equal(calls,1);
+});
+test('Recommendations empty/error gallery intent does not refetch on renders or focus',async()=>{
+  for(const failure of [false,true]) {
+    let calls=0;const screen=recommendationsFixture(async()=>{calls++;if(failure)throw Error('fixture');return {data:[],totalPages:0};},{openRecId:'not-loaded',ts:1});
+    screen.render();screen.effects();await screen.list.ensureLoaded();
+    for(let i=0;i<5;i++){screen.render();screen.effects();await screen.list.ensureLoaded();}
+    assert.equal(calls,1);assert.equal(nodes(screen.render(),'RecommendationDetailModal').length,0);
+    assert.equal(Boolean(screen.list.getSnapshot().error),failure);
+  }
+});
+test('Recommendations isolate detail/editor and late route responses across selection/profile changes',async()=>{
+  const pending=deferred();const records=[{_id:'old',associatedTrip:'route'}, {_id:'new',trip:{simplifiedRoute:['new-route']}}];
+  const screen=recommendationsFixture(async()=>({data:records,totalPages:1}),{}, {getTripJsonById:()=>pending.promise});
+  await screen.list.ensureLoaded();let tree=screen.render();const list=nodes(tree,'FlatList')[0];
+  const opening=list.props.renderItem({item:records[0]}).props.onPress();tree=screen.render();assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.recommendation._id,'old');
+  await list.props.renderItem({item:records[1]}).props.onPress();pending.resolve({simplifiedRoute:['old-route']});await opening;tree=screen.render();
+  assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.tripRouteCoordinates[0],'new-route');
+  screen.switchList(createPagedList(async()=>({data:[],totalPages:0})));tree=screen.render();
+  assert.equal(nodes(tree,'RecommendationDetailModal').length,0);assert.equal(nodes(tree,'AddRecommendationModal').length,0);
+});
+test('Recommendations editor refresh and optimistic deletion still update the same list without a focus loop',async()=>{
+  let calls=0,updates=0,deletes=0,edited;const rec={_id:'fixture',name:'Fixture',photos:['photo']};
+  const screen=recommendationsFixture(async()=>{calls++;return {data:deletes?[]:[rec],totalPages:1};},{},{updateRecommendation:async()=>updates++,deleteRecommendation:async()=>deletes++});
+  await screen.list.ensureLoaded();let tree=screen.render();await nodes(tree,'FlatList')[0].props.renderItem({item:rec}).props.onPress();tree=screen.render();
+  const editor=nodes(tree,'AddRecommendationModal')[0];editor.props.ref.current={openEdit:rec=>{edited=rec;}};
+  nodes(tree,'RecommendationDetailModal')[0].props.onEdit();assert.equal(edited._id,'fixture');
+  const result=await editor.props.onSubmit(rec,true);assert.equal(updates,1);assert.equal(calls,2);await result.refreshCallback();assert.equal(calls,3);
+  tree=screen.render();nodes(tree,'RecommendationDetailModal')[0].props.onOptimisticPhotoDelete('fixture','photo');assert.equal(screen.list.getSnapshot().items[0].photos.length,0);
+  nodes(tree,'FlatList')[0].props.renderItem({item:rec}).props.onLongPress();const confirm=screen.alerts.at(-1)[2].find(button=>button.text==='Delete');await confirm.onPress();
+  assert.equal(deletes,1);assert.equal(screen.list.getSnapshot().items.length,0);await screen.list.ensureLoaded();assert.equal(calls,4);
+});
+
+
+test('recommendation deletion queues a replacement after an older refresh response',async()=>{
+  const requests=[];const rec={_id:'fixture',name:'Fixture'};
+  const screen=recommendationsFixture(()=>{const pending=deferred();requests.push(pending);return pending.promise;});
+  const initial=screen.list.ensureLoaded();await tick();requests[0].resolve({data:[rec],totalPages:1});await initial;
+  const oldRefresh=screen.list.refresh();await tick();
+  const tree=screen.render();nodes(tree,'FlatList')[0].props.renderItem({item:rec}).props.onLongPress();
+  const deleting=screen.alerts.at(-1)[2].find(button=>button.text==='Delete').onPress();await tick();
+  assert.equal(screen.list.getSnapshot().items.length,0);
+  requests[1].resolve({data:[rec],totalPages:1});await oldRefresh;await tick();assert.equal(requests.length,3);
+  requests[2].resolve({data:[],totalPages:0});await deleting;assert.equal(screen.list.getSnapshot().items.length,0);
+});

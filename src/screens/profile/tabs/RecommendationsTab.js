@@ -1,7 +1,9 @@
-import { useFocusEffect, useNavigation, useRoute } from "expo-router/react-navigation";
-import { useCallback, useEffect, useRef, useState } from "react"; // Added useRef
-import { ActivityIndicator, Alert, FlatList, RefreshControl, Text, View } from "react-native";
+import { useNavigation, useRoute } from "expo-router/react-navigation";
+import { useEffect, useRef, useState } from "react"; // Added useRef
+import { ActivityIndicator, Alert, FlatList, RefreshControl } from "react-native";
 /* --- App utils / components -------------------------------------- */
+import useProfileList from "@/src/hooks/useProfileList";
+import ProfileListStatus from "@/src/components/ProfileListStatus";
 import RecommendationCard from "@/src/components/RecommendationCard";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal"; // Added
 import RecommendationDetailModal from "@/src/components/modals/RecommendationDetailModal";
@@ -20,127 +22,47 @@ import { lineStringToCoords } from "@/src/utils/geo";
  */
 export default function RecommendationsTab({ userId, isSelf }) {
 	/* ---------------- state ---------------- */
-	const [items, setItems] = useState([]);
-	const [page, setPage] = useState(1);
-	const [loading, setLoading] = useState(false);
-	const [refreshing, setRefresh] = useState(false);
-	const [hasNext, setHasNext] = useState(true);
-	const [error, setError] = useState(null);
-	const [pendingRecId, setPendingRecId] = useState(null); // remember “open this id” until list is ready
+	const { identity, items, setItems, loading, initialLoading, refreshing, error, ensureLoaded, refresh: onRefresh, loadMore } = useProfileList(userId, getRecommendationsByUser);
+	const [pendingRequest, setPendingRequest] = useState(null);
+	const pendingRecId = pendingRequest && pendingRequest.identity === identity ? pendingRequest.id : null;
 
 	/* modal */
 	const [detailModalOpen, setDetailModalOpen] = useState(false); // Renamed for clarity
-	const [selRec, setSelRec] = useState(null); // selected recommendation
+	const [selection, setSelection] = useState(null);
+	const selRec = selection && selection.identity === identity ? selection.rec : null;
+	const currentIdentity = useRef(identity);
+	currentIdentity.current = identity;
+	const detailRequest = useRef(null);
 	const [routeCoords, setRouteCoords] = useState([]); // array of {lat,lon}
 
 	const addRecModalRef = useRef(null); // Ref for AddRecommendationModal
 
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	const navigation = useNavigation();
 	const route = useRoute();
 
-	/* ------------------------------------------------------------ */
-	/* open modal automatically when Gallery sent us openRecId      */
-	/* ------------------------------------------------------------ */
-	// useEffect(() => {
-	// 	const recId = route.params?.openRecId;
-	// 	if (!recId) return;
-
-	// 	// try to find it in already-loaded items
-	// 	const found = items.find((r) => r._id === recId);
-	// 	if (found) {
-	// 		openDetailModal(found);
-	// 		navigation.setParams({ openRecId: undefined }); // clear once handled
-	// 		return;
-	// 	}
-
-	// 	// if not in list yet, make sure first page is fetched then retry
-	// 	(async () => {
-	// 		if (items.length === 0) await fetchPage(1, true);
-	// 		const again = items.find((r) => r._id === recId);
-	// 		if (again) openDetailModal(again);
-	// 		navigation.setParams({ openRecId: undefined });
-	// 	})();
-	// 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	// }, [route.params?.openRecId, items]);
-
-	/* — watch for ?openRecId sent by Gallery — */
+	// Gallery and focus can both request initialization; ensureLoaded shares the
+	// same request and regards empty/error results as a completed attempt.
 	useEffect(() => {
 		const recId = route.params?.openRecId;
-		if (!recId) return; // nothing sent
+		if (!recId) return;
+		setPendingRequest({ identity, id: recId });
+		void ensureLoaded();
+	}, [route.params?.openRecId, route.params?.ts]);
 
-		setPendingRecId(recId); // keep it until we can open modal
-		if (items.length === 0) fetchPage(1, true); // guarantee we have data
-		/* NOTE: we do NOT clear the nav param yet – we clear it only after opening */
-	}, [route.params?.openRecId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-	/* — open modal as soon as that record is present — */
 	useEffect(() => {
-		if (!pendingRecId) return; // nothing pending
-
-		const found = items.find((r) => r._id === pendingRecId);
-		if (!found) return; // not in list yet
-
-		openDetailModal(found); // your existing helper
-
-		/* cleanup so next jumps work normally */
-		setPendingRecId(null);
+		if (!pendingRecId) return;
+		const found = items.find((rec) => rec._id === pendingRecId);
+		if (!found) return;
+		void openDetailModal(found);
+		setPendingRequest(null);
 		navigation.setParams({ openRecId: undefined });
-	}, [items, pendingRecId]); // runs whenever list updates
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	/* ---------------- fetch helpers ---------------- */
-	const fetchPage = useCallback(
-		async (pageToLoad, replace = false) => {
-			if (loading && !replace) return; // Allow refresh even if loading
-			setLoading(true);
-
-			try {
-				const res = await getRecommendationsByUser(userId, pageToLoad, 10);
-				// console.log("[RecommendationsTab] RES", res); // Keep for debugging if needed
-
-				setItems((prev) => (replace ? res.data : [...prev, ...res.data]));
-				setHasNext(pageToLoad < res.totalPages);
-				setPage(pageToLoad + 1); // This should be pageToLoad, or res.page if API returns it
-				setError(null);
-			} catch (e) {
-				console.warn("[RecommendationsTab] fetch error", e.message);
-				setError(e.message);
-			} finally {
-				setLoading(false);
-				setRefresh(false);
-			}
-		},
-		[loading, userId] // Removed items from dependencies
-	);
-
-	/* first time tab visible */
-	useFocusEffect(
-		useCallback(() => {
-			// Fetch only if items are empty or userId changed (implicitly handled by hook)
-			if (items.length === 0 && userId) {
-				fetchPage(1, true);
-			}
-		}, [fetchPage, items.length, userId]) // Added userId dependency
-	);
-
-	/* pull-to-refresh */
-	const onRefresh = async () => {
-		setRefresh(true);
-		await fetchPage(1, true); // Reset to page 1 and replace data
-	};
-
-	/* infinite scroll */
-	const loadMore = () => {
-		if (!loading && hasNext) {
-			fetchPage(page); // fetchPage will use its current 'page' state and increment it
-		}
-	};
+	}, [items, pendingRecId]);
 
 	/* ---------------- modal helpers ---------------- */
 	const openDetailModal = async (rec) => {
-		setSelRec(rec);
+		setSelection({ identity, rec });
+		const request = {};
+		detailRequest.current = request;
 		setRouteCoords([]); // clear previous
 		setDetailModalOpen(true);
 
@@ -152,7 +74,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 			const tripId = rec.associatedTrip;
 			try {
 				const trip = await getTripJsonById(tripId);
-				if (trip?.simplifiedRoute) {
+				if (currentIdentity.current === identity && detailRequest.current === request && trip?.simplifiedRoute) {
 					setRouteCoords(lineStringToCoords(trip.simplifiedRoute));
 				}
 			} catch (err) {
@@ -192,6 +114,8 @@ export default function RecommendationsTab({ userId, isSelf }) {
 
 							// Update local state immediately
 							setItems((prevItems) => prevItems.filter((item) => item._id !== recommendation._id));
+							// A pre-delete request may still be settling; replace it with fresh data.
+							await onRefresh();
 
 							Alert.alert("Success", "Recommendation deleted successfully");
 						} catch (error) {
@@ -214,14 +138,9 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	// ADD THIS: Handle optimistic photo deletion in detail modal
 	const handleOptimisticPhotoDelete = (recommendationId, photoId) => {
 		// Update the selected recommendation immediately
-		setSelRec((prevSelected) => {
-			if (prevSelected?._id === recommendationId) {
-				return {
-					...prevSelected,
-					photos: prevSelected.photos?.filter((id) => id !== photoId) || [],
-				};
-			}
-			return prevSelected;
+		setSelection((previous) => {
+			if (previous?.identity !== identity || previous.rec?._id !== recommendationId) return previous;
+			return { identity, rec: { ...previous.rec, photos: previous.rec.photos?.filter((id) => id !== photoId) || [] } };
 		});
 
 		// Update the items list
@@ -247,12 +166,12 @@ export default function RecommendationsTab({ userId, isSelf }) {
 				await updateRecommendation(recommendationData._id, recommendationData);
 
 				// Return refresh callback for edit mode (same pattern as trip page)
-				await fetchPage(1, true); // Refresh data immediately
+				await onRefresh(); // Refresh data immediately
 				return {
-					refreshCallback: () => fetchPage(1, true),
+					refreshCallback: () => onRefresh(),
 				};
 			}
-			await fetchPage(1, true); // Reload data from page 1
+			await onRefresh(); // Reload data from page 1
 		} catch (error) {
 			console.error("[RecommendationsTab] Failed to save recommendation:", error.response?.data || error.message);
 			Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
@@ -260,15 +179,6 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	};
 
 	/* ---------------- render ---------------- */
-	if (error && items.length === 0 && !loading) {
-		// Show error only if not loading and no items
-		return (
-			<View style={{ padding: 24, flex: 1, justifyContent: "center", alignItems: "center" }}>
-				<Text style={{ textAlign: "center", color: theme.colors.error }}>Error: {error}</Text>
-			</View>
-		);
-	}
-
 	return (
 		<>
 			<FlatList
@@ -284,17 +194,9 @@ export default function RecommendationsTab({ userId, isSelf }) {
 				contentContainerStyle={{ paddingHorizontal: theme.space.sm, paddingTop: theme.space.sm, flexGrow: 1 }}
 				onEndReachedThreshold={0.4}
 				onEndReached={loadMore}
-				ListFooterComponent={loading && items.length > 0 ? <ActivityIndicator style={{ margin: 16 }} /> : null}
+				ListFooterComponent={items.length > 0 ? (loading ? <ActivityIndicator style={{ margin: 16 }} /> : error ? <ProfileListStatus error={error} onRetry={onRefresh} /> : null) : null}
 				refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-				ListEmptyComponent={
-					!loading && items.length === 0 ? (
-						<View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-							<Text style={{ textAlign: "center", marginTop: 32, color: theme.colors.textMuted }}>
-								No recommendations yet.
-							</Text>
-						</View>
-					) : null
-				}
+				ListEmptyComponent={<ProfileListStatus loading={initialLoading || loading} error={error} onRetry={onRefresh} emptyMessage="No recommendations yet." />}
 			/>
 
 			{/* ---------- detail modal ---------- */}
@@ -303,20 +205,20 @@ export default function RecommendationsTab({ userId, isSelf }) {
 					isVisible={detailModalOpen}
 					onClose={() => {
 						setDetailModalOpen(false);
-						// setSelRec(null); // Optionally clear selRec, or keep it if needed for quick reopen
+						detailRequest.current = null;
 					}}
 					recommendation={selRec}
 					// Pass the recommendation's author ID to determine editability
 					tripUserId={selRec?.user?._id}
 					tripRouteCoordinates={routeCoords}
 					onEdit={() => handleEditRecommendation(selRec)} // Use the new handler
-					onRefresh={() => fetchPage(1, true)}
+					onRefresh={onRefresh}
 					onOptimisticPhotoDelete={handleOptimisticPhotoDelete}
 				/>
 			)}
 
 			{/* ---------- Add/Edit Recommendation Modal ---------- */}
-			<AddRecommendationModal ref={addRecModalRef} onSubmit={handleRecommendationSubmitted} />
+			{selRec && <AddRecommendationModal ref={addRecModalRef} onSubmit={handleRecommendationSubmitted} />}
 		</>
 	);
 }
