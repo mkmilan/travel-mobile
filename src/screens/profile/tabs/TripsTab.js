@@ -1,9 +1,10 @@
 // screens/profile/tabs/TripsTab.js
-import { useFocusEffect } from "expo-router/react-navigation";
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
+import useProfileList from "@/src/hooks/useProfileList";
+import ProfileListStatus from "@/src/components/ProfileListStatus";
 import TripCardContainer from "@/src/components/TripCardContainer";
 import CommentsSheet from "@/src/components/sheets/CommentsSheet";
 import LikersSheet from "@/src/components/sheets/LikersSheet";
@@ -17,77 +18,22 @@ import { theme } from "@/src/theme";
 /* ------------------------------------------------------------------ */
 export default function TripsTab({ userId }) {
 	/* ---------------- local list state ---------------- */
-	const [items, setItems] = useState([]);
-	const [page, setPage] = useState(1);
-	const [loading, setLoading] = useState(false);
-	const [refreshing, setRefreshing] = useState(false);
-	const [hasNext, setHasNext] = useState(true);
-	const [error, setError] = useState(null);
+	const { identity, items, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore } = useProfileList(userId, getTripsByUser);
 
 	/* ---------------- sheet state ---------------- */
-	const [sheetType, setSheetType] = useState(null); // 'likers' | 'comments' | 'recs'
-	const [selectedTrip, setSelectedTrip] = useState(null);
+	const [sheet, setSheet] = useState(null);
+	const selectedTrip = sheet && sheet.identity === identity ? sheet.trip : null;
+	const sheetType = selectedTrip ? sheet.type : null;
 
 	const router = useRouter();
 
-	/* ---------------- helpers ---------------- */
-	const fetchPage = useCallback(
-		async (pageToLoad, replace = false) => {
-			if (loading || (!hasNext && !replace)) return;
-			setLoading(true);
-			try {
-				const res = await getTripsByUser(userId, pageToLoad, 10); // { data, page, totalPages }
-
-				setItems((prev) => (replace ? res.data : [...prev, ...res.data]));
-				setHasNext(pageToLoad < res.totalPages);
-				setPage(pageToLoad + 1);
-				setError(null);
-			} catch (e) {
-				console.warn("[TripsTab] fetch error", e.message);
-				setError(e.message);
-				setHasNext(false); // stop infinite loop on hard error
-			} finally {
-				setLoading(false);
-				setRefreshing(false);
-			}
-		},
-		[loading, userId, hasNext]
-	);
-
-	/* first time the tab becomes visible */
-	useFocusEffect(
-		useCallback(() => {
-			if (items.length === 0) fetchPage(1, true);
-		}, [fetchPage, items.length])
-	);
-
-	/* pull-to-refresh */
-	const onRefresh = () => {
-		setRefreshing(true);
-		fetchPage(1, true);
-	};
-
-	/* infinite scroll */
-	const loadMore = () => {
-		if (!loading && hasNext) fetchPage(page);
-	};
-
 	/* bottom-sheet helpers */
 	const openSheet = (type, trip) => {
-		setSelectedTrip(trip);
-		setSheetType(type);
+		setSheet({ identity, trip, type });
 	};
-	const closeSheet = () => setSheetType(null);
+	const closeSheet = () => setSheet(null);
 
 	/* ---------------- render ---------------- */
-	if (error && items.length === 0) {
-		return (
-			<View style={{ padding: 24 }}>
-				<Text style={{ textAlign: "center", color: theme.colors.error }}>Error: {error}</Text>
-			</View>
-		);
-	}
-
 	return (
 		<View style={{ flex: 1, backgroundColor: theme.colors.background }}>
 			<FlatList
@@ -102,19 +48,16 @@ export default function TripsTab({ userId }) {
 					/>
 				)}
 				contentContainerStyle={{
+					flexGrow: 1,
 					paddingHorizontal: theme.space.sm,
 					paddingTop: theme.space.sm,
 					paddingBottom: theme.space.sm,
 				}}
 				onEndReached={loadMore}
 				onEndReachedThreshold={0.4}
-				ListFooterComponent={loading && items.length > 0 ? <ActivityIndicator style={{ margin: 16 }} /> : null}
+				ListFooterComponent={items.length > 0 ? (loading ? <ActivityIndicator style={{ margin: 16 }} /> : error ? <ProfileListStatus error={error} onRetry={onRefresh} /> : null) : null}
 				refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-				ListEmptyComponent={
-					!loading && items.length === 0 ? (
-						<Text style={{ textAlign: "center", marginTop: 32 }}>Nothing to show yet.</Text>
-					) : null
-				}
+				ListEmptyComponent={<ProfileListStatus loading={initialLoading || loading} error={error} onRetry={onRefresh} emptyMessage="Nothing to show yet." />}
 			/>
 
 			{/* ---- shared bottom sheets (one copy each) ---- */}

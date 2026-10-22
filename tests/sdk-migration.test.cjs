@@ -19,10 +19,10 @@ test('image helper explicitly uses supported filesystem legacy compatibility API
   assert.match(read('src/utils/imageHelpers.js'), /from "expo-file-system\/legacy"/);
 });
 test('profile top tabs and consumers use one Expo Router navigation context', () => {
-  for (const file of ['src/screens/profile/ProfileTabsLayout.js','src/screens/profile/tabs/RecommendationsTab.js','src/screens/profile/tabs/TripsTab.js','src/components/ProfileGallery.js','src/components/HapticTab.js','src/components/ui/TabBarBackground.ios.js']) {
+  for (const file of ['src/screens/profile/ProfileTabsLayout.js','src/screens/profile/tabs/RecommendationsTab.js','src/screens/profile/tabs/TripsTab.js','src/components/ProfileGallery.js','src/hooks/useProfileList.js','src/components/HapticTab.js','src/components/ui/TabBarBackground.ios.js']) {
     const source = read(file);
     assert.doesNotMatch(source, /from ["']@react-navigation\//);
-    assert.match(source, /from "expo-router\//);
+    assert.match(source, /from "expo-router(?:\/[^"]+)?"/);
   }
 });
 test('SDK config explicitly enables existing background tracking and avoids removed architecture flags', () => {
