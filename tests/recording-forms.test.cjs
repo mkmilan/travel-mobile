@@ -71,6 +71,60 @@ test('screen saves selected transport key and DAO retains metadata in SQL and up
   assert.equal(payload.defaultTravelMode,'walking');assert.equal(payload.defaultTripVisibility,'private');assert.equal(payload.description,'Description');assert.equal(payload.startLocationName,'A');assert.equal(payload.endLocationName,'B');
 });
 
+const poiForm = onSubmit => fixture('src/components/modals/AddPoiModal.js','AddPoiModal',{onSubmit},{...native,theme,RecordingFormModal:'RecordingFormModal'});
+const poiButton = tree => nodes(tree,'Pressable').find(node=>node.props.testID==='poi-save');
+test('POI form awaits persistence, deduplicates taps, retains failed note and supports retry/cancel/reopen',async()=>{
+  const pending=deferred();let calls=0;let result=pending.promise;
+  const form=poiForm(({note})=>{calls++;assert.equal(note,'Fixture note');return result;});
+  form.render();form.ref.current.open();let tree=form.render();nodes(tree,'TextInput')[0].props.onChangeText('Fixture note');
+  const save=poiButton(form.render()).props.onPress;const saving=save();await save();
+  tree=form.render();assert.equal(calls,1);assert.equal(tree.props.visible,true);assert.equal(tree.props.busy,true);
+  pending.reject(Error('fixture'));await saving;tree=form.render();
+  assert.equal(tree.props.visible,true);assert.equal(tree.props.busy,false);assert.equal(nodes(tree,'TextInput')[0].props.value,'Fixture note');
+  assert.ok(nodes(tree,'Text').some(node=>node.props.accessibilityRole==='alert'));
+  result=Promise.resolve();await poiButton(tree).props.onPress();assert.equal(form.render().props.visible,false);
+  form.ref.current.open();tree=form.render();assert.equal(nodes(tree,'TextInput')[0].props.value,'');tree.props.onClose();assert.equal(form.render().props.visible,false);
+});
+
+function poiHandlers({status='recording',tripId='fixture-trip',point={lat:0,lon:0},owns=async()=>true}={}) {
+  const source=read('app/(tabs)/record/index.js');
+  const start=source.indexOf('const handleAddPoi = '),end=source.indexOf('\n\t// Handle recommendation submission',start);
+  const session={user:{_id:'fixture-owner'},token:'fixture-session'};
+  const saved=[];const notices=[];let opened=0;const pendingPoi={current:null};const lastPoint={current:point};
+  const handlers=require('node:vm').runInNewContext(source.slice(start,end)+';({handleAddPoi,handlePoiSubmit})',{
+    user:session.user,useAuthStore:{getState:()=>session},tripId,status,lastPoint,pendingPoi,
+    poiModalRef:{current:{open:()=>opened++}},toast:notice=>notices.push(notice),ownsLocalTrip:owns,
+    addPoi:async(id,data)=>saved.push({id,...data}),
+  });
+  return {...handlers,session,saved,notices,pendingPoi,lastPoint,opened:()=>opened};
+}
+test('recording screen wires POI persistence and captures point before the user types',async()=>{
+  assert.match(read('app/(tabs)/record/index.js'),/<AddPoiModal ref=\{poiModalRef\} onSubmit=\{handlePoiSubmit\}/);
+  for(const status of ['recording','paused']) {
+    const form=poiHandlers({status});form.handleAddPoi();assert.equal(form.opened(),1);
+    form.lastPoint.current={lat:1,lon:1};await form.handlePoiSubmit({note:'Fixture note'});
+    assert.equal(JSON.stringify(form.saved),JSON.stringify([{id:'fixture-trip',lat:0,lon:0,note:'Fixture note'}]));
+    assert.equal(form.notices.at(-1).title,'POI saved');
+  }
+});
+test('POI refuses absent GPS/inactive trip and stale or unowned sessions without writing',async()=>{
+  for(const options of [{point:null},{point:{lat:NaN,lon:0}},{status:'stopped'},{tripId:null}]) {
+    const form=poiHandlers(options);form.handleAddPoi();assert.equal(form.opened(),0);assert.equal(form.saved.length,0);assert.equal(form.notices.length,1);
+  }
+  const stale=poiHandlers();stale.handleAddPoi();stale.session.token='different';await assert.rejects(stale.handlePoiSubmit({note:'Fixture'}));assert.equal(stale.saved.length,0);
+  const unowned=poiHandlers({owns:async()=>false});unowned.handleAddPoi();await assert.rejects(unowned.handlePoiSubmit({note:'Fixture'}));assert.equal(unowned.saved.length,0);
+  const ownership=deferred();const switched=poiHandlers({owns:()=>ownership.promise});switched.handleAddPoi();
+  const submit=switched.handlePoiSubmit({note:'Fixture'});switched.session.user={_id:'other'};ownership.resolve(true);await assert.rejects(submit);assert.equal(switched.saved.length,0);
+});
+test('existing POI DAO appends note/point and upload payload includes it without altering track data',async()=>{
+  let sql,values;
+  const dao=load('src/db/tripDao.js','({addPoi,createTripPayload})',{openDatabase:async()=>({runAsync:async(query,params)=>{sql=query;values=params;}})});
+  await dao.addPoi('fixture-trip',{lat:0,lon:0,note:'Fixture'});
+  assert.match(sql,/INSERT INTO pois/);assert.equal(values[0],'fixture-trip');assert.equal(values[4],'Fixture');
+  const segments=[{track:[{lat:1,lon:1}]}];const payload=dao.createTripPayload({},segments,[{lat:values[1],lon:values[2],timestamp:values[3],note:values[4]}]);
+  assert.equal(payload.segments,segments);assert.equal(payload.pois[0].note,'Fixture');assert.equal(payload.pois[0].lat,0);
+});
+
 test('Cancel returns to a stopped-screen action that reopens the same trip draft',async()=>{
   let saved;const form=tripForm(async data=>{saved=data;});form.render();form.ref.current.open('Initial');
   let tree=form.render();nodes(tree,'TextInput')[0].props.onChangeText('Edited title');nodes(tree,'TextInput')[1].props.onChangeText('Edited description');

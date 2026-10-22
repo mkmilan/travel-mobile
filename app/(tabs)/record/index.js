@@ -6,6 +6,7 @@ import TripSaveModal from "@/src/components/modals/TripSaveModal";
 import { runMigrations } from "@/src/db/migrations";
 
 import {
+	addPoi,
 	addRecommendation,
 	buildTripJsonForUpload,
 	deleteTrip,
@@ -49,6 +50,7 @@ export default function RecordScreen() {
 	const lastPoint = useRef(null);
 	const sheetRef = useRef(null);
 	const poiModalRef = useRef(null);
+	const pendingPoi = useRef(null);
 	const addRecommendationModalRef = useRef(null);
 
 	const pendingNames = useRef({ startName: "Unknown", endName: "Unknown" });
@@ -362,7 +364,36 @@ export default function RecordScreen() {
 	};
 
 	// secondary buttons
-	const handleAddPoi = () => poiModalRef.current?.open();
+	const handleAddPoi = () => {
+		const session = useAuthStore.getState();
+		if (!tripId || !["recording", "paused"].includes(status) || !user?._id || session.user?._id !== user._id || !session.token) {
+			toast({ type: "warning", title: "Start or resume a trip before adding a POI" });
+			return;
+		}
+		const point = lastPoint.current;
+		if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lon)) {
+			toast({ type: "warning", title: "Location not available yet", msg: "Wait for GPS, then add the POI again." });
+			return;
+		}
+		// Save the location at which Add POI was tapped, not wherever the user
+		// happens to be after typing the note while recording continues.
+		pendingPoi.current = { tripId, userId: user._id, token: session.token, lat: point.lat, lon: point.lon };
+		poiModalRef.current?.open();
+	};
+
+	const handlePoiSubmit = async ({ note }) => {
+		const context = pendingPoi.current;
+		const isCurrent = () => {
+			const session = useAuthStore.getState();
+			return context && context.tripId === tripId && ["recording", "paused"].includes(status)
+				&& session.user?._id === context.userId && session.token === context.token;
+		};
+		if (!isCurrent() || !(await ownsLocalTrip(context.tripId, context.userId)) || !isCurrent()) {
+			throw new Error("The recording session changed. Reopen Add POI on the current trip.");
+		}
+		await addPoi(context.tripId, { lat: context.lat, lon: context.lon, note });
+		toast({ type: "success", title: "POI saved" });
+	};
 
 	// Handle recommendation submission
 	const handleRecommendationSubmit = async (recommendationData) => {
@@ -504,7 +535,7 @@ export default function RecordScreen() {
 			)}
 
 			<TripSaveModal ref={sheetRef} onConfirm={handleSaveMeta} />
-			<AddPoiModal ref={poiModalRef} />
+			<AddPoiModal ref={poiModalRef} onSubmit={handlePoiSubmit} />
 			<AddRecommendationModal
 				ref={addRecommendationModalRef}
 				onSubmit={handleRecommendationSubmit}
