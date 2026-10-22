@@ -147,3 +147,58 @@ test('recommendation deletion queues a replacement after an older refresh respon
   requests[1].resolve({data:[rec],totalPages:1});await oldRefresh;await tick();assert.equal(requests.length,3);
   requests[2].resolve({data:[],totalPages:0});await deleting;assert.equal(screen.list.getSnapshot().items.length,0);
 });
+
+function galleryFixture(loader) {
+  const props={userId:'profile-a'};let mediaKey='session-a',focused=false,list,storeKey,effectIndex=0;const effects=[],queued=[],navigation=[];
+  const screen=fixture('src/components/ProfileGallery.js','ProfileGallery',props,{
+    ...native,theme,Image:'Image',ImageViewing:'ImageViewing',BlurView:'BlurView',RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',fetchUserPhotosApi:loader,
+    useWindowDimensions:()=>({width:400}),usePhotoSource:()=>({mediaKey,getPhotoSource:photoId=>({uri:'https://fixture.invalid/'+photoId,headers:{Authorization:'Bearer fixture'}})}),
+    useRouter:()=>({push:route=>navigation.push({route})}),useNavigation:()=>({navigate:(route,params)=>navigation.push({route,params})}),useIsFocused:()=>focused,
+    useProfileList:(userId,fetchPage,size,key)=>{
+      const next=userId+'/'+key;if(next!==storeKey){list=createPagedList(page=>fetchPage(userId,page,size));storeKey=next;}
+      return {...list.getSnapshot(),identity:list,initialLoading:!list.getSnapshot().loaded,refresh:list.refresh,loadMore:list.loadMore};
+    },
+    useEffect:(callback,deps)=>{const index=effectIndex++;if(!effects[index]||deps.some((value,i)=>value!==effects[index][i])){effects[index]=deps;queued.push(callback);}},
+  });
+  return {navigation,get list(){return list;},render(){effectIndex=0;return screen.render();},effects(){while(queued.length)queued.shift()();},focus(value){focused=value;if(value&&list)void list.ensureLoaded();},profile(userId){props.userId=userId;},session(key){mediaKey=key;}};
+}
+test('Gallery shares bounded pagination, keeps focus cache, and offers explicit refresh/retry/empty states',async()=>{
+  const requests=[];const screen=galleryFixture((userId,page,limit)=>{const pending=deferred();requests.push({userId,page,limit,...pending});return pending.promise;});
+  let tree=screen.render();assert.equal(nodes(tree,'FlatList')[0].props.ListEmptyComponent.props.loading,true);
+  screen.focus(true);screen.effects();screen.focus(true);await tick();assert.equal(requests.length,1);assert.equal(requests[0].limit,20);
+  requests[0].resolve(Array.from({length:20},(_,i)=>({photoId:'photo-'+i})));await tick();tree=screen.render();screen.effects();
+  const more=nodes(tree,'FlatList')[0].props.onEndReached();nodes(tree,'FlatList')[0].props.onEndReached();await tick();assert.equal(requests.length,2);assert.equal(requests[1].page,2);
+  requests[1].resolve([]);await more;
+  for(let i=0;i<3;i++){screen.focus(false);screen.render();screen.effects();screen.focus(true);screen.render();screen.effects();}await tick();assert.equal(requests.length,2);
+  tree=screen.render();const refresh=nodes(tree,'FlatList')[0].props.refreshControl.props.onRefresh();await tick();requests[2].reject(Error('fixture'));await refresh;
+  tree=screen.render();assert.ok(nodes(tree,'FlatList')[0].props.ListFooterComponent.props.error);
+  const retry=nodes(tree,'FlatList')[0].props.ListFooterComponent.props.onRetry();await tick();requests[3].resolve([]);await retry;tree=screen.render();
+  assert.equal(nodes(tree,'FlatList')[0].props.ListEmptyComponent.props.loading,false);assert.equal(nodes(tree,'FlatList')[0].props.ListEmptyComponent.props.emptyMessage,'No photos yet.');
+});
+test('Gallery source links close viewer, preserve trip/Recs destinations and revalidate exactly once on return',async()=>{
+  for(const sourceType of ['trip','recommendation']) {
+    let calls=0;const photo={photoId:'photo',sourceId:'source',sourceType,context:'Fixture'};
+    const screen=galleryFixture(async()=>{calls++;return [photo];});screen.render();screen.focus(true);await tick();screen.render();screen.effects();
+    let tree=screen.render();nodes(tree,'FlatList')[0].props.renderItem({item:photo}).props.onPress();tree=screen.render();
+    const viewer=nodes(tree,'ImageViewing')[0];assert.equal(viewer.props.visible,true);assert.equal(viewer.props.images[0].headers.Authorization,'Bearer fixture');
+    nodes(viewer.props.FooterComponent(),'Pressable')[0].props.onPress();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,false);
+    assert.equal(screen.navigation[0].route,sourceType==='trip'?'(tabs)/trip/source':'Recs');if(sourceType==='recommendation')assert.equal(screen.navigation[0].params.openRecId,'source');
+    screen.focus(false);screen.render();screen.effects();screen.focus(true);screen.render();screen.effects();await tick();assert.equal(calls,2);
+    screen.render();screen.effects();await tick();assert.equal(calls,2);
+  }
+});
+test('Gallery hides old viewer immediately and isolates late profile/session responses',async()=>{
+  const requests=[];const screen=galleryFixture((userId,page)=>{const pending=deferred();requests.push({userId,...pending});return pending.promise;});
+  screen.render();screen.focus(true);await tick();const photo={photoId:'old',sourceType:'trip',sourceId:'old'};requests[0].resolve([photo]);await tick();let tree=screen.render();
+  nodes(tree,'FlatList')[0].props.renderItem({item:photo}).props.onPress();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,true);
+  const late=screen.list.refresh();await tick();screen.profile('profile-b');tree=screen.render();assert.equal(nodes(tree,'ImageViewing')[0].props.visible,false);assert.equal(nodes(tree,'ImageViewing')[0].props.images.length,0);screen.focus(true);await tick();
+  requests[2].resolve([{photoId:'new'}]);await tick();requests[1].resolve([photo]);await late;tree=screen.render();assert.equal(nodes(tree,'FlatList')[0].props.data[0].photoId,'new');
+  const key=nodes(tree,'FlatList')[0].props.key;screen.session('session-b');tree=screen.render();assert.notEqual(nodes(tree,'FlatList')[0].props.key,key);assert.equal(nodes(tree,'FlatList')[0].props.data.length,0);assert.equal(nodes(tree,'ImageViewing')[0].props.visible,false);
+});
+test('Gallery GET retains authentication and query pagination without acquiring an unnecessary CSRF token',async()=>{
+  const requests=[];
+  const fetchPhotos=load('src/services/api.js','(apiFetch = request, fetchUserPhotosApi)',{
+    Constants:{expoConfig:{extra:{API_URL:'https://fixture.invalid/api'}}},Updates:{},URLSearchParams,console:{log(){},error(){}},request:async(path,options)=>{requests.push({path,options});return {data:[{photoId:'fixture'}]};},
+  });
+  const result=await fetchPhotos('fixture-profile',2,20);assert.equal(result[0].photoId,'fixture');assert.equal(requests[0].path,'/users/v2/fixture-profile/photos?page=2&limit=20');assert.equal(requests[0].options.method,'GET');assert.equal(requests[0].options.auth,true);assert.notEqual(requests[0].options.csrf,true);
+});

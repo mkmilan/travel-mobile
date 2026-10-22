@@ -515,7 +515,7 @@ export const fetchUserPhotosApi = async (userId, page = 1, limit = 20) => {
 	const data = await apiFetch(`/users/v2/${userId}/photos?${params}`, {
 		method: "GET",
 		auth: true,
-		csrf: true,
+		// Read-only GET: server CSRF protection skips safe methods.
 	});
 	return data?.data ?? []; // API shape: { data, page, ... }
 };

@@ -1,115 +1,76 @@
+import useProfileList from "@/src/hooks/useProfileList";
+import ProfileListStatus from "@/src/components/ProfileListStatus";
 import { fetchUserPhotosApi } from "@/src/services/api";
 import { usePhotoSource } from "@/src/hooks/usePhotoSource";
 import { useIsFocused, useNavigation } from "expo-router/react-navigation";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Pressable, Text, useWindowDimensions } from "react-native";
+import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, Text, useWindowDimensions } from "react-native";
 import ImageViewing from "react-native-image-viewing";
+
+const PAGE_SIZE = 20;
+const loadGalleryPage = async (userId, page, limit) => {
+	const data = await fetchUserPhotosApi(userId, page, limit);
+	return { data, hasNext: data?.length === limit };
+};
 
 export default function ProfileGallery({ userId }) {
 	const { getPhotoSource, mediaKey } = usePhotoSource();
-	/* ---------- state ---------- */
-	const [photos, setPhotos] = useState([]);
-	const [page, setPage] = useState(1);
-	const [hasMore, setMore] = useState(true);
-	const [loading, setLoad] = useState(false);
-
+	const { identity, items: photos, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore } = useProfileList(userId, loadGalleryPage, PAGE_SIZE, mediaKey);
 	const [viewerOpen, setViewerOpen] = useState(false);
-	const [chosen, setChosen] = useState(null); // { photoId, context … }
-
-	useEffect(() => { setViewerOpen(false); setChosen(null); setPhotos([]); }, [mediaKey]);
-
-	/* ---------- helpers ---------- */
-	const PAGE_SIZE = 20;
+	const [selection, setSelection] = useState(null);
+	const chosen = selection && selection.identity === identity ? selection.photo : null;
+	const sourceReturn = useRef(null);
 	const router = useRouter();
 	const nav = useNavigation();
 	const isFocused = useIsFocused();
-	const listRef = useRef(null);
-	const activeMediaKey = useRef(mediaKey);
-	activeMediaKey.current = mediaKey;
-	const offsetRef = useRef(0); // remember scroll Y offset
 	const thumb = (useWindowDimensions().width - 3 * 4) / 2;
 
-	const fetchPage = async (p, replace = false) => {
-		if ((loading && !replace) || (!hasMore && !replace)) return;
-		const requestMediaKey = mediaKey;
-		setLoad(true);
-		try {
-			const batch = await fetchUserPhotosApi(userId, p, PAGE_SIZE);
-			if (activeMediaKey.current !== requestMediaKey) return;
-			setPhotos((prev) => (replace ? batch : [...prev, ...batch]));
-			setPage(p + 1);
-			setMore(batch.length === PAGE_SIZE);
-		} finally {
-			setLoad(false);
-			// snap back after pagination to stop jump-to-top
-			if (!replace && p > 1) {
-				requestAnimationFrame(() =>
-					listRef.current?.scrollToOffset({
-						offset: offsetRef.current,
-						animated: false,
-					})
-				);
-			}
-		}
-	};
-
-	/* ---------- focus behaviour ---------- */
+	// Ordinary tab switches reuse the loaded gallery. Returning from a photo's
+	// source can follow an edit/delete, so revalidate once; pull-to-refresh is
+	// always available for other changes.
 	useEffect(() => {
-		if (!isFocused) return;
-		// always refetch first page; keeps data current but never shows blank
-		fetchPage(1, true);
-	}, [isFocused, userId, mediaKey]);
+		if (isFocused && sourceReturn.current === identity) {
+			sourceReturn.current = null;
+			void onRefresh();
+		}
+	}, [isFocused, identity, onRefresh]);
 
 	/* ---------- link from viewer footer ---------- */
 	const openSource = () => {
 		if (!chosen) return;
 		if (chosen.sourceType === "trip") {
-			setViewerOpen(false); // close the gallery first OVO SMO DODALI OBRISI AKO NE VALJA/////////////////////////////////
+			sourceReturn.current = identity;
+			setViewerOpen(false);
 			router.push(`(tabs)/trip/${chosen.sourceId}`);
-			return; //I OVO //////////////////////////////////////////////////////////////////////
+			return;
 		} else if (chosen.sourceType === "recommendation") {
+			sourceReturn.current = identity;
 			setViewerOpen(false); // close the gallery first
 
-			/* navigate to the same profile route but add a query param
-       your Profile screen already lives at /user/[userId] and
-       renders RecommendationDetailModal when selRec is set.
-       The param below lets that screen open the modal directly. */
-
-			// router.push({
-			// 	pathname: `/user/${userId}`, // stay on the profile page
-			// 	params: { rec: chosen.sourceId }, // <-- picked up in Profile screen
-			// });
 			nav.navigate("Recs", { openRecId: chosen.sourceId, ts: Date.now() });
 		}
 		setViewerOpen(false);
 	};
 
 	/* ---------- render ---------- */
-	if (loading && photos.length === 0) {
-		return <ActivityIndicator style={{ marginTop: 32 }} />;
-	}
-
 	return (
 		<>
 			<FlatList
-				key={mediaKey}
-				ref={listRef}
+				key={`${userId}-${mediaKey}`}
 				data={photos}
 				keyExtractor={(it) => it.photoId}
 				numColumns={2}
 				showsVerticalScrollIndicator={false}
 				columnWrapperStyle={{ justifyContent: "space-between" }}
-				onEndReached={() => fetchPage(page)}
+				onEndReached={loadMore}
 				onEndReachedThreshold={0.4}
 				maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
-				onScroll={({ nativeEvent }) => (offsetRef.current = nativeEvent.contentOffset.y)}
-				scrollEventThrottle={16}
 				renderItem={({ item }) => (
 					<Pressable
 						onPress={() => {
-							setChosen(item);
+							setSelection({ identity, photo: item });
 							setViewerOpen(true);
 						}}
 						style={{ marginVertical: 4 }}
@@ -122,11 +83,13 @@ export default function ProfileGallery({ userId }) {
 						/>
 					</Pressable>
 				)}
-				ListFooterComponent={loading && photos.length > 0 ? <ActivityIndicator style={{ margin: 12 }} /> : null}
+				ListFooterComponent={photos.length > 0 ? (loading ? <ActivityIndicator style={{ margin: 12 }} /> : error ? <ProfileListStatus error={error} onRetry={onRefresh} /> : null) : null}
+				refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+				ListEmptyComponent={<ProfileListStatus loading={initialLoading || loading} error={error} onRetry={onRefresh} emptyMessage="No photos yet." />}
 			/>
 
 			<ImageViewing
-				key={mediaKey}
+				key={`${userId}-${mediaKey}`}
 				images={
 					chosen
 						? [
@@ -137,7 +100,7 @@ export default function ProfileGallery({ userId }) {
 						  ]
 						: []
 				}
-				visible={viewerOpen}
+				visible={viewerOpen && Boolean(chosen)}
 				imageIndex={0} // single image → no horizontal swipe
 				onRequestClose={() => setViewerOpen(false)}
 				swipeToCloseEnabled={true} // vertical drag OK
