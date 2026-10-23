@@ -10,9 +10,9 @@ import {
 	StyleSheet,
 	View,
 } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
-const MAX_HEIGHT = SCREEN_HEIGHT * 0.9; // never cover full screen
 
 export default function BottomModal({ visible, onClose, children, style }) {
 	const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -26,36 +26,23 @@ export default function BottomModal({ visible, onClose, children, style }) {
 	}, [visible]);
 
 	return (
-		<Modal
-			animationType="none"
-			transparent
-			visible={visible}
-			onRequestClose={onClose}
-			statusBarTranslucent
-		>
-			{/* dimmed backdrop */}
-			<Pressable style={styles.backdrop} onPress={onClose} />
-
-			<KeyboardAvoidingView
-				behavior={Platform.OS === "ios" ? "padding" : undefined}
-				keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
-				pointerEvents="box-none"
-				style={styles.wrapper}
-			>
-				<Animated.View
-					style={[
-						styles.container,
-						{ transform: [{ translateY }] },
-						style, // allow per-modal overrides
-					]}
-				>
-					{/* drag handle */}
-					<View style={styles.handle} />
-
-					{/* flex-grow content so ScrollView gets space */}
-					<View style={styles.content}>{children}</View>
-				</Animated.View>
-			</KeyboardAvoidingView>
+		<Modal animationType="none" transparent visible={visible} onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+			<SafeAreaProvider>
+				{/* The backdrop stays a sibling, never an ancestor of form controls. */}
+				<Pressable testID="bottom-modal-backdrop" style={styles.backdrop} onPress={onClose} accessible={false} />
+				<SafeAreaView edges={["top", "left", "right"]} style={styles.wrapper} pointerEvents="box-none">
+					{/* Android's modal window resizes for the keyboard natively. */}
+					<KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} pointerEvents="box-none" style={styles.wrapper}>
+						<Animated.View style={[styles.container, { transform: [{ translateY }] }, style]}>
+							{/* Keep system-navigation clearance inside per-modal style overrides. */}
+							<SafeAreaView edges={["bottom"]} style={styles.safeContent} accessibilityViewIsModal>
+								<View style={styles.handle} />
+								<View style={styles.content}>{children}</View>
+							</SafeAreaView>
+						</Animated.View>
+					</KeyboardAvoidingView>
+				</SafeAreaView>
+			</SafeAreaProvider>
 		</Modal>
 	);
 }
@@ -71,13 +58,16 @@ const styles = StyleSheet.create({
 	},
 	container: {
 		flex: 1, // 🔑 makes modal grow to available space
-		maxHeight: MAX_HEIGHT,
+		maxHeight: "90%",
 		backgroundColor: theme.colors.background,
 		paddingHorizontal: theme.space.md,
 		paddingTop: theme.space.lg,
-		paddingBottom: theme.space.lg + 10,
 		borderTopLeftRadius: theme.radius.lg,
 		borderTopRightRadius: theme.radius.lg,
+	},
+	safeContent: {
+		flex: 1,
+		paddingBottom: theme.space.lg + 10,
 	},
 	handle: {
 		width: 40,

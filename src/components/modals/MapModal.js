@@ -20,8 +20,8 @@ const styles = StyleSheet.create({
 		padding: 0,
 	},
 	mapContainer: {
-		// height: 400,
-		height: "100%",
+		// Fill only the space left below the header, not the entire sheet.
+		flex: 1,
 		width: "100%",
 		borderRadius: theme.radius.md,
 		overflow: "hidden",
