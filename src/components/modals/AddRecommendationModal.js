@@ -4,8 +4,9 @@ import TripPhotoThumb from "@/src/components/ui/TripPhotoThumb";
 import { RECOMMENDATION_CATEGORIES, RECOMMENDATION_TAGS } from "@/src/constants/recommendationConstants";
 import usePhotoManager from "@/src/hooks/usePhotoManager";
 import { theme } from "@/src/theme";
+import { useAuthStore } from "@/src/stores/auth";
 import { Ionicons } from "@expo/vector-icons";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
 	Alert,
 	ActivityIndicator,
@@ -201,10 +202,30 @@ const PhotoSection = ({ photos, uploading, addPhotos, removePhoto, maxPhotos = 5
 );
 
 const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, ref) => {
+	const { token, user } = useAuthStore();
+	const activeContext = useRef(null);
+	if (!activeContext.current || activeContext.current.token !== token || activeContext.current.userId !== user?._id) {
+		activeContext.current = { token, userId: user?._id };
+	}
+	const renderContext = activeContext.current;
+	const mounted = useRef(true);
+	const draftContext = useRef(null);
+	useEffect(() => {
+		mounted.current = true;
+		return () => { mounted.current = false; };
+	}, []);
+	const isCurrent = (context) => {
+		const session = useAuthStore.getState();
+		return mounted.current && activeContext.current === context && context?.token && context?.userId
+			&& session.token === context.token && session.user?._id === context.userId;
+	};
 	const [visible, setVisible] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState("");
-	const submitting = useRef(false);
+	const submitting = useRef(null);
+	// Keep the server identity after create, even if a later photo upload fails.
+	// Do not change the photo manager's initial-id prop: that would reset its draft.
+	const createdRecommendation = useRef(null);
 	const [isEditMode, setIsEditMode] = useState(false);
 	const [associatedTrip, setAssociatedTrip] = useState(null);
 	const [editingRecommendationId, setEditingRecommendationId] = useState(null);
@@ -234,6 +255,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		removePhoto,
 		setPhotos: setManagerPhotos,
 		uploadPendingPhotos,
+		getPhotos,
 	} = usePhotoManager({
 		context: "recommendation",
 		id: editingRecommendationId,
@@ -243,7 +265,11 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 
 	useImperativeHandle(ref, () => ({
 		open(locationData = null, tripId = null) {
-			if (submitting.current) return;
+			if (submitting.current && isCurrent(submitting.current.context)) return;
+			submitting.current = null;
+			setSaving(false);
+			draftContext.current = renderContext;
+			createdRecommendation.current = null;
 			setSaveError("");
 			setIsEditMode(false);
 			setEditingRecommendationId(null);
@@ -285,7 +311,11 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		},
 
 		openEdit(recommendation) {
-			if (submitting.current) return;
+			if (submitting.current && isCurrent(submitting.current.context)) return;
+			submitting.current = null;
+			setSaving(false);
+			draftContext.current = renderContext;
+			createdRecommendation.current = null;
 			setSaveError("");
 			setIsEditMode(true);
 			setEditingRecommendationId(recommendation._id);
@@ -320,12 +350,17 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		},
 	}));
 
+	const refreshSource = (recommendation) => {
+		// A failed refresh must not turn a committed save into another create.
+		try { Promise.resolve(recommendation?.refreshCallback?.()).catch(() => {}); } catch {}
+	};
+
 	const handleClose = () => {
 		if (!submitting.current && !uploading) setVisible(false);
 	};
 
 	const updateField = (field, value) => {
-		if (submitting.current) return;
+		if (submitting.current || !isCurrent(renderContext)) return;
 		setFormData((prev) => ({ ...prev, [field]: value }));
 	};
 
@@ -336,7 +371,8 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 	};
 
 	const handleSubmit = async () => {
-		if (submitting.current || uploading) return;
+		const context = renderContext;
+		if (submitting.current || uploading || draftContext.current !== context || !isCurrent(context)) return;
 		// Basic validation
 		if (!formData.name.trim()) return Alert.alert("Error", "Please enter a name for the recommendation");
 		if (!formData.description.trim()) return Alert.alert("Error", "Please enter a description");
@@ -348,8 +384,9 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 
 
 		// Get server photo IDs only (ignore local files for now)
-		const serverPhotoIds = photos.filter((p) => !p.startsWith("file://"));
-		const localFiles = photos.filter((p) => p.startsWith("file://"));
+		const currentPhotos = getPhotos();
+		const serverPhotoIds = currentPhotos.filter((p) => !p.startsWith("file://"));
+		const localFiles = currentPhotos.filter((p) => p.startsWith("file://"));
 
 		const buildPayload = (photoIds) => ({
 			latitude: formData.lat,
@@ -363,61 +400,51 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 			photoIds,
 		});
 
-		submitting.current = true;
+		const operation = { context };
+		submitting.current = operation;
 		setSaving(true);
 		setSaveError("");
 		try {
-			if (isEditMode) {
-				// For editing: include existing server photos
-				const updatedRec = await onSubmit({ ...buildPayload(serverPhotoIds), _id: editingRecommendationId }, true);
-				if (!updatedRec) throw new Error("The recommendation update was not confirmed. Please try again.");
-				// Upload any new local files
-				if (localFiles.length > 0) {
-					await uploadPendingPhotos(editingRecommendationId);
+			const existingId = isEditMode ? editingRecommendationId : createdRecommendation.current?._id;
+			let savedRecommendation;
+			if (existingId) {
+				savedRecommendation = await onSubmit({ ...buildPayload(serverPhotoIds), _id: existingId }, true);
+				if (!isCurrent(context)) return;
+				if (!savedRecommendation) throw new Error("The recommendation update was not confirmed. Please try again.");
+				if (createdRecommendation.current) {
+					createdRecommendation.current = { ...createdRecommendation.current, ...savedRecommendation, _id: existingId };
 				}
-
-				//  Trigger refresh after editing (same pattern as new recommendations)
-				if (typeof updatedRec?.refreshCallback === "function") {
-					updatedRec.refreshCallback();
-				}
-
-				Alert.alert("Success", "Recommendation updated!");
-				setVisible(false);
-				return updatedRec;
 			} else {
-				// For new: create recommendation first
-				const newRec = await onSubmit(buildPayload([]), false, false); // No immediate refresh
-
-				if (newRec?._id) {
-					// Upload photos if any
-					if (localFiles.length > 0) {
-						Alert.alert("Success", "Recommendation saved! Uploading photos...");
-						await uploadPendingPhotos(newRec._id);
-					} else {
-						Alert.alert("Success", "Recommendation saved!");
-					}
-
-					// Trigger refresh and close
-					if (typeof newRec.refreshCallback === "function") {
-						newRec.refreshCallback();
-					}
-					setVisible(false);
-					return newRec;
-				} else {
-					throw new Error("Failed to create recommendation");
-				}
+				savedRecommendation = await onSubmit(buildPayload([]), false, false);
+				if (!isCurrent(context)) return;
+				if (!savedRecommendation?._id) throw new Error("Failed to create recommendation");
+				createdRecommendation.current = savedRecommendation;
 			}
+
+			if (localFiles.length > 0) {
+				await uploadPendingPhotos(existingId || savedRecommendation._id);
+			}
+			if (!isCurrent(context)) return;
+			refreshSource(savedRecommendation);
+			Alert.alert("Success", isEditMode ? "Recommendation updated!" : "Recommendation saved!");
+			setVisible(false);
+			return savedRecommendation;
 		} catch (err) {
+			if (!isCurrent(context)) return;
 			console.error("Error saving recommendation:", err);
-			setSaveError(err?.message || "Could not save recommendation. Please try again.");
+			if (createdRecommendation.current) refreshSource(createdRecommendation.current);
+			const prefix = createdRecommendation.current ? "The recommendation already exists. " : "";
+			setSaveError(prefix + (err?.message || "Could not save recommendation. Please try again."));
 		} finally {
-			submitting.current = false;
-			setSaving(false);
+			if (submitting.current === operation) {
+				submitting.current = null;
+				if (isCurrent(context)) setSaving(false);
+			}
 		}
 	};
 
 	return (
-		<BottomModal visible={visible} onClose={handleClose}>
+		<BottomModal visible={visible && draftContext.current === renderContext} onClose={handleClose}>
 			<ModalHeader
 				title={isEditMode ? "Edit Recommendation" : "Add Recommendation"}
 				onClose={handleClose}

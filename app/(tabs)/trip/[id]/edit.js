@@ -6,13 +6,13 @@ import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import TransportIcon from "../../../../src/components/TransportIcon";
 
 // Chip component similar to your modals but smaller
-const Chip = ({ label, selected, onPress, children, compact = false }) => (
-	<Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected, compact && styles.chipCompact]}>
+const Chip = ({ label, selected, onPress, children, compact = false, disabled = false }) => (
+	<Pressable onPress={onPress} disabled={disabled} style={[styles.chip, selected && styles.chipSelected, compact && styles.chipCompact]}>
 		{children}
 		<Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
 	</Pressable>
@@ -35,7 +35,7 @@ const getVisibilityIcon = (value) => {
 export default function EditTripScreen() {
 	const router = useRouter();
 	const { id: tripId } = useLocalSearchParams();
-	const { user: currentUser } = useAuthStore();
+	const { user: currentUser, token } = useAuthStore();
 
 	const [trip, setTrip] = useState(null);
 	const [title, setTitle] = useState("");
@@ -62,23 +62,45 @@ export default function EditTripScreen() {
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState(null);
-	// console.log("EditTripScreen mounted with trip:", trip);
+	const saveInFlight = useRef(false);
+	const mounted = useRef(true);
+	const activeContext = useRef(null);
+	if (!activeContext.current || activeContext.current.tripId !== tripId || activeContext.current.userId !== currentUser?._id || activeContext.current.token !== token) {
+		activeContext.current = { tripId, userId: currentUser?._id, token };
+	}
+	const renderContext = activeContext.current;
+	const isCurrentContext = (context) => {
+		const session = useAuthStore.getState();
+		return mounted.current && activeContext.current === context && context.userId && context.token
+			&& session.user?._id === context.userId && session.token === context.token;
+	};
 
 	useEffect(() => {
-		if (tripId) {
+		mounted.current = true;
+		return () => { mounted.current = false; };
+	}, []);
+
+	useEffect(() => {
+		// A new trip/session owns a new draft; old async completions stay isolated.
+		saveInFlight.current = false;
+		setSaving(false);
+		setTrip(null);
+		if (tripId && isCurrentContext(renderContext)) {
 			fetchTripDetails();
 		} else {
-			setError("Trip ID is missing.");
+			setError(tripId ? "Sign in to edit this trip." : "Trip ID is missing.");
 			setLoading(false);
 		}
-	}, [tripId]);
+	}, [tripId, currentUser?._id, token]);
 
 	const fetchTripDetails = async () => {
+		const context = renderContext;
 		setLoading(true);
 		setError(null);
 		try {
-			const data = await getTripJsonById(tripId);
-			if (data.user?._id !== currentUser?._id) {
+			const data = await getTripJsonById(context.tripId);
+			if (!isCurrentContext(context)) return;
+			if (data.user?._id !== context.userId) {
 				setError("You are not authorized to edit this trip.");
 				Alert.alert("Unauthorized", "You cannot edit this trip.");
 				router.back();
@@ -92,22 +114,26 @@ export default function EditTripScreen() {
 			if (Array.isArray(data.photos)) setPhotos(data.photos);
 			// setPhotos(data.photos || []);
 		} catch (err) {
+			if (!isCurrentContext(context)) return;
 			console.error("Failed to fetch trip details for editing:", err);
 			setError(err.message || "Could not load trip details.");
 			Alert.alert("Error", "Could not load trip details for editing.");
 		} finally {
-			setLoading(false);
+			if (isCurrentContext(context)) setLoading(false);
 		}
 	};
 
 	const handleSaveChanges = async () => {
-		if (!trip) return;
+		const context = renderContext;
+		if (!trip || trip._id !== context.tripId || saveInFlight.current || uploading || !isCurrentContext(context)) return;
+		saveInFlight.current = true;
 		setSaving(true);
 		setError(null);
 
 		try {
 			// STEP 1: Upload any pending photos first
-			await uploadPendingPhotos(tripId);
+			await uploadPendingPhotos(context.tripId);
+			if (!isCurrentContext(context)) return;
 
 			// STEP 2: Get the final photo list (now all should be server IDs)
 			// const finalPhotoIds = photos.filter((id) => !id.startsWith("file://"));
@@ -120,17 +146,22 @@ export default function EditTripScreen() {
 				// photos: finalPhotoIds, // ← Add this line i think we dont need this for now server dont expect it
 			};
 
-			await updateTripJson(tripId, payload);
+			await updateTripJson(context.tripId, payload);
+			if (!isCurrentContext(context)) return;
 			Alert.alert("Success", "Trip updated successfully!");
-			router.replace(`/(tabs)/trip/${tripId}`); // Redirect to trip detail page after saving
+			router.replace(`/(tabs)/trip/${context.tripId}`); // Redirect to trip detail page after saving
 			// router.back();
 		} catch (err) {
+			if (!isCurrentContext(context)) return;
 			console.error("Failed to save trip changes:", err);
-			const errorMessage = err.message || "Could not save changes. Please try again.";
+			const errorMessage = err?.message || "Could not save changes. Please try again.";
 			setError(errorMessage);
 			Alert.alert("Error", errorMessage);
 		} finally {
-			setSaving(false);
+			if (isCurrentContext(context)) {
+				saveInFlight.current = false;
+				setSaving(false);
+			}
 		}
 	};
 
@@ -172,13 +203,14 @@ export default function EditTripScreen() {
 		>
 			<Text style={styles.header}>Edit Trip</Text>
 
-			{error && <Text style={styles.inlineErrorText}>{error}</Text>}
+			{error && <Text accessibilityRole="alert" style={styles.inlineErrorText}>{error}</Text>}
 
 			{/* Title */}
 			<Text style={styles.label}>Title</Text>
 			<TextInput
 				style={styles.input}
 				value={title}
+				editable={!saving && !uploading}
 				onChangeText={setTitle}
 				placeholder="Enter trip title"
 				placeholderTextColor={theme.colors.textMuted}
@@ -189,6 +221,7 @@ export default function EditTripScreen() {
 			<TextInput
 				style={[styles.input, styles.textArea]}
 				value={description}
+				editable={!saving && !uploading}
 				onChangeText={setDescription}
 				placeholder="Enter trip description"
 				placeholderTextColor={theme.colors.textMuted}
@@ -204,6 +237,7 @@ export default function EditTripScreen() {
 						label={option.label}
 						selected={option.value === visibility}
 						onPress={() => setVisibility(option.value)}
+						disabled={saving || uploading}
 						compact
 					>
 						<Feather
@@ -225,6 +259,7 @@ export default function EditTripScreen() {
 						label={option.label}
 						selected={option.value === transportMode}
 						onPress={() => setTransportMode(option.value)}
+						disabled={saving || uploading}
 						compact
 					>
 						<TransportIcon
@@ -243,17 +278,17 @@ export default function EditTripScreen() {
 					<TripPhotoThumb
 						key={id}
 						photoId={id}
-						onPress={() =>
+						onPress={() => !saveInFlight.current && !uploading &&
 							Alert.alert("Remove photo?", "", [
 								{ text: "Cancel", style: "cancel" },
-								{ text: "Delete", style: "destructive", onPress: () => removePhoto(id) },
+								{ text: "Delete", style: "destructive", onPress: () => { if (!saveInFlight.current) removePhoto(id); } },
 							])
 						}
 					/>
 				))}
 				{/* add-button */}
 				{photos.length < 5 && (
-					<Pressable onPress={addPhotos} style={[styles.addBox, uploading && { opacity: 0.5 }]} disabled={uploading}>
+					<Pressable onPress={addPhotos} style={[styles.addBox, (saving || uploading) && { opacity: 0.5 }]} disabled={saving || uploading}>
 						<Feather name="plus" size={24} color={theme.colors.textMuted} />
 					</Pressable>
 				)}
@@ -261,6 +296,7 @@ export default function EditTripScreen() {
 
 			{/* Buttons */}
 			<Pressable
+				testID="trip-edit-save"
 				style={({ pressed }) => [
 					styles.buttonPrimary,
 					pressed && styles.buttonPressed,

@@ -36,10 +36,11 @@ test('route-map modal fills remaining space below its header without overflowing
 
 function recommendationForm(onSubmit) {
   const alerts=[];
+  const session={user:{_id:"fixture-owner"},token:"fixture-token"};const useAuthStore=Object.assign(()=>session,{getState:()=>session});
   const form=fixture('src/components/modals/AddRecommendationModal.js','AddRecommendationModal',{onSubmit},{
-    ...native,theme,console:{log(){},error(){}},StyleSheet:styles,BottomModal:'BottomModal',ModalHeader:'ModalHeader',TripPhotoThumb:'TripPhotoThumb',Ionicons:'Ionicons',MapView:'MapView',Marker:'Marker',StarRating:'StarRating',
+    ...native,theme,useAuthStore,console:{log(){},error(){}},StyleSheet:styles,BottomModal:'BottomModal',ModalHeader:'ModalHeader',TripPhotoThumb:'TripPhotoThumb',Ionicons:'Ionicons',MapView:'MapView',Marker:'Marker',StarRating:'StarRating',
     RECOMMENDATION_CATEGORIES:[{value:'nature',label:'Nature'}],RECOMMENDATION_TAGS:[{value:'quiet',label:'Quiet'}],
-    Alert:{alert:(...args)=>alerts.push(args)},usePhotoManager:()=>({photos:[],uploading:false,setPhotos(){},uploadPendingPhotos:async()=>{}}),
+    Alert:{alert:(...args)=>alerts.push(args)},usePhotoManager:()=>({photos:[],getPhotos:()=>[],uploading:false,setPhotos(){},uploadPendingPhotos:async()=>{}}),
   });
   form.render();return {...form,alerts};
 }
