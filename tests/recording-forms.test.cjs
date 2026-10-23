@@ -101,7 +101,7 @@ function poiHandlers({status='recording',tripId='fixture-trip',point={lat:0,lon:
   return {...handlers,session,saved,notices,pendingPoi,lastPoint,opened:()=>opened};
 }
 test('recording screen wires POI persistence and captures point before the user types',async()=>{
-  assert.match(read('app/(tabs)/record/index.js'),/<AddPoiModal ref=\{poiModalRef\} onSubmit=\{handlePoiSubmit\}/);
+  assert.match(read('app/(tabs)/record/index.js'),/<AddPoiModal[^>]*ref=\{poiModalRef\} onSubmit=\{handlePoiSubmit\}/);
   for(const status of ['recording','paused']) {
     const form=poiHandlers({status});form.handleAddPoi();assert.equal(form.opened(),1);
     form.lastPoint.current={lat:1,lon:1};await form.handlePoiSubmit({note:'Fixture note'});
@@ -120,7 +120,7 @@ test('POI refuses absent GPS/inactive trip and stale or unowned sessions without
 });
 test('existing POI DAO appends note/point and upload payload includes it without altering track data',async()=>{
   let sql,values;
-  const dao=load('src/db/tripDao.js','({addPoi,createTripPayload})',{openDatabase:async()=>({runAsync:async(query,params)=>{sql=query;values=params;}})});
+  const dao=load('src/db/tripDao.js','({addPoi,createTripPayload})',{...noteTools,openDatabase:async()=>({runAsync:async(query,params)=>{sql=query;values=params;}})});
   await dao.addPoi('fixture-trip',{lat:0,lon:0,note:'Fixture'});
   assert.match(sql,/INSERT INTO pois/);assert.equal(values[0],'fixture-trip');assert.equal(values[4],'Fixture');
   const segments=[{track:[{lat:1,lon:1}]}];const payload=dao.createTripPayload({},segments,[{lat:values[1],lon:values[2],timestamp:values[3],note:values[4]}]);

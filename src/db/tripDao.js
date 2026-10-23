@@ -1,6 +1,7 @@
 import uuid from "react-native-uuid";
 import { openDatabase } from "./openDatabase";
 import { getActiveTrip } from "../utils/activeTrip";
+import { validatePoiNote } from "../utils/poiNote";
 
 /**
  * Creates the standardized payload structure for backend API
@@ -104,6 +105,15 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId) 
 	// ---- pois and recommendations -------------------------------------------
 	const pois = await db.getAllAsync(`SELECT * FROM pois WHERE trip_id = ? ORDER BY timestamp ASC`, [tripId]);
 
+	for (const poi of pois) {
+		try {
+			validatePoiNote(poi.note ?? "");
+		} catch (error) {
+			// Return the local row identity so the owner can explicitly repair it.
+			// Never truncate text, discard the POI, or send a doomed whole-trip request.
+			throw Object.assign(error, { code: "POI_NOTE_NEEDS_EDIT", poiId: poi.id });
+		}
+	}
 	const recommendations = await db.getAllAsync(`SELECT * FROM recommendations WHERE trip_id = ?`, [tripId]);
 
 	return createTripPayload(trip, segments, pois, recommendations, userSettings);
@@ -207,8 +217,9 @@ export const insertTrackPoint = async (tripId, segmentId, { lat, lon, timestamp,
 	);
 };
 
-// ─────── POIs & recommendations (unchanged) ───────────────────────────────
+// ─────── POIs & recommendations ───────────────────────────────
 export const addPoi = async (tripId, { lat, lon, note }) => {
+	note = validatePoiNote(note);
 	const db = await openDatabase();
 	const timestamp = new Date().toISOString();
 	await db.runAsync(
@@ -217,6 +228,21 @@ export const addPoi = async (tripId, { lat, lon, note }) => {
 		[tripId, lat, lon, timestamp, note]
 	);
 };
+export const getPoiForEdit = async (tripId, poiId, userId) => {
+	const db = await openDatabase();
+	const trip = await getOwnedTrip(db, tripId, userId);
+	await requireStoppedTrip(trip);
+	const [poi] = await db.getAllAsync(`SELECT * FROM pois WHERE id = ? AND trip_id = ?`, [poiId, tripId]);
+	if (!poi) throw new Error("POI not found for this trip");
+	return poi;
+};
+export const updatePoiNote = async (tripId, poiId, note, userId) => {
+	note = validatePoiNote(note);
+	const db = await openDatabase();
+	await getPoiForEdit(tripId, poiId, userId);
+	await db.runAsync(`UPDATE pois SET note = ? WHERE id = ? AND trip_id = ?`, [note, poiId, tripId]);
+};
+
 export const addRecommendation = async (
 	tripId,
 	{ latitude, longitude, primaryCategory, attributeTags, rating, name, description }

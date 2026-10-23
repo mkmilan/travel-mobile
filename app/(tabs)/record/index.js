@@ -13,6 +13,8 @@ import {
 	finishTrip,
 	getPendingTrips,
 	getLocalTrip,
+	getPoiForEdit,
+	updatePoiNote,
 	tripMetadataDefaults,
 	markTripUploaded,
 	ownsLocalTrip,
@@ -66,6 +68,8 @@ export default function RecordScreen() {
 	const uploadRequest = useRef(false);
 	const lifecycleRequest = useRef(false);
 	const watcherRequest = useRef(0);
+	const poiRepairModalRef = useRef(null);
+	const pendingPoiRepair = useRef(null);
 
 	const user = useAuthStore((s) => s.user);
 
@@ -74,6 +78,7 @@ export default function RecordScreen() {
 		let cancelled = false;
 		stopRequest.current = null;
 		metadataDraft.current = null;
+		pendingPoiRepair.current = null;
 		setIsResolvingLocation(false);
 		setPending([]);
 		setStatus("idle");
@@ -478,9 +483,20 @@ export default function RecordScreen() {
 			if (tid === tripId) resetState();
 		} catch (err) {
 			if (!isCurrent()) return;
-			if (err.code === "TRIP_METADATA_REQUIRED") {
-				await handleEditDetails(tid);
-				toast({ type: "info", title: "Review trip details before uploading" });
+			if (["TRIP_METADATA_REQUIRED", "POI_NOTE_NEEDS_EDIT"].includes(err.code)) {
+				try {
+					if (err.code === "TRIP_METADATA_REQUIRED") {
+						await handleEditDetails(tid);
+						if (isCurrent()) toast({ type: "info", title: "Review trip details before uploading" });
+					} else {
+						const poi = await getPoiForEdit(tid, err.poiId, session.user._id);
+						if (!isCurrent()) return;
+						pendingPoiRepair.current = { tripId: tid, poiId: poi.id, userId: session.user._id, token: session.token };
+						poiRepairModalRef.current?.open(poi.note || "", { title: "Edit POI note before upload" });
+					}
+				} catch (reviewError) {
+					if (isCurrent()) toast({ type: "danger", title: "Could not open trip details", msg: reviewError.message });
+				}
 				return;
 			}
 			console.error("Upload failed:", err);
@@ -532,6 +548,17 @@ export default function RecordScreen() {
 		}
 		await addPoi(context.tripId, { lat: context.lat, lon: context.lon, note });
 		toast({ type: "success", title: "POI saved" });
+	};
+
+	const handlePoiRepairSubmit = async ({ note }) => {
+		const context = pendingPoiRepair.current;
+		const isCurrent = () => context && useAuthStore.getState().user?._id === context.userId
+			&& useAuthStore.getState().token === context.token;
+		if (!isCurrent()) throw new Error("Account changed. Reopen this trip's POI note.");
+		await getPoiForEdit(context.tripId, context.poiId, context.userId);
+		if (!isCurrent()) throw new Error("Account changed. Reopen this trip's POI note.");
+		await updatePoiNote(context.tripId, context.poiId, note, context.userId);
+		if (isCurrent()) toast({ type: "success", title: "POI note updated", msg: "Your trip is kept on this device. Tap Upload to try again." });
 	};
 
 	// Handle recommendation submission
@@ -674,7 +701,8 @@ export default function RecordScreen() {
 			)}
 
 			<TripSaveModal key={user?._id || "signed-out"} ref={sheetRef} onConfirm={handleSaveMeta} />
-			<AddPoiModal ref={poiModalRef} onSubmit={handlePoiSubmit} />
+			<AddPoiModal key={`add-poi-${user?._id || "signed-out"}`} ref={poiModalRef} onSubmit={handlePoiSubmit} />
+			<AddPoiModal key={`repair-poi-${user?._id || "signed-out"}`} ref={poiRepairModalRef} onSubmit={handlePoiRepairSubmit} />
 			<AddRecommendationModal
 				ref={addRecommendationModalRef}
 				onSubmit={handleRecommendationSubmit}
