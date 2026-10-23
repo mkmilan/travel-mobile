@@ -61,6 +61,9 @@ export const runMigrations = async () => {
 		`ALTER TABLE trips ADD COLUMN end_time TEXT;`, // Add missing end_time
 		// NULL preserves legacy rows; only an explicit Save confirms new metadata.
 		`ALTER TABLE trips ADD COLUMN metadata_confirmed INTEGER;`,
+		`ALTER TABLE trips ADD COLUMN upload_payload TEXT;`,
+		`ALTER TABLE trips ADD COLUMN upload_server_id TEXT;`,
+		`ALTER TABLE trips ADD COLUMN upload_result TEXT;`,
 
 		// Recommendations table additions - add name and description columns
 		`ALTER TABLE recommendations ADD COLUMN name TEXT;`,

@@ -72,11 +72,14 @@ const createTripPayload = (trip, segments, pois = [], recommendations = [], user
 };
 
 // ─────── helpers for upload ───────────────────────────────────────────────
-export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId) => {
+export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId, reliableUpload = false) => {
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
 	await requireStoppedTrip(trip);
 	if (!hasConfirmedTripMetadata(trip)) throw metadataRequired();
+	// Freeze the first request before network dispatch. Retries across restarts
+	// must use the same identity AND contents, even after ambiguous responses.
+	if (reliableUpload && trip.upload_payload) return JSON.parse(trip.upload_payload);
 
 	// ---- points → segments --------------------------------------------------
 	const rows = await db.getAllAsync(`SELECT * FROM track_points WHERE trip_id = ? ORDER BY timestamp ASC`, [tripId]);
@@ -116,7 +119,16 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId) 
 	}
 	const recommendations = await db.getAllAsync(`SELECT * FROM recommendations WHERE trip_id = ?`, [tripId]);
 
-	return createTripPayload(trip, segments, pois, recommendations, userSettings);
+	const payload = createTripPayload(trip, segments, pois, recommendations, userSettings);
+	if (!reliableUpload) return payload;
+	payload.uploadProtocol = 1;
+	payload.uploadId = trip.id;
+	payload.recommendations = payload.recommendations.map((rec, index) => ({ ...rec, uploadId: String(recommendations[index].id) }));
+	await db.runAsync(`UPDATE trips SET upload_payload = ? WHERE id = ? AND user_id = ? AND upload_payload IS NULL`, [JSON.stringify(payload), tripId, userId]);
+	// A concurrent packaging attempt must use the first durable snapshot.
+	const frozen = await getOwnedTrip(db, tripId, userId);
+	if (!frozen.upload_payload) throw new Error("Could not preserve upload details. Your recording is still on this phone.");
+	return JSON.parse(frozen.upload_payload);
 };
 
 // Fail closed for legacy unowned records; never claim them for the next login.
@@ -179,6 +191,7 @@ export const finishTrip = async (
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
 	await requireStoppedTrip(trip);
+	if (trip.upload_payload) throw new Error("Upload already started. Retry the saved upload, then edit the online trip.");
 	if (!TRIP_MODES.includes(defaultTransportMode) || !TRIP_VISIBILITIES.includes(defaultTripVisibility)) throw metadataRequired();
 	await db.runAsync(
 		`UPDATE trips
@@ -233,6 +246,7 @@ export const getPoiForEdit = async (tripId, poiId, userId) => {
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
 	await requireStoppedTrip(trip);
+	if (trip.upload_payload) throw new Error("Upload already started. Retry the saved upload before editing.");
 	const [poi] = await db.getAllAsync(`SELECT * FROM pois WHERE id = ? AND trip_id = ?`, [poiId, tripId]);
 	if (!poi) throw new Error("POI not found for this trip");
 	return poi;
@@ -273,12 +287,29 @@ export const getPendingTrips = async (userId) => {
   `, [userId]);
 };
 
-export const markTripUploaded = async (tripId, userId) => {
+export const markTripUploaded = async (tripId, userId, result, sentPayload) => {
 	requireUserId(userId);
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
 	await requireStoppedTrip(trip);
 	if (!hasConfirmedTripMetadata(trip)) throw metadataRequired();
+	if (trip.upload_payload && sentPayload?.uploadProtocol !== 1) throw new Error("A confirmed upload receipt is required.");
+	if (sentPayload?.uploadProtocol === 1) {
+		const expected = new Set(sentPayload.recommendations.map(rec => rec.uploadId));
+		const outcomes = result?.recommendationsOutcome;
+		const validId = value => typeof value === "string" && /^[a-f0-9]{24}$/i.test(value);
+		if (result?.uploadProtocol !== 1 || result.uploadId !== sentPayload.uploadId
+			|| !validId(result?.trip?._id) || (trip.upload_server_id && trip.upload_server_id !== result.trip._id) || !Array.isArray(outcomes)
+			|| outcomes.length !== expected.size || new Set(outcomes.map(item => item.uploadId)).size !== expected.size
+			|| outcomes.some(item => !expected.has(item.uploadId) || !["created", "failed", "skipped"].includes(item.status)
+				|| (item.status === "created" && !validId(item.id)))) {
+			throw new Error("Upload receipt was not confirmed. Keep this recording and retry; it will use the same upload identity.");
+		}
+		await db.runAsync(`UPDATE trips SET upload_server_id = ?, upload_result = ? WHERE id = ? AND user_id = ?`, [result.trip._id, JSON.stringify(result), tripId, userId]);
+		if (result.uploadComplete !== true || outcomes.some(item => item.status !== "created")) {
+			throw Object.assign(new Error("The trip is saved online, but some recommendations are not. Keep this recording and tap Upload again to retry only missing recommendations."), { code: "TRIP_UPLOAD_INCOMPLETE" });
+		}
+	}
 	await db.runAsync(`UPDATE trips SET status = 'uploaded' WHERE id = ? AND user_id = ? AND status = 'stopped'`, [tripId, userId]);
 };
 
@@ -290,4 +321,15 @@ export const deleteTrip = async (tripId, userId) => {
 	await db.runAsync(`DELETE FROM track_points WHERE trip_id = ?`, [tripId]);
 	await db.runAsync(`DELETE FROM pois WHERE trip_id = ?`, [tripId]);
 	await db.runAsync(`DELETE FROM recommendations WHERE trip_id = ?`, [tripId]);
+};
+
+// Only an explicit matching pre-insert rejection may unlock the first snapshot.
+// A timeout, lost response or partial receipt must never take this path.
+export const releaseRejectedTripUpload = async (tripId, userId, payload, rejection) => {
+	if (rejection?.uploadRejected !== true || rejection.uploadId !== payload?.uploadId) return false;
+	const db = await openDatabase();
+	const trip = await getOwnedTrip(db, tripId, userId);
+	if (trip.upload_server_id || trip.status !== "stopped" || trip.upload_payload !== JSON.stringify(payload)) return false;
+	await db.runAsync(`UPDATE trips SET upload_payload = NULL WHERE id = ? AND user_id = ? AND upload_server_id IS NULL AND upload_payload = ?`, [tripId, userId, trip.upload_payload]);
+	return true;
 };

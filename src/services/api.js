@@ -114,7 +114,7 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 
 	if (!res.ok) {
 		const msg = isJson ? data.message || JSON.stringify(data) : data;
-		throw new Error(msg || `Request failed (${res.status})`);
+		throw Object.assign(new Error(msg || `Request failed (${res.status})`), { status: res.status, data: isJson ? data : null });
 	}
 
 	return data;
@@ -223,6 +223,14 @@ export const updateUserSettings = async (csrf = true, payload) => {
 export const uploadTripJson = async (payload, csrf = true, expectedUserId) => {
 	// console.log("[api] uploadTripJson payload", payload);
 
+	if (payload?.uploadProtocol === 1) {
+		try {
+			return await apiFetch(`/v2/trips/recording-upload`, { method: "POST", csrf, expectedUserId, body: JSON.stringify(payload) });
+		} catch (error) {
+			if (error.status === 404) throw new Error("Reliable uploads require the server update. Your recording is still on this phone.");
+			throw error;
+		}
+	}
 	return await apiFetch(`/v2/trips/json`, {
 		method: "POST",
 		csrf,

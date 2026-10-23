@@ -17,6 +17,7 @@ import {
 	updatePoiNote,
 	tripMetadataDefaults,
 	markTripUploaded,
+	releaseRejectedTripUpload,
 	ownsLocalTrip,
 	startSegment,
 	startTrip,
@@ -556,14 +557,15 @@ export default function RecordScreen() {
 		uploadRequest.current = true;
 		setIsUploading(true);
 		setUploadingTripId(tid);
+		let payload;
 		try {
 			toast({ type: "info", title: "Packaging trip…" });
 			// const payload = await buildTripJsonForUpload(tid);
-			const payload = await buildTripJsonForUpload(tid, user?.settings || {}, user?._id);
+			payload = await buildTripJsonForUpload(tid, user?.settings || {}, user?._id, true);
 
 			if (!isCurrent()) throw new Error("Account changed; upload cancelled");
-			await uploadTripJson(payload, true, user?._id);
-			await markTripUploaded(tid, user?._id); // keeps it for history but not in pending
+			const result = await uploadTripJson(payload, true, user?._id);
+			await markTripUploaded(tid, user?._id, result, payload); // keeps it for history but not in pending
 			if (!isCurrent()) return;
 			toast({ type: "success", title: "Uploaded!" });
 
@@ -571,6 +573,10 @@ export default function RecordScreen() {
 			if (tid === tripId) resetState();
 		} catch (err) {
 			if (!isCurrent()) return;
+			if (err.data?.uploadRejected === true && payload) {
+				try { await releaseRejectedTripUpload(tid, session.user._id, payload, err.data); } catch (_) { /* Keep the original draft if local storage fails. */ }
+				if (!isCurrent()) return;
+			}
 			if (["TRIP_METADATA_REQUIRED", "POI_NOTE_NEEDS_EDIT"].includes(err.code)) {
 				try {
 					if (err.code === "TRIP_METADATA_REQUIRED") {
@@ -588,7 +594,7 @@ export default function RecordScreen() {
 				return;
 			}
 			console.error("Upload failed:", err);
-			toast({ type: "danger", title: "Upload failed", msg: err.message });
+			toast({ type: "danger", title: err.code === "TRIP_UPLOAD_INCOMPLETE" ? "Upload incomplete" : "Upload not confirmed", msg: err.message });
 		} finally {
 			uploadRequest.current = false;
 			setIsUploading(false);
