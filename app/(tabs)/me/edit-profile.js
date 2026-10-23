@@ -2,12 +2,12 @@ import FormField from "@/src/components/form/FormField";
 import Avatar from "@/src/components/ui/Avatar";
 import useProfileContext from "@/src/hooks/useProfileContext";
 import useRequireAuth from "@/src/hooks/useRequireAuth";
-import { updateUserById, uploadProfilePhoto } from "@/src/services/api";
+import { getUserById, updateUserById, uploadProfilePhoto } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function EditProfileScreen() {
@@ -23,7 +23,8 @@ export default function EditProfileScreen() {
 	if (!draftSession.current) draftSession.current = authStore.captureSession();
 	const session = draftSession.current;
 	const pending = useRef(null);
-	// console.log("EditProfileScreen user:", user);
+	const dirtyFields = useRef(new Set());
+	const profileReady = useRef(false);
 
 	const [username, setUsername] = useState(user?.username || "");
 	const [bio, setBio] = useState(user?.bio || "");
@@ -32,13 +33,57 @@ export default function EditProfileScreen() {
 	const [avatarUploading, setAvatarUploading] = useState(false);
 	const [city, setCity] = useState(user?.city || "");
 	const [country, setCountry] = useState(user?.country || "");
+	const [profileStatus, setProfileStatus] = useState("loading");
+	const [profileError, setProfileError] = useState("");
+	const [loadAttempt, setLoadAttempt] = useState(0);
+
+	// Login data is deliberately smaller than the full profile. Never allow
+	// its missing optional fields to become destructive blank-save defaults.
+	useEffect(() => {
+		profileReady.current = false;
+		if (!ready || !session || !context.isCurrent() || !authStore.isSessionCurrent(session)) return;
+		let active = true;
+		const isCurrent = () => active && context.isCurrent()
+			&& useAuthStore.getState().isSessionCurrent(session);
+		setProfileStatus("loading");
+		setProfileError("");
+		(async () => {
+			try {
+				const profile = await getUserById(session.userId);
+				if (!isCurrent()) return;
+				if (!profile || String(profile._id) !== String(session.userId)) {
+					throw new Error("Could not load your profile. Please retry.");
+				}
+				// A slow load/retry must not replace text already typed by the user.
+				for (const [field, setter] of Object.entries({
+					username: setUsername, bio: setBio, city: setCity,
+					country: setCountry, profilePictureUrl: setAvatarId,
+				})) {
+					if (!dirtyFields.current.has(field)) setter(profile[field] ?? "");
+				}
+				profileReady.current = true;
+				setProfileStatus("ready");
+			} catch (error) {
+				if (!isCurrent()) return;
+				setProfileError(error.message || "Could not load your profile.");
+				setProfileStatus("error");
+			}
+		})();
+		return () => { active = false; profileReady.current = false; };
+	}, [ready, session, context, loadAttempt]);
+
+	const changeField = (field, setter) => (value) => {
+		dirtyFields.current.add(field);
+		setter(value);
+	};
+	const profileLoaded = profileStatus === "ready";
 
 	if (!ready || !user || !context.isCurrent() || !authStore.isSessionCurrent(session)) return <View style={styles.blank} />;
 
 	// One mutation at a time, including the native picker (before React can
 	// rerender disabled buttons). Old-render handlers keep their original login.
 	const begin = () => {
-		if (pending.current || !context.isCurrent() || !authStore.isSessionCurrent(session)) return null;
+		if (!profileLoaded || !profileReady.current || pending.current || !context.isCurrent() || !authStore.isSessionCurrent(session)) return null;
 		const operation = { session };
 		operation.isCurrent = () => pending.current === operation && context.isCurrent()
 			&& useAuthStore.getState().isSessionCurrent(operation.session);
@@ -91,8 +136,22 @@ export default function EditProfileScreen() {
 	/* ---------- render ---------- */
 	return (
 		<ScrollView style={styles.container} contentContainerStyle={{ padding: theme.space.md }}>
+			{profileStatus === "loading" && (
+				<View accessibilityLiveRegion="polite">
+					<ActivityIndicator color={theme.colors.primary} />
+					<Text style={styles.loadMessage}>Loading your profile…</Text>
+				</View>
+			)}
+			{profileStatus === "error" && (
+				<View accessibilityLiveRegion="polite">
+					<Text style={styles.loadMessage}>{profileError} Your changes have not been saved.</Text>
+					<TouchableOpacity accessibilityRole="button" onPress={() => setLoadAttempt(value => value + 1)} style={styles.retry}>
+						<Text style={styles.buttonTxt}>Retry loading profile</Text>
+					</TouchableOpacity>
+				</View>
+			)}
 			{/* avatar picker */}
-			<TouchableOpacity style={styles.avatarWrapper} onPress={pickAvatar} disabled={avatarUploading || saving}>
+			<TouchableOpacity style={styles.avatarWrapper} onPress={pickAvatar} disabled={!profileLoaded || avatarUploading || saving}>
 				<Avatar photoId={avatarId} size={120} />
 				{avatarUploading && (
 					<ActivityIndicator style={StyleSheet.absoluteFill} size="large" color={theme.colors.primary} />
@@ -101,12 +160,12 @@ export default function EditProfileScreen() {
 			</TouchableOpacity>
 
 			{/* form fields */}
-			<FormField label="Username" value={username} onChange={setUsername} />
-			<FormField label="City" value={city} onChange={setCity} />
-			<FormField label="Country" value={country} onChange={setCountry} />
-			<FormField label="Bio" value={bio} onChange={setBio} multiline />
+			<FormField label="Username" value={username} onChange={changeField("username", setUsername)} />
+			<FormField label="City" value={city} onChange={changeField("city", setCity)} />
+			<FormField label="Country" value={country} onChange={changeField("country", setCountry)} />
+			<FormField label="Bio" value={bio} onChange={changeField("bio", setBio)} multiline />
 
-			<TouchableOpacity style={styles.button} onPress={save} disabled={saving || avatarUploading}>
+			<TouchableOpacity style={[styles.button, !profileLoaded && styles.disabled]} onPress={save} disabled={!profileLoaded || saving || avatarUploading}>
 				<Text style={styles.buttonTxt}>{saving ? "Saving…" : "Save Changes"}</Text>
 			</TouchableOpacity>
 		</ScrollView>
@@ -118,6 +177,9 @@ const styles = StyleSheet.create({
 	blank: { flex: 1, backgroundColor: theme.colors.background },
 
 	container: { flex: 1, backgroundColor: theme.colors.background },
+	loadMessage: { color: theme.colors.text, marginVertical: theme.space.sm },
+	retry: { backgroundColor: theme.colors.primary, padding: theme.space.md, borderRadius: theme.radius.md, alignItems: "center", minHeight: 48 },
+	disabled: { opacity: 0.5 },
 
 	avatarWrapper: {
 		alignItems: "center",

@@ -33,10 +33,10 @@ function authFixture() {
   return {useAuthStore,SecureStore,storage,writes,state:()=>state,holdWrites:fn=>{beforeWrite=fn;}};
 }
 
-async function screenFixture(kind) {
+async function screenFixture(kind, { hydrate = true } = {}) {
   const auth=authFixture();await auth.state().login(account('A'));
   const host=hooksFixture(), replies=[], requests=[], routes=[], alerts=[], pickers=[];
-  const api=load('src/services/api.js','({updateUserById,updateUserSettings,uploadProfilePhoto})',{
+  const api=load('src/services/api.js','({getUserById,updateUserById,updateUserSettings,uploadProfilePhoto})',{
     Constants:{expoConfig:{extra:{API_URL:'https://fixture.invalid/api',APP_ENV:'test'}}},Updates:{},console:{log(){},error(){},warn(){}},
     require:()=>({useAuthStore:auth.useAuthStore}),SecureStore:auth.SecureStore,getCsrfToken:async()=> 'fixture-csrf',
     createPhotoFormData:async()=>({fixture:'multipart'}),
@@ -52,6 +52,11 @@ async function screenFixture(kind) {
   const render=()=>host.render(()=>screen.render());
   const save=()=>nodes(render(),'TouchableOpacity').at(-1).props.onPress();
   const avatar=()=>nodes(render(),'TouchableOpacity')[0].props.onPress();
+  if (kind === 'profile' && hydrate) {
+    render(); await tick();
+    replies[0].resolve(response({...account('A'), bio:'Original bio', city:'Saved city', country:'Saved country'}));
+    await tick(); render(); requests.length=0; replies.length=0;
+  }
   return {...auth,render,save,avatar,requests,replies,routes,alerts,pickers,unmount:()=>host.unmount()};
 }
 async function interrupt(f,kind) {
@@ -174,4 +179,71 @@ test('queued profile completion checks unmount before writing and failed persist
   write.resolve();await Promise.all([first,work]);assert.equal(persistedUser(f).username,'User A');assert.deepEqual(f.routes,[]);
   f.holdWrites(async()=>{throw Error('Fixture storage unavailable');});await assert.rejects(f.state().updateUser({username:'Failed'}),/storage unavailable/);
   f.holdWrites(async()=>{});await f.state().login(account('B'));assert.deepEqual(persistedUser(f),account('B'));
+});
+
+
+test('profile hydration loads authoritative location before allowing an unchanged save', async()=>{
+  const f=await screenFixture('profile',{hydrate:false});
+  const initial=f.render(); const oldSave=nodes(initial,'TouchableOpacity').at(-1).props.onPress;
+  assert.equal(nodes(initial,'TouchableOpacity').at(-1).props.disabled,true);
+  await oldSave(); await f.avatar(); await tick();
+  assert.equal(f.requests.length,1); assert.equal(f.requests[0].config.method,'GET');
+  assert.equal(f.pickers.length,0);
+  f.replies[0].resolve(response(profileReply())); await tick();
+  const loaded=f.render();
+  assert.equal(nodes(loaded,'FormField').find(n=>n.props.label==='City').props.value,'City');
+  assert.equal(nodes(loaded,'FormField').find(n=>n.props.label==='Country').props.value,'Country');
+  await oldSave(); assert.equal(f.requests.length,1,'old blank-render handler stays blocked');
+  const save=f.save(); await tick();
+  const payload=JSON.parse(f.requests[1].config.body);
+  assert.equal(payload.city,'City'); assert.equal(payload.country,'Country');
+  f.replies[1].resolve(response(profileReply())); await save;
+});
+
+test('profile hydration failure blocks save and retry preserves text already typed, including intentional clear', async()=>{
+  const f=await screenFixture('profile',{hydrate:false}); f.render(); await tick();
+  nodes(f.render(),'FormField').find(n=>n.props.label==='City').props.onChange('My draft');
+  f.replies[0].reject(Error('Offline')); await tick();
+  let tree=f.render(); assert.equal(nodes(tree,'TouchableOpacity').at(-1).props.disabled,true);
+  await f.save(); assert.equal(f.requests.length,1);
+  nodes(tree,'TouchableOpacity').find(n=>nodes(n,'Text').some(t=>t.children.includes('Retry loading profile'))).props.onPress();
+  tree=f.render(); await tick();
+  nodes(tree,'FormField').find(n=>n.props.label==='Country').props.onChange('');
+  f.replies[1].resolve(response(profileReply())); await tick();
+  tree=f.render(); const fields=nodes(tree,'FormField');
+  assert.equal(fields.find(n=>n.props.label==='City').props.value,'My draft');
+  assert.equal(fields.find(n=>n.props.label==='Country').props.value,'');
+  const save=f.save(); await tick();
+  const payload=JSON.parse(f.requests[2].config.body);
+  assert.equal(payload.city,'My draft'); assert.equal(payload.country,'');
+  f.replies[2].resolve(response(profileReply())); await save;
+});
+
+test('profile hydration rejects mismatched profile identity and does not enable saving', async()=>{
+  const f=await screenFixture('profile',{hydrate:false}); f.render(); await tick();
+  f.replies[0].resolve(response({...profileReply(),_id:'B'})); await tick();
+  const tree=f.render(); assert.equal(nodes(tree,'TouchableOpacity').at(-1).props.disabled,true);
+  await f.save(); assert.equal(f.requests.length,1); assert.deepEqual(f.routes,[]);
+});
+
+test('profile hydration ignores old success and failure after account switch, same-user relogin or unmount', async()=>{
+  for(const change of ['account','same-login','unmount']) for(const fail of [false,true]) {
+    const f=await screenFixture('profile',{hydrate:false}); const tree=f.render(); await tick();
+    const save=nodes(tree,'TouchableOpacity').at(-1).props.onPress;
+    await interrupt(f,change); const before=f.storage.get('user-data'),writes=f.writes.length;
+    if(fail)f.replies[0].reject(Error('Old GET'));else f.replies[0].resolve(response(profileReply()));
+    await tick(); await save();
+    assert.equal(f.requests.length,1); assert.equal(f.storage.get('user-data'),before); assert.equal(f.writes.length,writes);
+    assert.deepEqual(f.routes,[]); assert.deepEqual(f.alerts,[]);
+    if(change!=='unmount')assert.equal(nodes(f.render(),'FormField').length,0);
+  }
+});
+
+test('profile hydration supports absent optional fields only after authoritative profile loads', async()=>{
+  const f=await screenFixture('profile',{hydrate:false}); f.render(); await tick();
+  f.replies[0].resolve(response(account('A'))); await tick();
+  assert.equal(nodes(f.render(),'TouchableOpacity').at(-1).props.disabled,false);
+  const work=f.save(); await tick(); const payload=JSON.parse(f.requests[1].config.body);
+  assert.equal(payload.city,''); assert.equal(payload.country,'');
+  f.replies[1].resolve(response(profileReply())); await work;
 });
