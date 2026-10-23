@@ -1,160 +1,64 @@
 import { followUser, getUserFollowers, getUserFollowing, unfollowUser } from "@/src/services/api";
-import { useAuthStore } from "@/src/stores/auth";
+import useProfileContext from "@/src/hooks/useProfileContext";
+import { createPagedList } from "@/src/utils/pagedList";
+import { createFollowActions, followsUser } from "@/src/utils/followActions";
 import { theme } from "@/src/theme";
-import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from "react-native";
+import ProfileListStatus from "../ProfileListStatus";
 import Avatar from "../ui/Avatar";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
 
-export default function UserListModal({ visible, stat, userId, onClose, onStatsUpdate }) {
-	const [loading, setLoading] = useState(false);
-	const [users, setUsers] = useState([]);
-	const [page, setPage] = useState(1);
-	const [hasNext, setHasNext] = useState(true);
-	const [refreshing, setRefreshing] = useState(false);
+export default function UserListModal(props) {
+	// Unmount on close: reopening owns a new request/action lifetime.
+	return props.visible && ["Followers", "Following"].includes(props.stat) ? <UserListContent {...props} /> : null;
+}
 
-	const authUser = useAuthStore((s) => s.user);
+function UserListContent({ stat, userId, onClose, onStatsUpdate }) {
+	const context = useProfileContext(`${userId}:${stat}`);
+	const list = useMemo(() => createPagedList((page) => {
+		if (!context.isCurrent()) throw new Error("Profile changed; request cancelled");
+		return (stat === "Followers" ? getUserFollowers : getUserFollowing)(userId, page, 15);
+	}), [context, stat, userId]);
+	const state = useSyncExternalStore(list.subscribe, list.getSnapshot, list.getSnapshot);
+	const actions = useMemo(() => createFollowActions({
+		context, follow: followUser, unfollow: unfollowUser,
+		getFollowing: (targetId) => followsUser(list.getSnapshot().items.find((user) => user._id === targetId) || {}, context.userId),
+		onChange: async (targetId, isFollowing) => {
+			list.setItems((users) => users.map((user) => user._id === targetId ? { ...user, isFollowing } : user));
+			await Promise.all([list.refresh(), onStatsUpdate?.()]);
+		},
+		reconcile: () => Promise.all([list.refresh(), onStatsUpdate?.()]),
+	}), [context, list, onStatsUpdate]);
+	const actionState = useSyncExternalStore(actions.subscribe, actions.getSnapshot, actions.getSnapshot);
 	const router = useRouter();
-	useEffect(() => {
-		if (!visible) return;
-		setUsers([]);
-		setPage(1);
-		setHasNext(true);
-		loadUsers(1, true);
-	}, [visible, stat, userId]);
-
-	const loadUsers = async (pageToLoad = 1, replace = false) => {
-		setLoading(true);
-		try {
-			let res;
-			if (stat === "Followers") {
-				res = await getUserFollowers(userId, pageToLoad, 15);
-			} else if (stat === "Following") {
-				res = await getUserFollowing(userId, pageToLoad, 15);
-			} else {
-				setUsers([]);
-				setHasNext(false);
-				return;
-			}
-			setUsers((prev) => (replace ? res.data : [...prev, ...res.data]));
-			setHasNext(pageToLoad < res.totalPages);
-			setPage(pageToLoad + 1);
-		} catch (e) {
-			setUsers([]);
-			setHasNext(false);
-		} finally {
-			setLoading(false);
-			setRefreshing(false);
-		}
-	};
-
-	const handleFollowToggle = async (targetUser) => {
-		const isFollowing = targetUser.followers?.some((id) => id === authUser._id);
-		try {
-			if (isFollowing) {
-				await unfollowUser(targetUser._id);
-			} else {
-				await followUser(targetUser._id);
-			}
-			// Optimistically update UI
-			setUsers((prev) =>
-				prev.map((u) =>
-					u._id === targetUser._id
-						? {
-								...u,
-								followers: isFollowing
-									? u.followers.filter((id) => id !== authUser._id)
-									: [...u.followers, authUser._id],
-						  }
-						: u
-				)
-			);
-			if (onStatsUpdate) onStatsUpdate();
-		} catch (e) {
-			// Optionally show error
-		}
-	};
-
-	const renderItem = ({ item }) => {
-		const isFollowing = item.followers?.some((id) => id === authUser._id);
-
-		const handleUserPress = () => {
-			onClose?.();
-			router.push(`/(tabs)/user/${item._id}`);
-		};
-
-		return (
-			<View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10 }}>
-				<TouchableOpacity
-					style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
-					onPress={handleUserPress}
-					activeOpacity={0.7}
-				>
-					<Avatar user={item} size={48} style={{ marginRight: 12 }} />
-					<Text style={{ flex: 1, fontSize: 16 }}>{item.username}</Text>
-				</TouchableOpacity>
-				{item._id !== authUser._id && (
-					<TouchableOpacity
-						onPress={() => handleFollowToggle(item)}
-						activeOpacity={0.8}
-						style={{
-							flexDirection: "row",
-							alignItems: "center",
-							paddingHorizontal: 10,
-							paddingVertical: 4,
-							borderRadius: 14,
-							backgroundColor: isFollowing ? "#e5e7eb" : theme.colors.primary,
-							marginLeft: 8,
-						}}
-					>
-						<Feather
-							name={isFollowing ? "check" : "user-plus"}
-							size={15}
-							color={isFollowing ? theme.colors.textMuted : "#fff"}
-							style={{ marginRight: 4 }}
-						/>
-						<Text
-							style={{
-								fontSize: 13,
-								color: isFollowing ? theme.colors.textMuted : "#fff",
-								fontWeight: "400",
-							}}
-						>
-							{isFollowing ? "Following" : "Follow"}
-						</Text>
+	useEffect(() => { void list.ensureLoaded(); }, [list]);
+	return <BottomModal visible onClose={onClose}>
+		<ModalHeader title={stat} onClose={onClose} />
+		{actionState.error && <Text accessibilityRole="alert" style={{ color: theme.colors.error, paddingVertical: 12 }}>{actionState.error}</Text>}
+		<FlatList data={state.items} keyExtractor={(user) => user._id}
+			renderItem={({ item }) => {
+				const isFollowing = followsUser(item, context.userId);
+				const busy = !!actionState.pending[item._id];
+				return <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10 }}>
+					<TouchableOpacity accessibilityRole="button" onPress={() => {
+						if (!context.isCurrent()) return;
+						onClose(); router.push(`/(tabs)/user/${item._id}`);
+					}} style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+						<Avatar user={item} size={48} style={{ marginRight: 12 }} />
+						<Text style={{ flex: 1, fontSize: 16, color: theme.colors.text }}>{item.username}</Text>
 					</TouchableOpacity>
-				)}
-			</View>
-		);
-	};
-
-	return (
-		<BottomModal visible={visible} onClose={onClose}>
-			<ModalHeader title={stat} onClose={onClose} />
-			{loading && users.length === 0 ? (
-				<ActivityIndicator style={{ marginTop: 32 }} />
-			) : (
-				<FlatList
-					data={users}
-					keyExtractor={(u) => u._id}
-					renderItem={renderItem}
-					onEndReached={() => hasNext && loadUsers(page)}
-					onEndReachedThreshold={0.5}
-					refreshing={refreshing}
-					onRefresh={() => {
-						setRefreshing(true);
-						loadUsers(1, true);
-					}}
-					ListEmptyComponent={
-						!loading && (
-							<Text style={{ textAlign: "center", marginTop: 32, color: theme.colors.textMuted }}>No users found.</Text>
-						)
-					}
-				/>
-			)}
-		</BottomModal>
-	);
+					{item._id !== context.userId && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${isFollowing ? "Unfollow" : "Follow"} ${item.username}`}
+						disabled={busy} onPress={() => actions.toggle(item._id, isFollowing)}
+						style={{ padding: 10, borderRadius: 14, marginLeft: 8, backgroundColor: isFollowing ? "#e5e7eb" : theme.colors.primary, opacity: busy ? 0.6 : 1 }}>
+						<Text style={{ color: isFollowing ? theme.colors.text : "#fff" }}>{busy ? "Updating…" : isFollowing ? "Unfollow" : "Follow"}</Text>
+					</TouchableOpacity>}
+				</View>;
+			}}
+			onEndReached={list.loadMore} onEndReachedThreshold={0.5} refreshing={state.refreshing} onRefresh={list.refresh}
+			ListEmptyComponent={<ProfileListStatus loading={!state.loaded || state.loading} error={state.error} onRetry={list.refresh} emptyMessage={stat === "Followers" ? "No followers yet." : "Not following anyone yet."} />}
+			ListFooterComponent={state.items.length ? state.loading ? <ActivityIndicator /> : state.error ? <ProfileListStatus error={state.error} onRetry={list.refresh} /> : null : null} />
+	</BottomModal>;
 }

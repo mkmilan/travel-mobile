@@ -491,14 +491,14 @@ export const followUser = async (userId) =>
 
 // ───────────────── getUserFollowing ✅ ─────────────────
 export const getUserFollowing = async (userId, page = 1, limit = 10) => {
-	const data = await apiFetch(`/users/${userId}/following`, {
+	const data = await apiFetch(`/users/${userId}/following?${new URLSearchParams({ page, limit })}`, {
 		method: "GET",
 	});
 	return data;
 };
 // ───────────────── getUserFollowers ✅ ─────────────────
 export const getUserFollowers = async (userId, page = 1, limit = 10) => {
-	const data = await apiFetch(`/users/${userId}/followers`, {
+	const data = await apiFetch(`/users/${userId}/followers?${new URLSearchParams({ page, limit })}`, {
 		method: "GET",
 	});
 	return data;

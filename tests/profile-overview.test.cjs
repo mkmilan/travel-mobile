@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { load, fixture, nodes, native, theme } = require('./helpers/component-fixture.cjs');
+const {createFollowActions}=load('src/utils/followActions.js','({createFollowActions})');
 const { createProfileData, profileStats, profileDistance } = load('src/utils/profileData.js', '({createProfileData, profileStats, profileDistance})');
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b; }); return {promise,resolve,reject}; };
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -10,7 +11,7 @@ test('profile maps the actual server counters and displays meters as explicit km
   assert.deepEqual(JSON.parse(JSON.stringify(stats)),{totalDistance:3,totalTrips:1,recommendationCount:2,poi:3,followers:4,following:5});
   assert.equal(profileDistance(stats.totalDistance),'0.003 km'); assert.equal(profileDistance(1250),'1.25 km'); assert.equal(profileDistance(0),'0 km');
   const pressed=[];
-  const tree=fixture('src/screens/profile/ProfileSummary.js','ProfileSummary',{displayedUser:{_id:'one'},stats,colors:{},onStatPress:value=>pressed.push(value)},
+  const tree=fixture('src/screens/profile/ProfileSummary.js','ProfileSummary',{displayedUser:{_id:'one'},isSelf:true,stats,colors:{},onStatPress:value=>pressed.push(value)},
     {...native,baseTheme:theme,StyleSheet:{create:x=>x},Feather:'Feather',Avatar:'Avatar',Link:'Link',profileDistance}).render();
   const cards=nodes(tree,'TouchableOpacity').filter(node=>node.props.accessibilityLabel);
   assert.equal(cards.length,6); cards.forEach(card=>card.props.onPress());
@@ -38,21 +39,22 @@ test('stale profile/login response, retry and mutation callback cannot update a 
 });
 
 test('ProfileScreen focus reloads instead of auth snapshot zeros; error offers retry rather than endless spinner', async () => {
-  const contexts=[{isCurrent:()=>true}];let context=contexts[0],focus,calls=0,memo,deps;
+  const contexts=[{isCurrent:()=>true}];let context=contexts[0],focus,calls=0,memoIndex=0;const memos=[];
   let request=async()=>{calls++;return {_id:'self',totalTrips:calls};};
   const screen=fixture('src/screens/profile/ProfileScreen.js','ProfileScreen',{}, {
     ...native,StyleSheet:{create:x=>x},useRequireAuth:()=>true,useResolvedTheme:()=> 'light',lightTheme:theme,darkTheme:theme,
     useLocalSearchParams:()=>({}),useAuthStore:select=>select({user:{_id:'self',totalTrips:0},logout(){}}),useProfileContext:()=>context,
-    createProfileData,profileStats,getUserById:()=>request(),getPublicUserById:()=>{throw Error('wrong route');},ProfileTabsLayout:'ProfileTabsLayout',
-    useMemo:(create,next)=>{if(!deps||next.some((value,i)=>value!==deps[i])){memo=create();deps=next;}return memo;},
+    createProfileData,profileStats,createFollowActions,followUser:()=>{},unfollowUser:()=>{},getUserById:()=>request(),getPublicUserById:()=>{throw Error('wrong route');},ProfileTabsLayout:'ProfileTabsLayout',
+    useMemo:(create,next)=>{const index=memoIndex++;const previous=memos[index];if(!previous||next.some((value,i)=>value!==previous.deps[i]))memos[index]={value:create(),deps:next};return memos[index].value;},
     useSyncExternalStore:(_subscribe,get)=>get(),useCallback:callback=>callback,useFocusEffect:callback=>{focus=callback;},
   });
-  assert.equal(nodes(screen.render(),'ActivityIndicator').length,1);focus();await tick();
-  assert.equal(nodes(screen.render(),'ProfileTabsLayout')[0].props.summaryData.stats.totalTrips,1);
-  focus();await tick();assert.equal(nodes(screen.render(),'ProfileTabsLayout')[0].props.summaryData.stats.totalTrips,2);
+  const render=()=>{memoIndex=0;return screen.render();};
+  assert.equal(nodes(render(),'ActivityIndicator').length,1);focus();await tick();
+  assert.equal(nodes(render(),'ProfileTabsLayout')[0].props.summaryData.stats.totalTrips,1);
+  focus();await tick();assert.equal(nodes(render(),'ProfileTabsLayout')[0].props.summaryData.stats.totalTrips,2);
   context={isCurrent:()=>true};request=async()=>{throw Error('offline');};
-  assert.equal(nodes(screen.render(),'ProfileTabsLayout').length,0);focus();await tick();
-  const failed=screen.render();assert.equal(nodes(failed,'ActivityIndicator').length,0);assert.equal(nodes(failed,'Pressable').length,1);
+  assert.equal(nodes(render(),'ProfileTabsLayout').length,0);focus();await tick();
+  const failed=render();assert.equal(nodes(failed,'ActivityIndicator').length,0);assert.equal(nodes(failed,'Pressable').length,1);
 });
 
 test('all six tile actions reach appropriate existing tabs or typed detail sheets, never generic user sheets', () => {

@@ -14,6 +14,8 @@ export const profileDistance = (meters) => `${Number((meters / 1000).toFixed(3))
 export function createProfileData(load, isCurrent) {
 	let state = { user: null, loading: false, error: null };
 	let pending = null;
+	let version = 0;
+	let queuedRefresh = null;
 	const listeners = new Set();
 	const update = (patch) => {
 		if (!isCurrent()) return;
@@ -23,18 +25,24 @@ export function createProfileData(load, isCurrent) {
 	const refresh = () => {
 		if (!isCurrent()) return Promise.resolve();
 		if (pending) return pending;
+		const requestVersion = version;
 		update({ loading: true, error: null });
 		pending = Promise.resolve().then(() => {
 			if (isCurrent()) return load();
 		}).then((user) => {
-			if (!isCurrent()) return;
+			if (!isCurrent() || requestVersion !== version) return;
 			if (!user?._id) throw new Error("Invalid profile response");
 			update({ user });
-		}).catch((error) => update({ error: error?.message || "Please try again." }))
+		}).catch((error) => { if (requestVersion === version) update({ error: error?.message || "Please try again." }); })
 			.finally(() => { pending = null; update({ loading: false }); });
 		return pending;
 	};
-	return { refresh, getSnapshot: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-		updateUser(patch) { if (state.user) update({ user: { ...state.user, ...patch } }); },
+	const refreshAfterChange = () => {
+		if (!pending) return refresh();
+		if (!queuedRefresh) queuedRefresh = pending.then(() => { queuedRefresh = null; return refresh(); });
+		return queuedRefresh;
+	};
+	return { refresh, refreshAfterChange, getSnapshot: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+		updateUser(patch) { version++; if (state.user) update({ user: { ...state.user, ...patch } }); },
 	};
 }

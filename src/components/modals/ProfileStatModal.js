@@ -12,7 +12,10 @@ import ModalHeader from "./ModalHeader";
 
 export default function ProfileStatModal({ stat, userId, stats, onClose }) {
 	const context = useProfileContext(`${userId}:${stat}`);
-	const list = useMemo(() => createPagedList((page) => getUserPois(userId, page, 15), stat === "POIs"), [context, stat, userId]);
+	const list = useMemo(() => createPagedList((page) => {
+		if (!context.isCurrent()) throw new Error("Profile changed; request cancelled");
+		return getUserPois(userId, page, 15);
+	}, stat === "POIs"), [context, stat, userId]);
 	const state = useSyncExternalStore(list.subscribe, list.getSnapshot, list.getSnapshot);
 	const router = useRouter();
 	useEffect(() => { void list.ensureLoaded(); }, [list]);

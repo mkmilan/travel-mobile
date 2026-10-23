@@ -5,7 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout, onStatPress, refreshError, onRefresh }) {
+export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout, onStatPress, refreshError, onRefresh, onFollowToggle, followBusy, followError }) {
 	const statMeta = {
 		Trips: { icon: "map", color: "#4A90E2" },
 		Distance: { icon: "activity", color: "#50E3C2" },
@@ -79,6 +79,14 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 						);
 					})}
 			</View>
+
+			{!isSelf && <View style={{ paddingHorizontal: base.space.md, marginTop: base.space.md }}>
+				<TouchableOpacity accessibilityRole="button" accessibilityLabel={displayedUser.isFollowing ? "Unfollow user" : "Follow user"}
+					disabled={followBusy} onPress={onFollowToggle} style={[styles.editBtn, { flex: 0, opacity: followBusy ? 0.6 : 1 }]}>
+					<Text style={styles.btnTxt}>{followBusy ? "Updating…" : displayedUser.isFollowing ? "Unfollow" : "Follow"}</Text>
+				</TouchableOpacity>
+				{followError && <Text accessibilityRole="alert" style={{ color: colors.error, marginTop: 12 }}>{followError}</Text>}
+			</View>}
 
 			{/* ----- own profile buttons ----- */}
 			{isSelf && (

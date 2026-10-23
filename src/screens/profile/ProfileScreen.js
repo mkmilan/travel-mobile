@@ -1,9 +1,10 @@
 import useRequireAuth from "@/src/hooks/useRequireAuth";
 import { useResolvedTheme } from "@/src/hooks/useResolvedTheme";
 import useProfileContext from "@/src/hooks/useProfileContext";
-import { getPublicUserById, getUserById } from "@/src/services/api";
+import { followUser, unfollowUser, getPublicUserById, getUserById } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { darkTheme, theme as lightTheme } from "@/src/theme";
+import { createFollowActions } from "@/src/utils/followActions";
 import { createProfileData, profileStats } from "@/src/utils/profileData";
 import { useLocalSearchParams } from "expo-router";
 import { useFocusEffect } from "expo-router/react-navigation";
@@ -25,6 +26,17 @@ export default function ProfileScreen() {
 		() => isSelf ? getUserById(profileId) : getPublicUserById(profileId), context.isCurrent
 	), [context, isSelf, profileId]);
 	const { user: displayedUser, loading, error } = useSyncExternalStore(profile.subscribe, profile.getSnapshot, profile.getSnapshot);
+	const actions = useMemo(() => createFollowActions({
+		context, follow: followUser, unfollow: unfollowUser,
+		getFollowing: () => profile.getSnapshot().user?.isFollowing,
+		onChange: async (_id, isFollowing) => {
+			const user = profile.getSnapshot().user;
+			profile.updateUser({ isFollowing, followersCount: Math.max(0, (user?.followersCount || 0) + (isFollowing ? 1 : -1)) });
+			await profile.refreshAfterChange();
+		},
+		reconcile: profile.refreshAfterChange,
+	}), [context, profile]);
+	const actionState = useSyncExternalStore(actions.subscribe, actions.getSnapshot, actions.getSnapshot);
 	useFocusEffect(useCallback(() => { if (ready) void profile.refresh(); }, [ready, profile]));
 
 	if (!ready || !authUser) return <View style={styles.centered} />;
@@ -36,9 +48,10 @@ export default function ProfileScreen() {
 		</View>
 	);
 	const summaryData = { displayedUser, stats: profileStats(displayedUser), colors, isSelf,
-		onLogout: doLogout, refreshing: loading, refreshError: error, onRefresh: profile.refresh };
+		onLogout: doLogout, onFollowToggle: () => actions.toggle(profileId, !!displayedUser.isFollowing),
+		followBusy: !!actionState.pending[profileId], followError: actionState.error, refreshing: loading, refreshError: error, onRefresh: profile.refresh };
 	return <ProfileTabsLayout key={displayedUser.isFollowing ? "following" : "not-following"}
-		isSelf={isSelf} userId={profileId} summaryData={summaryData} onProfileStatsChange={profile.refresh} />;
+		isSelf={isSelf} userId={profileId} summaryData={summaryData} onProfileStatsChange={profile.refreshAfterChange} />;
 }
 
 const styles = StyleSheet.create({ centered: { flex: 1, justifyContent: "center", alignItems: "center" } });
