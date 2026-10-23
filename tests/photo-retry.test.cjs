@@ -73,7 +73,7 @@ function tripEditor(uploadPendingPhotos,update=async()=>{}) {
   const alerts=[],routes=[],updates=[];
   const route={id:'fixture-trip'},session={user:{_id:'fixture-owner'},token:'fixture-session'};
   const auth=()=>session;auth.getState=()=>session;let cleanup;
-  const form=fixture('app/(tabs)/trip/[id]/edit.js','EditTripScreen',{}, {
+  const form=fixture('app/(tabs)/trip/[id]/edit.js','EditTripForm',{}, {
     ...native,theme,StyleSheet:{create:value=>value},Feather:'Feather',TransportIcon:'TransportIcon',TripPhotoThumb:'TripPhotoThumb',
     useMemo:fn=>fn(),useLocalSearchParams:()=>route,useRouter:()=>({replace:route=>routes.push(route),back(){}}),
     useAuthStore:auth,useEffect:(callback,deps)=>{if(deps.length===0&&!cleanup)cleanup=callback();},travelModeOptions:[],tripVisibilityOptions:[],

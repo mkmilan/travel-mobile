@@ -33,9 +33,17 @@ const getVisibilityIcon = (value) => {
 };
 
 export default function EditTripScreen() {
+	const { id: tripId } = useLocalSearchParams();
+	const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+	// Reset the photo hook's in-flight locks with the draft, not when an obsolete
+	// upload eventually settles. Same-session retries keep the same mounted form.
+	return <EditTripForm key={`${tripId}:${sessionEpoch}`} />;
+}
+
+function EditTripForm() {
 	const router = useRouter();
 	const { id: tripId } = useLocalSearchParams();
-	const { user: currentUser, token } = useAuthStore();
+	const { user: currentUser, token, sessionEpoch, isSessionChanging } = useAuthStore();
 
 	const [trip, setTrip] = useState(null);
 	const [title, setTitle] = useState("");
@@ -66,15 +74,21 @@ export default function EditTripScreen() {
 	const saveInFlight = useRef(false);
 	const mounted = useRef(true);
 	const activeContext = useRef(null);
-	if (!activeContext.current || activeContext.current.tripId !== tripId || activeContext.current.userId !== currentUser?._id || activeContext.current.token !== token) {
-		activeContext.current = { tripId, userId: currentUser?._id, token };
+	if (!activeContext.current || activeContext.current.tripId !== tripId || activeContext.current.userId !== currentUser?._id
+		|| activeContext.current.token !== token || activeContext.current.sessionEpoch !== sessionEpoch
+		|| activeContext.current.isSessionChanging !== isSessionChanging) {
+		activeContext.current = { tripId, userId: currentUser?._id, token, sessionEpoch, isSessionChanging };
 	}
 	const renderContext = activeContext.current;
+	const draftContext = useRef(renderContext);
 	const isCurrentContext = (context) => {
 		const session = useAuthStore.getState();
 		return mounted.current && activeContext.current === context && context.userId && context.token
+			&& !context.isSessionChanging && !session.isSessionChanging && session.sessionEpoch === context.sessionEpoch
 			&& session.user?._id === context.userId && session.token === context.token;
 	};
+	const canEditDraft = () => trip && draftContext.current === renderContext && trip._id === renderContext.tripId && isCurrentContext(renderContext);
+	const canChangeDraft = () => canEditDraft() && !saveInFlight.current && !uploading && !isDeleting();
 
 	useEffect(() => {
 		mounted.current = true;
@@ -83,16 +97,26 @@ export default function EditTripScreen() {
 
 	useEffect(() => {
 		// A new trip/session owns a new draft; old async completions stay isolated.
+		draftContext.current = renderContext;
 		saveInFlight.current = false;
 		setSaving(false);
 		setTrip(null);
+		setTitle("");
+		setDescription("");
+		setVisibility("public");
+		setTransportMode("car");
+		setError(null);
+		if (isSessionChanging) {
+			setLoading(true);
+			return;
+		}
 		if (tripId && isCurrentContext(renderContext)) {
 			fetchTripDetails();
 		} else {
 			setError(tripId ? "Sign in to edit this trip." : "Trip ID is missing.");
 			setLoading(false);
 		}
-	}, [tripId, currentUser?._id, token]);
+	}, [tripId, currentUser?._id, token, sessionEpoch, isSessionChanging]);
 
 	const fetchTripDetails = async () => {
 		const context = renderContext;
@@ -112,8 +136,7 @@ export default function EditTripScreen() {
 			setDescription(data.description || "");
 			setVisibility(data.defaultTripVisibility || "public");
 			setTransportMode(data.defaultTravelMode || "car");
-			if (Array.isArray(data.photos)) setPhotos(data.photos);
-			// setPhotos(data.photos || []);
+			setPhotos(Array.isArray(data.photos) ? data.photos : []);
 		} catch (err) {
 			if (!isCurrentContext(context)) return;
 			console.error("Failed to fetch trip details for editing:", err);
@@ -126,7 +149,7 @@ export default function EditTripScreen() {
 
 	const handleSaveChanges = async () => {
 		const context = renderContext;
-		if (!trip || trip._id !== context.tripId || saveInFlight.current || uploading || isDeleting() || !isCurrentContext(context)) return;
+		if (!canChangeDraft()) return;
 		saveInFlight.current = true;
 		setSaving(true);
 		setError(null);
@@ -166,7 +189,8 @@ export default function EditTripScreen() {
 		}
 	};
 
-	if (loading) {
+	// Hide a previous login's draft on the first render, before the reset effect.
+	if (loading || isSessionChanging || draftContext.current !== renderContext) {
 		return (
 			<View style={styles.centered}>
 				<ActivityIndicator size="small" color={theme.colors.primary} />
@@ -212,7 +236,7 @@ export default function EditTripScreen() {
 				style={styles.input}
 				value={title}
 				editable={!saving && !uploading && !deleting}
-				onChangeText={setTitle}
+				onChangeText={(value) => { if (canChangeDraft()) setTitle(value); }}
 				placeholder="Enter trip title"
 				placeholderTextColor={theme.colors.textMuted}
 			/>
@@ -223,7 +247,7 @@ export default function EditTripScreen() {
 				style={[styles.input, styles.textArea]}
 				value={description}
 				editable={!saving && !uploading && !deleting}
-				onChangeText={setDescription}
+				onChangeText={(value) => { if (canChangeDraft()) setDescription(value); }}
 				placeholder="Enter trip description"
 				placeholderTextColor={theme.colors.textMuted}
 				multiline
@@ -237,7 +261,7 @@ export default function EditTripScreen() {
 						key={option.value}
 						label={option.label}
 						selected={option.value === visibility}
-						onPress={() => setVisibility(option.value)}
+						onPress={() => { if (canChangeDraft()) setVisibility(option.value); }}
 						disabled={saving || uploading || deleting}
 						compact
 					>
@@ -259,7 +283,7 @@ export default function EditTripScreen() {
 						key={option.value}
 						label={option.label}
 						selected={option.value === transportMode}
-						onPress={() => setTransportMode(option.value)}
+						onPress={() => { if (canChangeDraft()) setTransportMode(option.value); }}
 						disabled={saving || uploading || deleting}
 						compact
 					>
@@ -276,7 +300,7 @@ export default function EditTripScreen() {
 			{deleting && <Text>Removing photo…</Text>}
 			{deleteError && <View>
 				<Text accessibilityRole="alert" style={styles.inlineErrorText}>{deleteError}</Text>
-				<Pressable accessibilityRole="button" onPress={() => { if (!saveInFlight.current) void retryRemovePhoto(); }} disabled={saving || uploading || deleting}>
+				<Pressable accessibilityRole="button" onPress={() => { if (canChangeDraft()) return retryRemovePhoto(); }} disabled={saving || uploading || deleting}>
 					<Text>Retry remove photo</Text>
 				</Pressable>
 			</View>}
@@ -287,18 +311,18 @@ export default function EditTripScreen() {
 						key={id}
 						photoId={id}
 						onPress={() => {
-							if (saveInFlight.current || uploading || isDeleting()) return;
+							if (!canChangeDraft()) return;
 							const remove = prepareRemovePhoto(id);
 							Alert.alert("Remove photo?", "", [
 								{ text: "Cancel", style: "cancel" },
-								{ text: "Delete", style: "destructive", onPress: () => { if (!saveInFlight.current) void remove(); } },
+								{ text: "Delete", style: "destructive", onPress: () => { if (canChangeDraft()) return remove(); } },
 							]);
 						}}
 					/>
 				))}
 				{/* add-button */}
 				{photos.length < 5 && (
-					<Pressable onPress={addPhotos} style={[styles.addBox, (saving || uploading || deleting) && { opacity: 0.5 }]} disabled={saving || uploading || deleting}>
+					<Pressable onPress={() => { if (canChangeDraft()) return addPhotos(); }} style={[styles.addBox, (saving || uploading || deleting) && { opacity: 0.5 }]} disabled={saving || uploading || deleting}>
 						<Feather name="plus" size={24} color={theme.colors.textMuted} />
 					</Pressable>
 				)}
@@ -325,7 +349,7 @@ export default function EditTripScreen() {
 					saving && styles.buttonDisabled,
 				]}
 				// onPress={() => router.back()}
-				onPress={() => router.replace(`/(tabs)/trip/${tripId}`)}
+				onPress={() => { if (canEditDraft() && !saveInFlight.current) router.replace(`/(tabs)/trip/${tripId}`); }}
 				disabled={saving}
 			>
 				<Text style={styles.buttonSecondaryText}>Cancel</Text>

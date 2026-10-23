@@ -67,7 +67,7 @@ test('MOB-028 missing target fails visibly; created recommendation ID survives p
 
 function tripEditor(remove){
   const alerts=[],updates=[],routes=[];const env=photoEnvironment({deleteTripPhoto:remove});
-  const form=fixture('app/(tabs)/trip/[id]/edit.js','EditTripScreen',{}, {...native,theme,...env.host.hooks,usePhotoManager:env.usePhotoManager,useAuthStore:env.auth.store,StyleSheet:{create:x=>x},Feather:'Feather',TransportIcon:'TransportIcon',TripPhotoThumb:'TripPhotoThumb',
+  const form=fixture('app/(tabs)/trip/[id]/edit.js','EditTripForm',{}, {...native,theme,...env.host.hooks,usePhotoManager:env.usePhotoManager,useAuthStore:env.auth.store,StyleSheet:{create:x=>x},Feather:'Feather',TransportIcon:'TransportIcon',TripPhotoThumb:'TripPhotoThumb',
     useLocalSearchParams:()=>({id:'item'}),useRouter:()=>({replace:path=>routes.push(path),back(){}}),travelModeOptions:[],tripVisibilityOptions:[],
     getTripJsonById:async()=>({_id:'item',user:{_id:'actor'},title:'Kept title',description:'Kept description',photos:['photo']}),updateTripJson:async(...args)=>updates.push(args),Alert:{alert:(...args)=>alerts.push(args)},
   });
