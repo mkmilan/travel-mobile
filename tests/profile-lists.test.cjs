@@ -214,3 +214,17 @@ test('off-page gallery target offers one direct resolver without auto-pagination
   assert.equal(calls,1);
  }
 });
+
+test('pending gallery source cannot replace newer manual detail or changed route intent before effects',async()=>{
+ for(const change of ['manual','route']) {
+  const other={_id:'manual',name:'Newer selection'};
+  const screen=recommendationsFixture(async()=>({data:[other],totalPages:2}),{openRecId:'old-source',ts:1});
+  screen.render();screen.effects();await screen.list.ensureLoaded();screen.render();screen.effects();let tree=screen.render();
+  const resolver=nodes(tree,'FlatList')[0].props.ListHeaderComponent;
+  if(change==='manual') nodes(tree,'FlatList')[0].props.renderItem({item:other}).props.onPress();
+  else {screen.route.params.openRecId='new-source';screen.route.params.ts=2;screen.render();}
+  resolver.props.onFound({_id:'old-source',user:{_id:'fixture'}});
+  tree=screen.render();const details=nodes(tree,'RecommendationDetailModal');
+  if(change==='manual')assert.equal(details[0].props.recommendation._id,'manual');else assert.equal(details.length,0);
+ }
+});

@@ -22,17 +22,21 @@ import { lineStringToCoords } from "@/src/utils/geo";
  * Infinite-scroll + pull-to-refresh.  Opens detail modal onPress.
  */
 export default function RecommendationsTab({ userId, isSelf }) {
+	const navigation = useNavigation();
+	const route = useRoute();
 	/* ---------------- state ---------------- */
 	const { identity, items, setItems, loading, initialLoading, refreshing, error, ensureLoaded, refresh: onRefresh, loadMore } = useProfileList(userId, getRecommendationsByUser);
 	const [pendingRequest, setPendingRequest] = useState(null);
-	const pendingRecId = pendingRequest && pendingRequest.identity === identity ? pendingRequest.id : null;
+	const pendingRecId = pendingRequest && pendingRequest.identity === identity
+		&& pendingRequest.id === route.params?.openRecId && pendingRequest.intentKey === route.params?.ts
+		? pendingRequest.id : null;
 
 	/* modal */
 	const [detailModalOpen, setDetailModalOpen] = useState(false); // Renamed for clarity
 	const [selection, setSelection] = useState(null);
 	const selRec = selection && selection.identity === identity ? selection.rec : null;
 	const currentPending = useRef(pendingRequest);
-	currentPending.current = pendingRequest;
+	currentPending.current = pendingRecId ? pendingRequest : null;
 	const currentIdentity = useRef(identity);
 	currentIdentity.current = identity;
 	const detailRequest = useRef(null);
@@ -40,15 +44,13 @@ export default function RecommendationsTab({ userId, isSelf }) {
 
 	const addRecModalRef = useRef(null); // Ref for AddRecommendationModal
 
-	const navigation = useNavigation();
-	const route = useRoute();
 
 	// Gallery and focus can both request initialization; ensureLoaded shares the
 	// same request and regards empty/error results as a completed attempt.
 	useEffect(() => {
 		const recId = route.params?.openRecId;
 		if (!recId) return;
-		setPendingRequest({ identity, id: recId });
+		setPendingRequest({ identity, id: recId, intentKey: route.params?.ts });
 		void ensureLoaded();
 	}, [route.params?.openRecId, route.params?.ts]);
 
@@ -64,6 +66,10 @@ export default function RecommendationsTab({ userId, isSelf }) {
 
 	/* ---------------- modal helpers ---------------- */
 	const openDetailModal = async (rec) => {
+		// Any newer user selection supersedes an unfinished gallery-source lookup.
+		currentPending.current = null;
+		setPendingRequest(null);
+		if (route.params?.openRecId) navigation.setParams({ openRecId: undefined });
 		setSelection({ identity, rec });
 		const request = {};
 		detailRequest.current = request;
