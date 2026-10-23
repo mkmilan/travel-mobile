@@ -5,17 +5,28 @@ import {
 	uploadRecommendationPhoto,
 	uploadTripPhoto,
 } from "@/src/services/api";
+import useProfileContext from "@/src/hooks/useProfileContext";
 import { copyAndResizeAsync } from "@/src/utils/imageHelpers";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
 
 export default function usePhotoManager({ context, id: initialIdProp, max = 5, initial = [] }) {
+	const photoContext = useProfileContext(`${context}:${initialIdProp || "new"}`);
+	const stateContext = useRef(photoContext);
 	const [photos, setPhotoState] = useState(initial || []);
 	const photosRef = useRef(photos);
 	const draftVersion = useRef(0);
 	const uploadInFlight = useRef(null);
 	const [uploading, setUploading] = useState(false);
-	const [currentId, setCurrentId] = useState(initialIdProp);
+	const currentId = useRef(initialIdProp);
+	const deleteInFlight = useRef(null);
+	const [deleting, setDeleting] = useState(false);
+	const [deleteFailure, setDeleteFailure] = useState(null);
+	const deleteFailureRef = useRef(null);
+	const updateDeleteFailure = (failure) => {
+		deleteFailureRef.current = failure;
+		setDeleteFailure(failure);
+	};
 
 	// Async retries must read the latest confirmed IDs, not a render's old URI list.
 	const updatePhotos = (value) => {
@@ -26,17 +37,23 @@ export default function usePhotoManager({ context, id: initialIdProp, max = 5, i
 	};
 	const setPhotos = (value) => {
 		draftVersion.current += 1;
+		deleteInFlight.current = null;
+		setDeleting(false);
+		updateDeleteFailure(null);
 		updatePhotos(value);
 	};
 
 	// Reset when props change
 	useEffect(() => {
-		setPhotos(initial || []);
-		setCurrentId(initialIdProp);
-	}, [initialIdProp, JSON.stringify(initial)]);
+		const previous = stateContext.current;
+		const sameSession = previous.valid && previous.token === photoContext.token && previous.userId === photoContext.userId;
+		setPhotos(sameSession ? initial || [] : []);
+		stateContext.current = photoContext;
+		currentId.current = initialIdProp;
+	}, [initialIdProp, JSON.stringify(initial), photoContext]);
 
 	const addPhotos = async () => {
-		if (uploadInFlight.current) return;
+		if (stateContext.current !== photoContext || !photoContext.isCurrent() || uploadInFlight.current || deleteInFlight.current) return;
 		const version = draftVersion.current;
 		const remaining = max - photosRef.current.length;
 		if (remaining <= 0) return;
@@ -48,38 +65,65 @@ export default function usePhotoManager({ context, id: initialIdProp, max = 5, i
 			quality: 0.9,
 			allowsEditing: false,
 		});
-		if (res.canceled || !res.assets || version !== draftVersion.current || uploadInFlight.current) return;
+		if (res.canceled || !res.assets || version !== draftVersion.current || !photoContext.isCurrent() || uploadInFlight.current || deleteInFlight.current) return;
 
 		const pickedAssets = res.assets.slice(0, remaining);
 		const newLocalUris = await Promise.all(pickedAssets.map((a) => copyAndResizeAsync(a.uri)));
-		if (version !== draftVersion.current || uploadInFlight.current) return;
+		if (version !== draftVersion.current || !photoContext.isCurrent() || uploadInFlight.current || deleteInFlight.current) return;
 
 		// Add to photos array immediately for preview
 		updatePhotos((prev) => [...prev, ...newLocalUris].slice(0, max));
 	};
 
-	const removePhoto = async (photoIdToRemove) => {
-		if (uploadInFlight.current) return;
+	const removePhoto = (photoIdToRemove) => {
+		if (stateContext.current !== photoContext || !photoContext.isCurrent() || uploadInFlight.current) return Promise.resolve(false);
+		if (deleteInFlight.current) return deleteInFlight.current.photoId === photoIdToRemove
+			? deleteInFlight.current.promise : Promise.resolve(false);
+		if (!photosRef.current.includes(photoIdToRemove)) return Promise.resolve(true);
 		if (photoIdToRemove.startsWith("file://")) {
 			updatePhotos((prev) => prev.filter((p) => p !== photoIdToRemove));
-			return;
+			return Promise.resolve(true);
 		}
 
-		try {
-			if (context === "trip" && currentId && currentId !== "new") {
-				await deleteTripPhoto(currentId, photoIdToRemove);
-			} else if (context === "recommendation" && currentId && currentId !== "new") {
-				await deleteRecommendationPhoto(currentId, photoIdToRemove);
+		const version = draftVersion.current;
+		const targetId = currentId.current;
+		const isCurrent = () => photoContext.isCurrent() && version === draftVersion.current;
+		const operation = { photoId: photoIdToRemove, promise: null };
+		deleteInFlight.current = operation;
+		setDeleting(true);
+		updateDeleteFailure(null);
+		// Install the lock before invoking even a synchronous failing API mock.
+		operation.promise = Promise.resolve().then(async () => {
+			try {
+				if (!isCurrent()) return false;
+				if (!targetId || targetId === "new") throw new Error("Reopen the saved item before removing this photo.");
+				if (context === "trip") await deleteTripPhoto(targetId, photoIdToRemove);
+				else if (context === "recommendation") await deleteRecommendationPhoto(targetId, photoIdToRemove);
+				else throw new Error("Photo removal is not available here.");
+				if (!isCurrent()) return false;
+				updatePhotos((prev) => prev.filter((p) => p !== photoIdToRemove));
+				return true;
+			} catch (error) {
+				if (isCurrent()) updateDeleteFailure({ photoId: photoIdToRemove,
+					message: `Photo removal was not confirmed. ${error?.message || "Please try again."}` });
+				// The thumbnail stays visible and callers have explicit failure UI;
+				// native Alert callbacks must never leak an unhandled rejection.
+				return false;
+			} finally {
+				if (deleteInFlight.current === operation) {
+					deleteInFlight.current = null;
+					if (isCurrent()) setDeleting(false);
+				}
 			}
-		} catch (e) {
-			console.warn(`Failed to delete photo ${photoIdToRemove} from server:`, e.message);
-		}
-		updatePhotos((prev) => prev.filter((p) => p !== photoIdToRemove));
+		});
+		return operation.promise;
 	};
 
 	// Confirmed successes become server IDs before a partial failure is reported.
 	// Retrying the same form therefore uploads only the remaining local files.
 	const uploadPendingPhotos = (serverId) => {
+		if (stateContext.current !== photoContext || !photoContext.isCurrent()) return Promise.reject(new Error("Photo session changed. Reopen the item."));
+		if (deleteInFlight.current) return Promise.reject(new Error("Wait for the photo removal to finish before saving."));
 		if (uploadInFlight.current) {
 			if (uploadInFlight.current.serverId === serverId) return uploadInFlight.current.promise;
 			return Promise.reject(new Error("Another photo upload is still in progress."));
@@ -89,7 +133,7 @@ export default function usePhotoManager({ context, id: initialIdProp, max = 5, i
 		if (!serverId || serverId === "new") return Promise.reject(new Error("Save the item before uploading its photos."));
 		const version = draftVersion.current;
 		setUploading(true);
-		setCurrentId(serverId);
+		currentId.current = serverId;
 
 		const promise = (async () => {
 			try {
@@ -110,7 +154,7 @@ export default function usePhotoManager({ context, id: initialIdProp, max = 5, i
 						return null;
 					}
 				}));
-				if (version !== draftVersion.current) throw new Error("The photo selection changed during upload. Reopen the item to check its saved photos.");
+				if (version !== draftVersion.current || !photoContext.isCurrent()) throw new Error("The photo selection changed during upload. Reopen the item to check its saved photos.");
 				const successful = new Map(results.filter(Boolean).map(({ localUri, photoId }) => [localUri, photoId]));
 				const photoIds = updatePhotos((previous) => previous.map((photo) => successful.get(photo) || photo));
 				const failedCount = results.filter((result) => !result).length;
@@ -127,12 +171,21 @@ export default function usePhotoManager({ context, id: initialIdProp, max = 5, i
 		return promise;
 	};
 
+	const ownsState = stateContext.current === photoContext;
 	return {
-		photos,
-		getPhotos: () => photosRef.current,
+		photos: ownsState ? photos : [],
+		getPhotos: () => stateContext.current === photoContext && photoContext.isCurrent() ? photosRef.current : [],
 		uploading,
+		deleting: ownsState && deleting,
+		isDeleting: () => Boolean(deleteInFlight.current),
+		deleteError: ownsState ? deleteFailure?.message || null : null,
+		retryRemovePhoto: () => deleteFailureRef.current ? removePhoto(deleteFailureRef.current.photoId) : Promise.resolve(false),
 		addPhotos,
 		removePhoto,
+		prepareRemovePhoto: (photoId) => {
+			const version = draftVersion.current;
+			return () => version === draftVersion.current ? removePhoto(photoId) : Promise.resolve(false);
+		},
 		setPhotos,
 		uploadPendingPhotos,
 	};

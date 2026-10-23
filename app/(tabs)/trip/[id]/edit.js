@@ -49,8 +49,9 @@ export default function EditTripScreen() {
 		photos, // array of ids   (read-only)
 		setPhotos, // setter we’ll call once after fetch
 		uploading,
+		deleting = false, deleteError, retryRemovePhoto, isDeleting = () => false,
 		addPhotos,
-		removePhoto,
+		prepareRemovePhoto,
 		uploadPendingPhotos,
 	} = usePhotoManager({
 		context: "trip",
@@ -125,7 +126,7 @@ export default function EditTripScreen() {
 
 	const handleSaveChanges = async () => {
 		const context = renderContext;
-		if (!trip || trip._id !== context.tripId || saveInFlight.current || uploading || !isCurrentContext(context)) return;
+		if (!trip || trip._id !== context.tripId || saveInFlight.current || uploading || isDeleting() || !isCurrentContext(context)) return;
 		saveInFlight.current = true;
 		setSaving(true);
 		setError(null);
@@ -210,7 +211,7 @@ export default function EditTripScreen() {
 			<TextInput
 				style={styles.input}
 				value={title}
-				editable={!saving && !uploading}
+				editable={!saving && !uploading && !deleting}
 				onChangeText={setTitle}
 				placeholder="Enter trip title"
 				placeholderTextColor={theme.colors.textMuted}
@@ -221,7 +222,7 @@ export default function EditTripScreen() {
 			<TextInput
 				style={[styles.input, styles.textArea]}
 				value={description}
-				editable={!saving && !uploading}
+				editable={!saving && !uploading && !deleting}
 				onChangeText={setDescription}
 				placeholder="Enter trip description"
 				placeholderTextColor={theme.colors.textMuted}
@@ -237,7 +238,7 @@ export default function EditTripScreen() {
 						label={option.label}
 						selected={option.value === visibility}
 						onPress={() => setVisibility(option.value)}
-						disabled={saving || uploading}
+						disabled={saving || uploading || deleting}
 						compact
 					>
 						<Feather
@@ -259,7 +260,7 @@ export default function EditTripScreen() {
 						label={option.label}
 						selected={option.value === transportMode}
 						onPress={() => setTransportMode(option.value)}
-						disabled={saving || uploading}
+						disabled={saving || uploading || deleting}
 						compact
 					>
 						<TransportIcon
@@ -272,23 +273,32 @@ export default function EditTripScreen() {
 				))}
 			</View>
 			{/* Photos (max 5) */}
+			{deleting && <Text>Removing photo…</Text>}
+			{deleteError && <View>
+				<Text accessibilityRole="alert" style={styles.inlineErrorText}>{deleteError}</Text>
+				<Pressable accessibilityRole="button" onPress={() => { if (!saveInFlight.current) void retryRemovePhoto(); }} disabled={saving || uploading || deleting}>
+					<Text>Retry remove photo</Text>
+				</Pressable>
+			</View>}
 			<Text style={styles.label}>Photos ({photos.length}/5)</Text>
 			<View style={{ flexDirection: "row", flexWrap: "wrap" }}>
 				{photos.map((id) => (
 					<TripPhotoThumb
 						key={id}
 						photoId={id}
-						onPress={() => !saveInFlight.current && !uploading &&
+						onPress={() => {
+							if (saveInFlight.current || uploading || isDeleting()) return;
+							const remove = prepareRemovePhoto(id);
 							Alert.alert("Remove photo?", "", [
 								{ text: "Cancel", style: "cancel" },
-								{ text: "Delete", style: "destructive", onPress: () => { if (!saveInFlight.current) removePhoto(id); } },
-							])
-						}
+								{ text: "Delete", style: "destructive", onPress: () => { if (!saveInFlight.current) void remove(); } },
+							]);
+						}}
 					/>
 				))}
 				{/* add-button */}
 				{photos.length < 5 && (
-					<Pressable onPress={addPhotos} style={[styles.addBox, (saving || uploading) && { opacity: 0.5 }]} disabled={saving || uploading}>
+					<Pressable onPress={addPhotos} style={[styles.addBox, (saving || uploading || deleting) && { opacity: 0.5 }]} disabled={saving || uploading || deleting}>
 						<Feather name="plus" size={24} color={theme.colors.textMuted} />
 					</Pressable>
 				)}
@@ -300,12 +310,12 @@ export default function EditTripScreen() {
 				style={({ pressed }) => [
 					styles.buttonPrimary,
 					pressed && styles.buttonPressed,
-					(saving || uploading) && styles.buttonDisabled, // ← Add uploading check
+					(saving || uploading || deleting) && styles.buttonDisabled, // ← Add uploading check
 				]}
 				onPress={handleSaveChanges}
-				disabled={saving || uploading}
+				disabled={saving || uploading || deleting}
 			>
-				<Text style={styles.buttonPrimaryText}> {saving || uploading ? "Saving..." : "Save"} </Text>
+				<Text style={styles.buttonPrimaryText}> {deleting ? "Removing photo…" : saving || uploading ? "Saving..." : "Save"} </Text>
 			</Pressable>
 
 			<Pressable

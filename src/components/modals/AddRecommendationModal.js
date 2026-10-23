@@ -174,26 +174,33 @@ const TagsSelector = ({ selectedTags, onTagsChange }) => {
 };
 
 // PhotoSection: Renders photos and add button
-const PhotoSection = ({ photos, uploading, addPhotos, removePhoto, maxPhotos = 5 }) => (
+const PhotoSection = ({ photos, uploading, deleting, deleteError, retryRemovePhoto, addPhotos, prepareRemovePhoto, maxPhotos = 5 }) => (
 	<View style={styles.field}>
 		<Text style={styles.label}>
 			Photos ({photos.length}/{maxPhotos})
 		</Text>
+		{deleting && <Text>Removing photo…</Text>}
+		{deleteError && <View>
+			<Text accessibilityRole="alert" style={{ color: theme.colors.error }}>{deleteError}</Text>
+			<Pressable accessibilityRole="button" disabled={uploading || deleting} onPress={retryRemovePhoto}><Text>Retry remove photo</Text></Pressable>
+		</View>}
 		<View style={styles.photoWrap}>
 			{photos.map((photoId) => (
 				<TripPhotoThumb
 					key={photoId}
 					photoId={photoId}
-					onPress={() =>
+					onPress={() => {
+						if (uploading || deleting) return;
+						const remove = prepareRemovePhoto(photoId);
 						Alert.alert("Remove photo?", "", [
 							{ text: "Cancel", style: "cancel" },
-							{ text: "Delete", style: "destructive", onPress: () => removePhoto(photoId) },
-						])
-					}
+							{ text: "Delete", style: "destructive", onPress: remove },
+						]);
+					}}
 				/>
 			))}
 			{photos.length < maxPhotos && (
-				<Pressable onPress={addPhotos} style={[styles.addBox, uploading && { opacity: 0.4 }]} disabled={uploading}>
+				<Pressable onPress={addPhotos} style={[styles.addBox, (uploading || deleting) && { opacity: 0.4 }]} disabled={uploading || deleting}>
 					<Ionicons name="add" size={28} color={theme.colors.textMuted} />
 				</Pressable>
 			)}
@@ -251,8 +258,9 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 	const {
 		photos,
 		uploading,
+		deleting = false, deleteError, retryRemovePhoto, isDeleting = () => false,
 		addPhotos,
-		removePhoto,
+		prepareRemovePhoto,
 		setPhotos: setManagerPhotos,
 		uploadPendingPhotos,
 		getPhotos,
@@ -265,7 +273,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 
 	useImperativeHandle(ref, () => ({
 		open(locationData = null, tripId = null) {
-			if (submitting.current && isCurrent(submitting.current.context)) return;
+			if ((submitting.current && isCurrent(submitting.current.context)) || isDeleting()) return;
 			submitting.current = null;
 			setSaving(false);
 			draftContext.current = renderContext;
@@ -311,7 +319,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		},
 
 		openEdit(recommendation) {
-			if (submitting.current && isCurrent(submitting.current.context)) return;
+			if ((submitting.current && isCurrent(submitting.current.context)) || isDeleting()) return;
 			submitting.current = null;
 			setSaving(false);
 			draftContext.current = renderContext;
@@ -356,7 +364,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 	};
 
 	const handleClose = () => {
-		if (!submitting.current && !uploading) setVisible(false);
+		if (!submitting.current && !uploading && !isDeleting()) setVisible(false);
 	};
 
 	const updateField = (field, value) => {
@@ -372,7 +380,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 
 	const handleSubmit = async () => {
 		const context = renderContext;
-		if (submitting.current || uploading || draftContext.current !== context || !isCurrent(context)) return;
+		if (submitting.current || uploading || isDeleting() || draftContext.current !== context || !isCurrent(context)) return;
 		// Basic validation
 		if (!formData.name.trim()) return Alert.alert("Error", "Please enter a name for the recommendation");
 		if (!formData.description.trim()) return Alert.alert("Error", "Please enter a description");
@@ -530,8 +538,14 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 							key={editingRecommendationId || "new-photo-section"}
 							photos={photos}
 							uploading={uploading}
+							deleting={deleting}
+							deleteError={deleteError}
+							retryRemovePhoto={() => { if (!submitting.current) void retryRemovePhoto(); }}
 							addPhotos={addPhotos}
-							removePhoto={removePhoto}
+							prepareRemovePhoto={(photoId) => {
+								const remove = prepareRemovePhoto(photoId);
+								return () => { if (!submitting.current) void remove(); };
+							}}
 							maxPhotos={5}
 						/>
 					)}
@@ -541,7 +555,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 					)}
 
 					{saveError ? <Text accessibilityRole="alert" style={{ color: theme.colors.error }}>{saveError}</Text> : null}
-					<Pressable testID="recommendation-save" onPress={handleSubmit} disabled={saving || uploading} style={[styles.button, { backgroundColor: theme.colors.primary, opacity: saving ? 0.5 : 1 }]}>
+					<Pressable testID="recommendation-save" onPress={handleSubmit} disabled={saving || uploading || deleting} style={[styles.button, { backgroundColor: theme.colors.primary, opacity: saving ? 0.5 : 1 }]}>
 						{saving && <ActivityIndicator color="#fff" />}
 						<Text style={styles.buttonText}>{isEditMode ? "Update Recommendation" : "Save Recommendation"}</Text>
 					</Pressable>

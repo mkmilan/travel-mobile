@@ -3,8 +3,9 @@ const assert = require('node:assert/strict');
 const {fixture,nodes,theme,native} = require('./helpers/component-fixture.cjs');
 const deferred = () => {let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const json = value => JSON.parse(JSON.stringify(value));
+const photoContext={valid:true,token:'fixture-session',userId:'fixture-owner',isCurrent:()=>true};
 const manager = ({initial=[],context='trip',upload=async(id,uri)=>({photoIds:[`saved-${uri.split('/').at(-1)}`]}),extra={}}={}) => fixture('src/hooks/usePhotoManager.js','usePhotoManager',{initial,context,id:'fixture-item'}, {
-  uploadTripPhoto:upload,uploadRecommendationPhoto:upload,uploadProfilePhoto:async uri=>({profilePictureUrl:(await upload('profile',uri)).photoIds[0]}),...extra,
+  useProfileContext:()=>photoContext,uploadTripPhoto:upload,uploadRecommendationPhoto:upload,uploadProfilePhoto:async uri=>({profilePictureUrl:(await upload('profile',uri)).photoIds[0]}),...extra,
 });
 
 test('photo upload success replaces every local URI with confirmed IDs and never reuploads server photos',async()=>{
