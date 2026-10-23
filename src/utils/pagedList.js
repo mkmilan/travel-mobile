@@ -5,6 +5,19 @@ export function createPagedList(loadPage, enabled = true) {
 	let inFlight = null;
 	let queuedRefresh = null;
 	const listeners = new Set();
+	const uniqueItems = (items) => {
+		const positions = new Map();
+		const result = [];
+		for (const item of items) {
+			const id = item?._id ?? item?.photoId;
+			if (id != null && positions.has(id)) result[positions.get(id)] = item;
+			else {
+				if (id != null) positions.set(id, result.length);
+				result.push(item);
+			}
+		}
+		return result;
+	};
 	const update = (patch) => {
 		state = { ...state, ...patch };
 		listeners.forEach((listener) => listener());
@@ -18,7 +31,7 @@ export function createPagedList(loadPage, enabled = true) {
 			.then((result) => {
 				if (!Array.isArray(result?.data)) throw new Error("Invalid list response");
 				update({
-					items: replace ? result.data : [...state.items, ...result.data],
+					items: uniqueItems(replace ? result.data : [...state.items, ...result.data]),
 					nextPage: page + 1,
 					hasNext: result.hasNext ?? page < result.totalPages,
 					loaded: true,

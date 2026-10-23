@@ -1,7 +1,11 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from "react-native";
 
+import useProfileList from "@/src/hooks/useProfileList";
+import ProfileListStatus from "@/src/components/ProfileListStatus";
+import { useAuthStore } from "@/src/stores/auth";
+import { getFollowRevision, subscribeFollowChanges } from "@/src/utils/followActions";
 import TripCardContainer from "@/src/components/TripCardContainer";
 import CommentsSheet from "@/src/components/sheets/CommentsSheet";
 import LikersSheet from "@/src/components/sheets/LikersSheet";
@@ -11,58 +15,34 @@ import { getFeedTripJson } from "@/src/services/api";
 import { useTripSocialStore } from "@/src/stores/tripSocialStore";
 import { theme } from "@/src/theme";
 
+const loadFeedPage = async (_userId, page, limit) => {
+	const { items } = await getFeedTripJson(page, limit);
+	return { data: items, hasNext: items.length > 0 };
+};
+
 /* ------------------------------------------------------------------ */
 /* screen                                                              */
 /* ------------------------------------------------------------------ */
 export default function FeedScreen() {
-	/* paging state */
-	const [items, setItems] = useState([]);
-	const [page, setPage] = useState(1);
-	const [loading, setLoading] = useState(false);
-	const [hasMore, setHasMore] = useState(true);
-
-	/* bottom-sheet state */
-	const [sheetType, setSheetType] = useState(null); // 'likers'|'comments'|'recs'
-	const [selectedTrip, setSelected] = useState(null);
-
+	const userId = useAuthStore((state) => state.user?._id);
+	const followRevision = useSyncExternalStore(subscribeFollowChanges, getFollowRevision, getFollowRevision);
+	const { identity, items, loading, initialLoading, refreshing, error, refresh, loadMore, refreshOnNextFocus } = useProfileList(userId, loadFeedPage, 10, followRevision);
+	// A changed relationship replaces privacy-dependent data immediately. Ordinary
+	// tab returns retain the same list, pages and scroll position.
+	const [sheet, setSheet] = useState(null);
+	const selectedTrip = sheet?.identity === identity ? sheet.trip : null;
+	const sheetType = selectedTrip ? sheet.type : null;
 	const router = useRouter();
-	const { primeCounts } = useTripSocialStore(); // prime slice
-
-	/* -------------------------------------------------------------- */
-	/* fetch one page                                                 */
-	/* -------------------------------------------------------------- */
-	const loadPage = useCallback(async () => {
-		if (loading || !hasMore) return;
-		setLoading(true);
-		try {
-			const { items: fetched } = await getFeedTripJson(page);
-			/* cache counts for optimistic sync */
-			fetched.forEach(primeCounts);
-			// console.log("FEED TRIP/items", items[0]);
-
-			setItems((prev) => [...prev, ...fetched]);
-			setHasMore(fetched.length > 0);
-			setPage((p) => p + 1);
-		} catch (err) {
-			console.error("feed fetch error", err);
-			setHasMore(false);
-		} finally {
-			setLoading(false);
-		}
-	}, [loading, hasMore, page]);
-
-	useEffect(() => {
-		loadPage();
-	}, []); // first mount
+	const { primeCounts } = useTripSocialStore();
+	useEffect(() => { items.forEach(primeCounts); }, [items, primeCounts]);
 
 	/* -------------------------------------------------------------- */
 	/* sheet helpers                                                  */
 	/* -------------------------------------------------------------- */
 	const openSheet = (type, trip) => {
-		setSelected(trip);
-		setSheetType(type);
+		setSheet({ identity, trip, type });
 	};
-	const closeSheet = () => setSheetType(null);
+	const closeSheet = () => setSheet(null);
 
 	/* -------------------------------------------------------------- */
 	/* render                                                         */
@@ -77,17 +57,20 @@ export default function FeedScreen() {
 						user={item.user}
 						trip={item}
 						onOpenSheet={openSheet}
-						onPress={() => router.push(`/trip/${item._id}`)}
+						onPress={() => { refreshOnNextFocus(); router.push(`/trip/${item._id}`); }}
 					/>
 				)}
 				contentContainerStyle={{
+					flexGrow: 1,
 					paddingHorizontal: theme.space.md,
 					paddingTop: theme.space.sm,
 					paddingBottom: theme.space.sm,
 				}}
-				onEndReached={loadPage}
+				onEndReached={loadMore}
 				onEndReachedThreshold={0.3}
-				ListFooterComponent={loading ? <ActivityIndicator /> : null}
+				ListFooterComponent={items.length > 0 ? loading ? <ActivityIndicator /> : error ? <ProfileListStatus error={error} onRetry={refresh} /> : null : null}
+				refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+				ListEmptyComponent={<ProfileListStatus loading={initialLoading || loading} error={error} onRetry={refresh} emptyMessage="No trips in your feed yet." />}
 			/>
 
 			{/* shared bottom sheets */}
