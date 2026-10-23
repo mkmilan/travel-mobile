@@ -32,6 +32,7 @@ import { useTripSocialStore } from "@/src/stores/tripSocialStore";
 import { theme } from "@/src/theme";
 import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
+import { getPoiNote } from "@/src/utils/poiNote";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -748,10 +749,10 @@ export default function TripDetailScreen() {
 						<Pressable
 							key={poi._id || `poi-${index}`}
 							style={styles.listItem}
-							onPress={() => Alert.alert("POI Detail", poi.note || "View POI")}
+							onPress={() => Alert.alert("POI Detail", getPoiNote(poi) || "View POI")}
 						>
 							<Feather name="map-pin" size={16} color={theme.colors.primary} style={styles.listItemIcon} />
-							<Text style={styles.listItemText}>{poi.note || `POI ${index + 1}`}</Text>
+							<Text style={styles.listItemText}>{getPoiNote(poi) || `POI ${index + 1}`}</Text>
 						</Pressable>
 					))
 				) : (
