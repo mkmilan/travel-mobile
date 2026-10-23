@@ -79,6 +79,11 @@ export default function RecordScreen() {
 		stopRequest.current = null;
 		metadataDraft.current = null;
 		pendingPoiRepair.current = null;
+		pendingPoi.current = null;
+		firstPoint.current = null;
+		lastPoint.current = null;
+		tripEndTime.current = null;
+		pendingNames.current = { startName: "Unknown", endName: "Unknown" };
 		setIsResolvingLocation(false);
 		setPending([]);
 		setStatus("idle");

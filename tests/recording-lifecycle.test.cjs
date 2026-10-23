@@ -85,7 +85,7 @@ test('actual SQLite: active/paused/restored records cannot upload, delete or bec
     await f.dao.stopTrip(id,end,'owner');await f.dao.finishTrip(id,metadata,'owner');
     // A stale restored marker must block even a superficially stopped row.
     f.setActive({tripId:id,userId:'owner'});await assert.rejects(f.dao.deleteTrip(id,'owner'),/Stop/);await assert.rejects(f.dao.buildTripJsonForUpload(id,{},'owner'),/Stop/);
-    f.setActive({});await f.dao.insertTrackPoint(id,'s',point);await f.dao.markTripUploaded(id,'owner');await f.dao.insertTrackPoint(id,'s',point);
+    f.setActive({});await f.dao.insertTrackPoint(id,'s',point);await f.dao.markTripUploaded(id,'owner');await assert.rejects(f.dao.stopTrip(id,end,'owner'),/already uploaded/);await f.dao.insertTrackPoint(id,'s',point);
     assert.equal((await f.db.getAllAsync('SELECT * FROM track_points')).length,2);
     await assert.rejects(f.dao.setTripRecordingStatus(id,'recording','owner'),/already stopped/);
     const deleted=await f.dao.startTrip('owner');await f.dao.stopTrip(deleted,end,'owner');await f.dao.deleteTrip(deleted,'owner');await f.dao.insertTrackPoint(deleted,'s',point);
@@ -193,4 +193,12 @@ test('legacy uploaded/stopped collector cleanup preserves history and reports na
       assert.equal(JSON.stringify(await f.db.getAllAsync('SELECT * FROM trips')),before);assert.equal(JSON.stringify(await f.db.getAllAsync('SELECT * FROM track_points')),points);
     } finally {f.close();}
   }
+});
+
+test('account initialization clears stale GPS and POI draft before a new owner can add a note',async()=>{
+  let effects=[],notices=[];const session={user:{_id:'new-owner'},token:'new-token'};
+  const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {...native,theme,StyleSheet:{create:x=>x,absoluteFillObject:{}},useEffect:fn=>effects.push(fn),useAuthStore:Object.assign(select=>select(session),{getState:()=>session}),runMigrations:async()=>{},getPendingTrips:async()=>[],getActiveTrip:async()=>({}),Location:{hasStartedLocationUpdatesAsync:async()=>false},TASK_NAME:'task',toast:n=>notices.push(n),CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal'});
+  screen.setState(10,{current:{lat:10,lon:20}});screen.setState(11,{current:{lat:10,lon:20}});screen.setState(14,{current:{tripId:'old',userId:'old-owner'}});
+  screen.render();effects[0]();await new Promise(setImmediate);screen.setState(0,'recording');screen.setState(1,'new-trip');const tree=screen.render();nodes(tree,'CircleButton').find(n=>n.props.icon==='location-sharp').props.onPress();
+  assert.equal(notices.at(-1).title,'Location not available yet');
 });

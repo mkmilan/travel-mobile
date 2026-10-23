@@ -166,6 +166,7 @@ export const startTrip = async (userId, settings = {}) => {
 export const stopTrip = async (tripId, endTime, userId) => {
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
+	if (!["recording", "paused", "stopped"].includes(trip.status)) throw new Error("This trip is already uploaded");
 	await requireInactiveTrip(trip);
 	await db.runAsync(`UPDATE trips SET status = 'stopped', end_time = COALESCE(end_time, ?), metadata_confirmed = CASE WHEN metadata_confirmed IS NULL AND status IN ('recording','paused') THEN -1 ELSE metadata_confirmed END WHERE id = ? AND user_id = ? AND status IN ('recording','paused','stopped')`, [endTime, tripId, userId]);
 };
