@@ -27,29 +27,20 @@ if (!API_URL) {
 	console.error("[api] API_URL is not defined in app.config.js › extra. " + "Feed calls will fail.");
 }
 
-// Capture auth synchronously, before CSRF/file/storage awaits. A session epoch
-// also rejects logout/login cycles that happen to reuse the same token/user.
-let observedAuthStore;
-let stopObservingAuth;
-let requestSessionGeneration = 0;
+// Capture the auth store's authoritative epoch before CSRF/file/storage awaits.
+// Logout can overlap a same-token login without ever clearing the old identity;
+// observing token/user changes alone cannot distinguish those sessions.
 const captureRequestSession = (expectedUserId) => {
 	const store = require("@/src/stores/auth").useAuthStore;
-	if (observedAuthStore !== store) {
-		stopObservingAuth?.();
-		observedAuthStore = store;
-		requestSessionGeneration++;
-		stopObservingAuth = store.subscribe?.((next, previous) => {
-			if (next.token !== previous.token || next.user?._id !== previous.user?._id) requestSessionGeneration++;
-		});
-	}
 	const state = store.getState();
-	const session = { store, token: state.token ?? null, userId: state.user?._id, generation: requestSessionGeneration };
-	if (expectedUserId && session.userId !== expectedUserId) throw new Error("Account changed; request cancelled");
+	const session = { store, token: state.token ?? null, userId: state.user?._id, epoch: state.sessionEpoch };
+	if (state.isSessionChanging || (expectedUserId && session.userId !== expectedUserId)) throw new Error("Account changed; request cancelled");
 	return session;
 };
 const isRequestSessionCurrent = (session) => {
 	const state = session.store.getState();
-	return session.generation === requestSessionGeneration && (state.token ?? null) === session.token && state.user?._id === session.userId;
+	return !state.isSessionChanging && session.epoch === state.sessionEpoch
+		&& (state.token ?? null) === session.token && state.user?._id === session.userId;
 };
 const assertRequestSession = async (session, expectedUserId) => {
 	const [token, rawUser] = await Promise.all([
@@ -61,6 +52,15 @@ const assertRequestSession = async (session, expectedUserId) => {
 		|| (expectedUserId && (user?._id !== expectedUserId || user?.token !== session.token))) {
 		throw new Error("Account changed; request cancelled");
 	}
+};
+const fetchForRequestSession = async (session, url, options, expectedUserId) => {
+	if (session) {
+		await assertRequestSession(session, expectedUserId);
+		// Recheck synchronously at dispatch, after the async storage assertion has
+		// returned control; a transition can also start in that promise boundary.
+		if (!isRequestSessionCurrent(session)) throw new Error("Account changed; request cancelled");
+	}
+	return fetch(url, options);
 };
 
 /* ------------------------------------------------------------------ *
@@ -93,15 +93,13 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 		return null; // swallow the call gracefully
 	}
 
-	if (requestSession) await assertRequestSession(requestSession, expectedUserId);
-	const res = await fetch(`${API_URL}${path}`, { ...options, method, headers });
+	const res = await fetchForRequestSession(requestSession, `${API_URL}${path}`, { ...options, method, headers }, expectedUserId);
 
 	/* ─── automatic logout on 401 ─── */
 	if (res.status === 401 && requestToken) {
 		try {
-			const store = require("@/src/stores/auth").useAuthStore;
 			const currentToken = await SecureStore.getItemAsync("auth-token");
-			const state = store.getState();
+			const state = requestSession.store.getState();
 			if (currentToken === requestToken && state.token === requestToken && isRequestSessionCurrent(requestSession)) {
 				await state.logout();
 			}
@@ -382,10 +380,9 @@ export const uploadProfilePhoto = async (localUri) => {
 
 	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	const form = await createPhotoFormData("photo", localUri);
-	await assertRequestSession(requestSession);
 
 	// 3. Direct fetch (we **don’t** use apiFetch so we avoid the JSON header)
-	const res = await fetch(`${API_URL}/users/me`, {
+	const res = await fetchForRequestSession(requestSession, `${API_URL}/users/me`, {
 		method: "PUT",
 		headers: {
 			"X-CSRF-Token": csrfToken,
@@ -417,9 +414,8 @@ export const uploadTripPhoto = async (tripId, localUri) => {
 
 	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	const form = await createPhotoFormData("photos", localUri);
-	await assertRequestSession(requestSession);
 
-	const res = await fetch(`${API_URL}/trips/${tripId}/photos`, {
+	const res = await fetchForRequestSession(requestSession, `${API_URL}/trips/${tripId}/photos`, {
 		method: "POST",
 		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${requestSession.token}` },
 		body: form,
@@ -446,9 +442,8 @@ export const uploadRecommendationPhoto = async (recId, localUri) => {
 
 	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	const form = await createPhotoFormData("photos", localUri);
-	await assertRequestSession(requestSession);
 
-	const res = await fetch(`${API_URL}/v2/recommendations/${recId}/photos`, {
+	const res = await fetchForRequestSession(requestSession, `${API_URL}/v2/recommendations/${recId}/photos`, {
 		method: "POST",
 		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${requestSession.token}` },
 		body: form,

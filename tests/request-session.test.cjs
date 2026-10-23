@@ -5,11 +5,11 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve
 const tick=()=>new Promise(setImmediate);
 const response=(status=200)=>({status,ok:status<400,headers:{get:()=> 'application/json'},json:async()=>status===401?{message:'Expired'}:{ok:true}});
 function apiFixture({csrf=async()=> 'fixture-csrf',photo=async()=>({fixture:'form'}),reply=async()=>response(),read}={}) {
-  let state={user:{_id:'fixture-a'},token:'fixture-token-a'};let token=state.token,user=JSON.stringify({...state.user,token});
+  let state={user:{_id:'fixture-a'},token:'fixture-token-a',sessionEpoch:1,isSessionChanging:false};let token=state.token,user=JSON.stringify({...state.user,token});
   const listeners=new Set(),requests=[];let storeReads=0,logoutCount=0;
   state.logout=async()=>logoutCount++;
   const store={getState:()=>{storeReads++;return state;},subscribe:listener=>{listeners.add(listener);return ()=>listeners.delete(listener);}};
-  const setSession=(next,{persist=true}={})=>{const previous=state;state={...next,logout:async()=>logoutCount++};if(persist){token=next.token;user=next.user?JSON.stringify({...next.user,token}):null;}for(const listener of listeners)listener(state,previous);};
+  const setSession=(next,{persist=true}={})=>{const previous=state;const changed=next.token!==previous.token||next.user?._id!==previous.user?._id;state={...next,sessionEpoch:previous.sessionEpoch+Number(changed),isSessionChanging:false,logout:async()=>logoutCount++};if(persist){token=next.token;user=next.user?JSON.stringify({...next.user,token}):null;}for(const listener of listeners)listener(state,previous);};
   const api=load('src/services/api.js','({apiFetch,uploadProfilePhoto,uploadTripPhoto,uploadRecommendationPhoto})',{
     Constants:{expoConfig:{extra:{API_URL:'https://fixture.invalid/api',APP_ENV:'test'}}},Updates:{},console:{log(){},warn(){},error(){}},
     require:()=>({useAuthStore:store}),SecureStore:{getItemAsync:key=>read?read(key,()=>key==='auth-token'?token:user):Promise.resolve(key==='auth-token'?token:user)},
