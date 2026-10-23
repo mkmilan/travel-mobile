@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, FlatList, RefreshControl } from "react-native
 /* --- App utils / components -------------------------------------- */
 import useProfileList from "@/src/hooks/useProfileList";
 import ProfileListStatus from "@/src/components/ProfileListStatus";
+import RecommendationSourceLoader from "@/src/components/RecommendationSourceLoader";
 import RecommendationCard from "@/src/components/RecommendationCard";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal"; // Added
 import RecommendationDetailModal from "@/src/components/modals/RecommendationDetailModal";
@@ -30,6 +31,8 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	const [detailModalOpen, setDetailModalOpen] = useState(false); // Renamed for clarity
 	const [selection, setSelection] = useState(null);
 	const selRec = selection && selection.identity === identity ? selection.rec : null;
+	const currentPending = useRef(pendingRequest);
+	currentPending.current = pendingRequest;
 	const currentIdentity = useRef(identity);
 	currentIdentity.current = identity;
 	const detailRequest = useRef(null);
@@ -53,6 +56,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 		if (!pendingRecId) return;
 		const found = items.find((rec) => rec._id === pendingRecId);
 		if (!found) return;
+		currentPending.current = null;
 		void openDetailModal(found);
 		setPendingRequest(null);
 		navigation.setParams({ openRecId: undefined });
@@ -183,6 +187,22 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	return (
 		<>
 			<FlatList
+				ListHeaderComponent={pendingRecId && !initialLoading && !loading && !items.some((rec) => rec._id === pendingRecId) ? (
+					<RecommendationSourceLoader key={`${pendingRecId}-${route.params?.ts || ""}`} recommendationId={pendingRecId} userId={userId}
+						onFound={(rec) => {
+							if (currentIdentity.current !== identity || currentPending.current !== pendingRequest) return;
+							currentPending.current = null;
+							void openDetailModal(rec);
+							setPendingRequest(null);
+							navigation.setParams({ openRecId: undefined });
+						}}
+						onCancel={() => {
+							if (currentIdentity.current !== identity || currentPending.current !== pendingRequest) return;
+							currentPending.current = null;
+							setPendingRequest(null);
+							navigation.setParams({ openRecId: undefined });
+						}} />
+				) : null}
 				data={items}
 				keyExtractor={(it) => it._id}
 				renderItem={({ item }) => (

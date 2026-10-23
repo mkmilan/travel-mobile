@@ -298,6 +298,10 @@ export const addRecommendation = async (recommendationData, csrf = true) => {
 	return data;
 };
 
+// One permission-checked source lookup; never crawl paginated lists.
+export const getRecommendationByIdApi = (id) =>
+	apiFetch(`/v2/recommendations/${encodeURIComponent(id)}`, { method: "GET" });
+
 // Fetch recommendations roe requested user requested user id is userId
 export const getRecommendationsByUser = async (userId, page = 1, limit = 10) => {
 	const data = await apiFetch(`/v2/recommendations/user/${userId}?page=${page}&limit=${limit}`, {

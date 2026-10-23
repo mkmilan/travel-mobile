@@ -83,7 +83,7 @@ test('Trips sheets are hidden immediately when profile/session identity changes'
 
 function recommendationsFixture(loader,routeParams={},dependencies={}) {
   let list=createPagedList(loader);const route={params:routeParams};const effects=[];let effectIndex=0;const queued=[];const alerts=[];
-  const nativeDeps={...native,theme,RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',RecommendationCard:'RecommendationCard',RecommendationDetailModal:'RecommendationDetailModal',AddRecommendationModal:'AddRecommendationModal',getRecommendationsByUser:()=>{},lineStringToCoords:coords=>coords,
+  const nativeDeps={...native,theme,RecommendationSourceLoader:'RecommendationSourceLoader',RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',RecommendationCard:'RecommendationCard',RecommendationDetailModal:'RecommendationDetailModal',AddRecommendationModal:'AddRecommendationModal',getRecommendationsByUser:()=>{},lineStringToCoords:coords=>coords,
     getTripJsonById:async()=>({}),deleteRecommendation:async()=>{},updateRecommendation:async()=>{},Alert:{alert:(...args)=>alerts.push(args)},
     useNavigation:()=>({setParams:params=>Object.assign(route.params,params)}),useRoute:()=>route,
     useProfileList:()=>({...list.getSnapshot(),identity:list,initialLoading:!list.getSnapshot().loaded,ensureLoaded:list.ensureLoaded,refresh:list.refresh,loadMore:list.loadMore,setItems:list.setItems}),
@@ -181,7 +181,7 @@ test('Gallery source links close viewer, preserve trip/Recs destinations and rev
     const screen=galleryFixture(async()=>{calls++;return [photo];});screen.render();screen.focus(true);await tick();screen.render();screen.effects();
     let tree=screen.render();nodes(tree,'FlatList')[0].props.renderItem({item:photo}).props.onPress();tree=screen.render();
     const viewer=nodes(tree,'ImageViewing')[0];assert.equal(viewer.props.visible,true);assert.equal(viewer.props.images[0].headers.Authorization,'Bearer fixture');
-    nodes(viewer.props.FooterComponent(),'Pressable')[0].props.onPress();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,false);
+    nodes(viewer.props.FooterComponent(),'Pressable')[0].props.onPress();nodes(viewer.props.FooterComponent(),'Pressable')[0].props.onPress();assert.equal(screen.navigation.length,1);assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,false);
     assert.equal(screen.navigation[0].route,sourceType==='trip'?'(tabs)/trip/source':'Recs');if(sourceType==='recommendation')assert.equal(screen.navigation[0].params.openRecId,'source');
     screen.focus(false);screen.render();screen.effects();screen.focus(true);screen.render();screen.effects();await tick();assert.equal(calls,2);
     screen.render();screen.effects();await tick();assert.equal(calls,2);
@@ -201,4 +201,16 @@ test('Gallery GET retains authentication and query pagination without acquiring 
     Constants:{expoConfig:{extra:{API_URL:'https://fixture.invalid/api'}}},Updates:{},URLSearchParams,console:{log(){},error(){}},request:async(path,options)=>{requests.push({path,options});return {data:[{photoId:'fixture'}]};},
   });
   const result=await fetchPhotos('fixture-profile',2,20);assert.equal(result[0].photoId,'fixture');assert.equal(requests[0].path,'/users/v2/fixture-profile/photos?page=2&limit=20');assert.equal(requests[0].options.method,'GET');assert.equal(requests[0].options.auth,true);assert.notEqual(requests[0].options.csrf,true);
+});
+
+test('off-page gallery target offers one direct resolver without auto-pagination and handles open/cancel/stale completion',async()=>{
+ for(const action of ['open','cancel','stale']) {
+  let calls=0;const screen=recommendationsFixture(async()=>{calls++;return {data:[{_id:'page-one'}],totalPages:8};},{openRecId:'off-page',ts:1});
+  screen.render();screen.effects();await screen.list.ensureLoaded();screen.render();screen.effects();let tree=screen.render();
+  const resolver=nodes(tree,'FlatList')[0].props.ListHeaderComponent;assert.equal(resolver.type,'RecommendationSourceLoader');assert.equal(resolver.props.recommendationId,'off-page');assert.equal(calls,1);
+  if(action==='stale'){screen.switchList(createPagedList(async()=>({data:[],totalPages:0})));screen.render();resolver.props.onFound({_id:'off-page',user:{_id:'fixture'}});assert.equal(nodes(screen.render(),'RecommendationDetailModal').length,0);}
+  else if(action==='open'){resolver.props.onFound({_id:'off-page',user:{_id:'fixture'}});tree=screen.render();assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.recommendation._id,'off-page');assert.equal(nodes(tree,'FlatList')[0].props.ListHeaderComponent,null);}
+  else {resolver.props.onCancel();assert.equal(nodes(screen.render(),'FlatList')[0].props.ListHeaderComponent,null);}
+  assert.equal(calls,1);
+ }
 });
