@@ -13,6 +13,7 @@ function authFixture({ storedUser=null, token=null, register=async()=>({success:
   let state;
   const writes=[];
   const dependencies={
+    ...require('../src/constants/presentationPreferences'),
     create: (initializer)=> { state=initializer((patch)=>Object.assign(state,patch),()=>state); return {getState:()=>state}; },
     SecureStore: {
       getItemAsync: async(key)=>{ if(storageFailure) throw Error('fixture'); return key==='user-data' ? storedUser : token; },
@@ -114,5 +115,5 @@ test('profile/settings/edit-profile keep hooks unconditional across sign-out and
     assert.ok(guardIndex>Math.max(...hookIndices),`${file}: all hooks precede auth guard`);
   }
   assert.match(read('app/(tabs)/me/settings.js'),/useState\(\{ \.\.\.user\?\.settings \}\)/);
-  assert.match(read('src/screens/profile/ProfileScreen.js'),/if \(!ready \|\| !profileId\) return;/);
+  assert.match(read('src/screens/profile/ProfileScreen.js'),/if \(ready\) void profile\.refresh\(\)/);
 });

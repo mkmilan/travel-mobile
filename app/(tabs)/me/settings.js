@@ -3,6 +3,7 @@
  * ------------------------------------------------------------------ */
 import ChoiceTabs from "@/src/components/form/ChoiceTabs";
 import TransportIcon from "@/src/components/TransportIcon";
+import { ENABLE_LANGUAGE_AND_THEME_PREFERENCES, getEditableSettings } from "@/src/constants/presentationPreferences";
 import {
 	dateFormatOptions,
 	languageOptions,
@@ -78,9 +79,7 @@ export default function SettingsScreen() {
 
 	const save = async () => {
 		try {
-			// const updated = await updateUserSettings(true, { settings: s });
-			const updated = await updateUserSettings(true, s);
-			console.log("[SettingsScreen] save settings before put", s);
+			const updated = await updateUserSettings(true, getEditableSettings(s));
 			await updateUser(updated); // bullet-proof merge inside the store
 			router.push(`/(tabs)/user/${user._id}`);
 		} catch (e) {
@@ -135,15 +134,19 @@ export default function SettingsScreen() {
 				iconRenderer={(name, color) => <Feather name={name} size={16} color={color} style={{ marginRight: 6 }} />}
 			/>
 
-			<Text style={styles.sectionHdr}>Theme preference</Text>
-			<View style={{ height: theme.space.xs }} />
-			<ChoiceTabs
-				value={s.themePreference}
-				options={withIcon(themePreferenceOptions)}
-				onChange={(v) => updateField("themePreference", v)}
-				size="sm"
-				iconRenderer={(name, color) => <Feather name={name} size={16} color={color} style={{ marginRight: 6 }} />}
-			/>
+			{ENABLE_LANGUAGE_AND_THEME_PREFERENCES && (
+				<>
+					<Text style={styles.sectionHdr}>Theme preference</Text>
+					<View style={{ height: theme.space.xs }} />
+					<ChoiceTabs
+						value={s.themePreference}
+						options={withIcon(themePreferenceOptions)}
+						onChange={(v) => updateField("themePreference", v)}
+						size="sm"
+						iconRenderer={(name, color) => <Feather name={name} size={16} color={color} style={{ marginRight: 6 }} />}
+					/>
+				</>
+			)}
 
 			{/* ── Date / time / language ──────────────────── */}
 			<Text style={styles.sectionHdr}>Date format</Text>
@@ -166,15 +169,19 @@ export default function SettingsScreen() {
 				iconRenderer={(name, color) => <Feather name={name} size={16} color={color} style={{ marginRight: 6 }} />}
 			/>
 
-			<Text style={styles.sectionHdr}>Language</Text>
-			<View style={{ height: theme.space.xs }} />
-			<ChoiceTabs
-				value={s.language}
-				options={withIcon(languageOptions)}
-				onChange={(v) => updateField("language", v)}
-				size="sm"
-				iconRenderer={(name, color) => <Feather name={name} size={16} color={color} style={{ marginRight: 6 }} />}
-			/>
+			{ENABLE_LANGUAGE_AND_THEME_PREFERENCES && (
+				<>
+					<Text style={styles.sectionHdr}>Language</Text>
+					<View style={{ height: theme.space.xs }} />
+					<ChoiceTabs
+						value={s.language}
+						options={withIcon(languageOptions)}
+						onChange={(v) => updateField("language", v)}
+						size="sm"
+						iconRenderer={(name, color) => <Feather name={name} size={16} color={color} style={{ marginRight: 6 }} />}
+					/>
+				</>
+			)}
 
 			{/* ── Save button ─────────────────────────────── */}
 			<TouchableOpacity style={styles.button} onPress={save}>

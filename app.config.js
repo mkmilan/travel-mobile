@@ -1,4 +1,5 @@
 import * as dotenv from "dotenv";
+const { ENABLE_LANGUAGE_AND_THEME_PREFERENCES } = require("./src/constants/presentationPreferences");
 
 // Variant selection is explicit and independent of NODE_ENV (release JS is production).
 const isTest = process.env.APP_VARIANT === "test";
@@ -27,7 +28,7 @@ export default {
 		scheme: isTest ? "travel-test" : "mobile",
 		// This side-by-side APK only runs its embedded bundle. Never publish to the old app.
 		...(isTest ? { updates: { enabled: false }, runtimeVersion: "travel-test-sdk57-v1" } : {}),
-		userInterfaceStyle: "automatic",
+		userInterfaceStyle: ENABLE_LANGUAGE_AND_THEME_PREFERENCES ? "automatic" : "light",
 		ios: {
 			supportsTablet: true,
 			infoPlist: {

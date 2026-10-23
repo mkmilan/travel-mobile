@@ -2,6 +2,7 @@ import * as authService from "@/src/services/auth";
 import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
 import { stopActiveRecording } from "../utils/stopActiveRecording";
+import { getAppLanguage, getAppThemePreference } from "../constants/presentationPreferences";
 
 const STORAGE_KEYS = {
 	user: "user-data",
@@ -14,8 +15,8 @@ const isValidUser = (obj) =>
 export const useAuthStore = create((set, get) => ({
 	user: null,
 	token: null,
-	theme: "system",
-	language: "en",
+	theme: getAppThemePreference(),
+	language: getAppLanguage(),
 	loading: false,
 	isAuthenticated: false,
 	isHydrating: true,
@@ -34,8 +35,8 @@ export const useAuthStore = create((set, get) => ({
 			user: userData,
 			token: userData.token,
 			isAuthenticated: true,
-			theme: userData.settings?.themePreference || "system",
-			language: userData.settings?.language || "en",
+			theme: getAppThemePreference(userData.settings?.themePreference),
+			language: getAppLanguage(userData.settings?.language),
 		});
 	},
 
@@ -65,8 +66,8 @@ export const useAuthStore = create((set, get) => ({
 			user: null,
 			token: null,
 			isAuthenticated: false,
-			theme: "system",
-			language: "en",
+			theme: getAppThemePreference(),
+			language: getAppLanguage(),
 			loading: false,
 		});
 		// router.replace("/login");
@@ -85,10 +86,8 @@ export const useAuthStore = create((set, get) => ({
 					user,
 					token,
 					isAuthenticated: true,
-					// theme: user.settings?.themePreference || "system",
-
-					theme: "light",
-					language: user.settings?.language || "en",
+					theme: getAppThemePreference(user.settings?.themePreference),
+					language: getAppLanguage(user.settings?.language),
 				});
 			}
 		} catch (err) {
@@ -99,8 +98,8 @@ export const useAuthStore = create((set, get) => ({
 	},
 
 	/* ─────────────────── SETTERS ─────────────────── */
-	setTheme: (t) => set({ theme: t }),
-	setLanguage: (l) => set({ language: l }),
+	setTheme: (t) => set({ theme: getAppThemePreference(t) }),
+	setLanguage: (l) => set({ language: getAppLanguage(l) }),
 
 	/* ─────────────────── UPDATE USER (safe-merge) ─────────────────── */
 	/**
@@ -122,9 +121,9 @@ export const useAuthStore = create((set, get) => ({
 		// Write to state
 		set({
 			user: next,
-			// Update theme / language immediately if those prefs changed
-			theme: next.settings?.themePreference ?? get().theme,
-			language: next.settings?.language ?? get().language,
+			// Effective presentation is gated; preserve the original user settings.
+			theme: getAppThemePreference(next.settings?.themePreference ?? get().theme),
+			language: getAppLanguage(next.settings?.language ?? get().language),
 		});
 
 		// Persist – don’t overwrite the token

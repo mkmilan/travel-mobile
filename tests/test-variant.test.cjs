@@ -2,12 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const { createRequire } = require('node:module');
+const path = require('node:path');
 const source = fs.readFileSync('app.config.js', 'utf8')
   .replace('import * as dotenv from "dotenv";', '')
   .replace('export default', 'globalThis.result =');
 function config(env) {
   let loadedEnv = false;
-  const ctx = { process: { env }, dotenv: { config() { loadedEnv = true; } } };
+  const ctx = { process: { env }, dotenv: { config() { loadedEnv = true; } }, require: createRequire(path.resolve('app.config.js')) };
   vm.runInNewContext(source, ctx);
   return { app: JSON.parse(JSON.stringify(ctx.result.expo)), loadedEnv };
 }
@@ -15,6 +17,7 @@ const plugin = (app, name) => app.plugins.find(p => Array.isArray(p) && p[0] ===
 test('Travel Test isolates Android identity, runtime, updates and maps key', () => {
   const { app, loadedEnv } = config({ APP_VARIANT: 'test', API_URL: 'https://wrong.example/api', GOOGLE_MAPS_KEY: 'old-key', TEST_GOOGLE_MAPS_KEY: 'test-only-placeholder' });
   assert.equal(app.name, 'Travel Test');
+  assert.equal(app.userInterfaceStyle, 'light');
   assert.equal(app.android.package, 'com.mkmilanmilan.travelmobile.test');
   assert.equal(app.scheme, 'travel-test');
   assert.equal(app.runtimeVersion, 'travel-test-sdk57-v1');
@@ -34,6 +37,7 @@ test('test variant never falls back to original maps key; cloud build fails with
 test('old production identity and environment behavior remain unchanged', () => {
   const { app, loadedEnv } = config({ APP_ENV: 'production', API_URL: 'https://original.example/api', GOOGLE_MAPS_KEY: 'original-placeholder' });
   assert.equal(app.name, 'Travel mobile');
+  assert.equal(app.userInterfaceStyle, 'light');
   assert.equal(app.android.package, 'com.mkmilanmilan.travelmobile');
   assert.equal(app.scheme, 'mobile');
   assert.equal(app.runtimeVersion, undefined);
@@ -62,6 +66,10 @@ test('native introspection enforces APK identity, exclusive scheme and no OTA/cl
     encoding: 'utf8', maxBuffer: 5 * 1024 * 1024,
   }));
   const manifest = native._internal.modResults.android.manifest.manifest;
+  assert.equal(native.userInterfaceStyle, 'light');
+  assert.equal(native._internal.modResults.ios.infoPlist.UIUserInterfaceStyle, 'Light');
+  const appTheme = native._internal.modResults.android.styles.resources.style.find(style => style.$.name === 'AppTheme');
+  assert.equal(appTheme.$.parent, 'Theme.AppCompat.Light.NoActionBar');
   assert.equal(manifest.$.package, 'com.mkmilanmilan.travelmobile.test');
   const app = manifest.application[0];
   assert.equal(app.$['android:usesCleartextTraffic'], 'false');
