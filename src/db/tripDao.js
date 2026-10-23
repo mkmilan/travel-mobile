@@ -1,5 +1,6 @@
 import uuid from "react-native-uuid";
 import { openDatabase } from "./openDatabase";
+import { getActiveTrip } from "../utils/activeTrip";
 
 /**
  * Creates the standardized payload structure for backend API
@@ -22,6 +23,14 @@ export const tripMetadataDefaults = (trip, settings = {}) => ({
 	visibility: ([0, 1].includes(trip.metadata_confirmed) || hasConfirmedTripMetadata(trip))
 		? trip.default_trip_visibility : settings.defaultTripVisibility || trip.default_trip_visibility || "public",
 });
+const requireInactiveTrip = async (trip) => {
+	const active = await getActiveTrip();
+	if (active?.tripId && active.tripId === trip.id) throw new Error("Stop this recording before uploading, editing or deleting it.");
+};
+const requireStoppedTrip = async (trip) => {
+	await requireInactiveTrip(trip);
+	if (trip.status !== "stopped") throw new Error("Stop or recover this recording before uploading or deleting it.");
+};
 const metadataRequired = () => Object.assign(new Error("Review and save this trip's details before uploading."), { code: "TRIP_METADATA_REQUIRED" });
 
 const createTripPayload = (trip, segments, pois = [], recommendations = [], userSettings = {}) => {
@@ -65,7 +74,7 @@ const createTripPayload = (trip, segments, pois = [], recommendations = [], user
 export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId) => {
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
-	if (trip.status !== "stopped") throw new Error("Stop this recording before uploading.");
+	await requireStoppedTrip(trip);
 	if (!hasConfirmedTripMetadata(trip)) throw metadataRequired();
 
 	// ---- points → segments --------------------------------------------------
@@ -146,7 +155,8 @@ export const startTrip = async (userId, settings = {}) => {
 // leave a stopped collector represented as an active recording after relaunch.
 export const stopTrip = async (tripId, endTime, userId) => {
 	const db = await openDatabase();
-	await getOwnedTrip(db, tripId, userId);
+	const trip = await getOwnedTrip(db, tripId, userId);
+	await requireInactiveTrip(trip);
 	await db.runAsync(`UPDATE trips SET status = 'stopped', end_time = COALESCE(end_time, ?), metadata_confirmed = CASE WHEN metadata_confirmed IS NULL AND status IN ('recording','paused') THEN -1 ELSE metadata_confirmed END WHERE id = ? AND user_id = ? AND status IN ('recording','paused','stopped')`, [endTime, tripId, userId]);
 };
 
@@ -157,7 +167,7 @@ export const finishTrip = async (
 ) => {
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
-	if (trip.status !== "stopped") throw new Error("Stop this recording before saving its details.");
+	await requireStoppedTrip(trip);
 	if (!TRIP_MODES.includes(defaultTransportMode) || !TRIP_VISIBILITIES.includes(defaultTripVisibility)) throw metadataRequired();
 	await db.runAsync(
 		`UPDATE trips
@@ -175,6 +185,15 @@ export const finishTrip = async (
 	);
 };
 
+export const setTripRecordingStatus = async (tripId, status, userId) => {
+	if (!["recording", "paused"].includes(status)) throw new Error("Invalid recording status");
+	const db = await openDatabase();
+	const trip = await getOwnedTrip(db, tripId, userId);
+	if (!["recording", "paused"].includes(trip.status)) throw new Error("This trip is already stopped");
+	await requireInactiveTrip(trip);
+	await db.runAsync(`UPDATE trips SET status = ? WHERE id = ? AND user_id = ? AND status IN ('recording','paused')`, [status, tripId, userId]);
+};
+
 export const startSegment = () => uuid.v4();
 
 export const insertTrackPoint = async (tripId, segmentId, { lat, lon, timestamp, speed, accuracy }) => {
@@ -182,8 +201,9 @@ export const insertTrackPoint = async (tripId, segmentId, { lat, lon, timestamp,
 	await db.runAsync(
 		`INSERT INTO track_points
        (trip_id, segment_id, lat, lon, timestamp, speed, accuracy)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		[tripId, segmentId, lat, lon, timestamp, speed, accuracy]
+     SELECT ?, ?, ?, ?, ?, ?, ?
+       WHERE EXISTS (SELECT 1 FROM trips WHERE id = ? AND status = 'recording')`,
+		[tripId, segmentId, lat, lon, timestamp, speed, accuracy, tripId]
 	);
 };
 
@@ -229,12 +249,16 @@ export const getPendingTrips = async (userId) => {
 export const markTripUploaded = async (tripId, userId) => {
 	requireUserId(userId);
 	const db = await openDatabase();
-	await db.runAsync(`UPDATE trips SET status = 'uploaded' WHERE id = ? AND user_id = ?`, [tripId, userId]);
+	const trip = await getOwnedTrip(db, tripId, userId);
+	await requireStoppedTrip(trip);
+	if (!hasConfirmedTripMetadata(trip)) throw metadataRequired();
+	await db.runAsync(`UPDATE trips SET status = 'uploaded' WHERE id = ? AND user_id = ? AND status = 'stopped'`, [tripId, userId]);
 };
 
 export const deleteTrip = async (tripId, userId) => {
 	const db = await openDatabase();
-	await getOwnedTrip(db, tripId, userId);
+	const trip = await getOwnedTrip(db, tripId, userId);
+	await requireStoppedTrip(trip);
 	await db.runAsync(`DELETE FROM trips WHERE id = ?`, [tripId]);
 	await db.runAsync(`DELETE FROM track_points WHERE trip_id = ?`, [tripId]);
 	await db.runAsync(`DELETE FROM pois WHERE trip_id = ?`, [tripId]);

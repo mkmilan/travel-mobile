@@ -26,7 +26,7 @@ function fixture() {
     },
     runAsync: async (sql, params) => queries.push({sql, params})
   };
-  const dao = load('src/db/tripDao.js', ['getPendingTrips','buildTripJsonForUpload','deleteTrip','markTripUploaded','startTrip','ownsLocalTrip'], {openDatabase: async()=>db, uuid:{v4:()=> 'new-id'}});
+  const dao = load('src/db/tripDao.js', ['getPendingTrips','buildTripJsonForUpload','deleteTrip','markTripUploaded','startTrip','ownsLocalTrip'], {getActiveTrip:async()=>({}),openDatabase: async()=>db, uuid:{v4:()=> 'new-id'}});
   return {dao, queries};
 }
 test('signed-out pending list does not read the database', async()=> {
@@ -49,7 +49,7 @@ test('owner can package a trip; ownership is checked before reading location dat
 });
 test('upload marker is owner-scoped and anonymous recording is rejected', async()=> {
   const {dao,queries}=fixture(); await dao.markTripUploaded('trip-a','alice');
-  assert.match(queries[0].sql,/AND user_id = \?/); assert.equal(queries[0].params[1],'alice');
+  const update=queries.find(q=>q.sql.startsWith('UPDATE'));assert.match(update.sql,/AND user_id = \?/); assert.equal(update.params[1],'alice');
   await assert.rejects(dao.startTrip(),/Sign in/);
 });
 test('logout clears active marker before stopping native collection', async()=> {

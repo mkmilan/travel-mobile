@@ -66,7 +66,7 @@ test('screen saves selected transport key and DAO retains metadata in SQL and up
   await handler({title:'Title',mode:'walking',visibility:'private',description:'Description'});
   assert.equal(saved.data.endTime,'2026-01-01T00:00:00.000Z');assert.equal(saved.data.defaultTransportMode,'walking');assert.equal(saved.data.defaultTravelMode,undefined);
   let sql,params;
-  const dao=load('src/db/tripDao.js','({finishTrip,createTripPayload})',{openDatabase:async()=>({getAllAsync:async()=>[{status:'stopped'}],runAsync:async(query,values)=>{sql=query;params=values;}})});
+  const dao=load('src/db/tripDao.js','({finishTrip,createTripPayload})',{getActiveTrip:async()=>({}),openDatabase:async()=>({getAllAsync:async()=>[{status:'stopped'}],runAsync:async(query,values)=>{sql=query;params=values;}})});
   await dao.finishTrip(saved.id,saved.data,'owner');
   assert.match(sql,/UPDATE trips/); assert.equal(JSON.stringify(params.slice(1)),JSON.stringify(['Title','Description','A','B','walking','private','fixture-trip','owner']));
   const payload=dao.createTripPayload({title:params[1],description:params[2],start_name:params[3],end_name:params[4],default_transport_mode:params[5],default_trip_visibility:params[6]},[]);
@@ -135,7 +135,7 @@ test('Cancel returns to a stopped-screen action that reopens the same trip draft
   const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {
     ...native,theme,useAuthStore:Object.assign(select=>select({user:{_id:'fixture'}}),{getState:()=>({user:{_id:'fixture'},token:'token'})}),getLocalTrip:async()=>({status:'stopped'}),...tripTools,CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',Ionicons:'Ionicons',StyleSheet:{create:styles=>styles,absoluteFillObject:{}},
   });
-  screen.setState(0,'stopped');screen.setState(1,'trip');screen.setState(18,{current:{tripId:'trip',userId:'fixture',token:'token'}});const screenTree=screen.render();
+  screen.setState(0,'stopped');screen.setState(1,'trip');screen.setState(19,{current:{tripId:'trip',userId:'fixture',token:'token'}});const screenTree=screen.render();
   nodes(screenTree,'TripSaveModal')[0].props.ref.current=form.ref.current;
   const edit=nodes(screenTree,'TouchableOpacity').find(node=>node.props.accessibilityLabel==='Edit trip details');
   assert.ok(edit);assert.equal(edit.props.disabled,false);await edit.props.onPress();
@@ -148,7 +148,7 @@ function stopHandlers({running=true,names=async()=>({startName:null,endName:null
   const session={user:{_id:'fixture-owner'},token:'fixture-token'};const events=[],opened=[],notices=[];let button;
   const stopRequest={current:null},tripEndTime={current:null},pendingNames={current:null};
   const handler=require('node:vm').runInNewContext(source.slice(start,end)+';handleStop',{
-    tripId:'fixture-trip',user:{...session.user,settings:{defaultTravelMode:'walking'}},useAuthStore:{getState:()=>session},stopRequest,tripEndTime,pendingNames,firstPoint:{current:null},lastPoint:{current:null},TASK_NAME:'fixture-task',
+    lifecycleRequest:{current:false},isRestoring:false,tripId:'fixture-trip',user:{...session.user,settings:{defaultTravelMode:'walking'}},useAuthStore:{getState:()=>session},stopRequest,tripEndTime,pendingNames,firstPoint:{current:null},lastPoint:{current:null},TASK_NAME:'fixture-task',
     Alert:{alert:(_,__,buttons)=>{button=buttons.find(b=>b.text==='Stop');}},stopLocationWatcher:async()=>events.push('foreground-stop'),
     Location:{hasStartedLocationUpdatesAsync:async()=>running,stopLocationUpdatesAsync:async()=>{events.push('background-stop');await stopBackground();}},
     clearActiveTrip:async()=>events.push('clear-active'),stopTrip:async()=>events.push('persist-stop'),refreshPending:async()=>{},getLocalTrip:async()=>({status:'stopped',metadata_confirmed:0,default_transport_mode:'walking',default_trip_visibility:'private'}),metadataDraft:{current:null},...tripTools,getTripLocationNames:names,setStatus:status=>events.push(status),setIsResolvingLocation:busy=>events.push(busy),

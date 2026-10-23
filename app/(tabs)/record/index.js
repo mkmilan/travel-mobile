@@ -19,6 +19,7 @@ import {
 	startSegment,
 	startTrip,
 	stopTrip,
+	setTripRecordingStatus,
 } from "@/src/db/tripDao";
 import { uploadTripJson } from "@/src/services/api";
 import { getTripLocationNames } from "@/src/services/locationNames";
@@ -26,10 +27,10 @@ import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { clearActiveTrip, getActiveTrip, setActiveTrip } from "@/src/utils/activeTrip";
 import { toast } from "@/src/utils/toast";
+import { stopAbandonedRecording } from "@/src/utils/recordingAttempt";
 import { ensureRecordingPermissions } from "@/src/utils/recordingPermissions";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import * as TaskManager from "expo-task-manager";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -47,6 +48,8 @@ export default function RecordScreen() {
 	const [isUploading, setIsUploading] = useState(false);
 	const [uploadingTripId, setUploadingTripId] = useState(null); //just for showing upload proggress
 
+	const [isRestoring, setIsRestoring] = useState(true);
+
 	const locationWatcher = useRef(null);
 	const permissionPending = useRef(false);
 	const firstPoint = useRef(null);
@@ -61,6 +64,8 @@ export default function RecordScreen() {
 	const stopRequest = useRef(null);
 	const metadataDraft = useRef(null);
 	const uploadRequest = useRef(false);
+	const lifecycleRequest = useRef(false);
+	const watcherRequest = useRef(0);
 
 	const user = useAuthStore((s) => s.user);
 
@@ -74,25 +79,46 @@ export default function RecordScreen() {
 		setStatus("idle");
 		setTripId(null);
 		setSegment(null);
+		setIsRestoring(true);
 		(async () => {
-			await runMigrations();
-			await refreshPending();
-			// Restore background tracking state if OS relaunched the app
-			const running = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
-			if (running) {
+			try {
+				await runMigrations();
+				await refreshPending();
 				const { tripId: tid, segmentId: seg, userId: ownerId } = await getActiveTrip();
-				if (tid && seg && ownerId === user?._id && await ownsLocalTrip(tid, user._id) && !cancelled) {
-					setTripId(tid);
-					setSegment(seg);
+				const running = await Location.hasStartedLocationUpdatesAsync(TASK_NAME);
+				if (cancelled || ownerId !== user?._id || !tid || !seg) return;
+				const trip = await getLocalTrip(tid, ownerId);
+				if (cancelled || useAuthStore.getState().user?._id !== ownerId) return;
+				if (!["recording", "paused"].includes(trip.status)) {
+					// Older versions allowed upload while the collector was still active.
+					// Stop that exact stale task; never rewrite or delete its history.
+					await stopAbandonedRecording({ tripId: tid, segmentId: seg, userId: ownerId,
+						location: Location, taskName: TASK_NAME, getActiveTrip, clearActiveTrip });
+					if (!cancelled) toast({ type: "info", title: "Stale recording stopped", msg: "Your saved trip data has been kept." });
+					return;
+				}
+				setTripId(tid);
+				setSegment(seg);
+				if (running) {
 					setStatus("recording");
 					await startLocationWatcher();
 					if (cancelled) await stopLocationWatcher();
+				} else {
+					// A killed/failed native collector is recoverable, never auto-uploaded.
+					await clearActiveTrip();
+					await setTripRecordingStatus(tid, "paused", ownerId);
+					if (!cancelled) setStatus("paused");
 				}
+			} catch (error) {
+				if (!cancelled) toast({ type: "warning", title: "Recording recovery needs attention", msg: error.message });
+			} finally {
+				if (!cancelled) setIsRestoring(false);
 			}
 		})();
 		return () => {
 			cancelled = true;
 			stopRequest.current = null;
+			watcherRequest.current++;
 			locationWatcher.current?.remove();
 			locationWatcher.current = null;
 		};
@@ -106,6 +132,7 @@ export default function RecordScreen() {
 
 	// ─────── location helpers ────────────────────────────────────────────────
 	const stopLocationWatcher = async () => {
+		watcherRequest.current++;
 		if (locationWatcher.current) {
 			await locationWatcher.current.remove();
 			locationWatcher.current = null;
@@ -113,15 +140,19 @@ export default function RecordScreen() {
 	};
 
 	const startLocationWatcher = async () => {
-		console.log("Starting location watcher...");
-
-		locationWatcher.current = await Location.watchPositionAsync(
+		const request = ++watcherRequest.current;
+		const session = { ...useAuthStore.getState() };
+		const isCurrent = () => request === watcherRequest.current
+			&& useAuthStore.getState().user?._id === session.user?._id
+			&& useAuthStore.getState().token === session.token;
+		const watcher = await Location.watchPositionAsync(
 			{
 				accuracy: Location.Accuracy.High,
 				timeInterval: TIME_INTERVAL,
 				distanceInterval: DISTANCE_INTERVAL,
 			},
 			(loc) => {
+				if (!isCurrent()) return;
 				const { latitude, longitude } = loc.coords;
 				const timestamp = new Date().toISOString();
 
@@ -134,6 +165,8 @@ export default function RecordScreen() {
 				console.log(`[Rec] ${latitude.toFixed(5)},${longitude.toFixed(5)} `);
 			}
 		);
+		if (isCurrent()) locationWatcher.current = watcher;
+		else watcher.remove();
 	};
 
 	// ─────── actions ─────────────────────────────────────────────────────────
@@ -176,109 +209,153 @@ export default function RecordScreen() {
 	};
 
 	const handleStart = async () => {
-		// No trip or active marker is created until both permissions are granted.
-		if (!(await requestRecordingAccess())) return;
-
-		// 2 — create trip & first segment ---------------------------------------
-		const uid = user?._id;
-		if (!uid) return;
-		console.log("UID:", uid);
-		const tid = await startTrip(uid, useAuthStore.getState().user?.settings || {});
-		metadataDraft.current = null;
-		tripEndTime.current = null;
-		console.log("Trip started:", tid);
-		const seg = startSegment();
-		console.log("Segment started:", seg);
-
-		setTripId(tid);
-		setSegment(seg);
-		setStatus("recording");
-		console.log("State set");
-
-		// 3 — persist ids so TaskManager knows where to write
-		await setActiveTrip(tid, seg, uid);
-		console.log("Active trip set");
-		// 4 — start foreground & background tracking ----------------------------
+		if (isRestoring || lifecycleRequest.current || uploadRequest.current || status !== "idle") return;
+		lifecycleRequest.current = true;
+		let attempt;
+		let isCurrent = () => false;
 		try {
-			// foreground watcher (only updates first/last point refs)
-			console.log("Starting try before start loc watcher...");
-
+			// No trip or marker is created before both permissions are granted.
+			if (!(await requestRecordingAccess())) return;
+			const session = { ...useAuthStore.getState() };
+			const uid = session.user?._id;
+			if (!uid || uid !== user?._id || !session.token) return;
+			isCurrent = () => useAuthStore.getState().user?._id === uid && useAuthStore.getState().token === session.token;
+			const tid = await startTrip(uid, session.user.settings || {});
+			if (!isCurrent()) return; // Retain this owner's unsynced row for recovery.
+			const seg = startSegment();
+			attempt = { tripId: tid, segmentId: seg, userId: uid };
+			metadataDraft.current = null;
+			tripEndTime.current = null;
+			await setActiveTrip(tid, seg, uid);
+			if (!isCurrent()) return;
 			await startLocationWatcher();
-
-			// background updates (write points to SQLite)
+			if (!isCurrent()) return;
 			await Location.startLocationUpdatesAsync(TASK_NAME, {
-				accuracy: Location.Accuracy.High,
-				timeInterval: TIME_INTERVAL,
-				distanceInterval: DISTANCE_INTERVAL,
+				accuracy: Location.Accuracy.High, timeInterval: TIME_INTERVAL, distanceInterval: DISTANCE_INTERVAL,
 				showsBackgroundLocationIndicator: true,
-				foregroundService: {
-					notificationTitle: "Recording trip",
-					notificationBody: "Tracking continues when the app is closed.",
-				},
+				foregroundService: { notificationTitle: "Recording trip", notificationBody: "Tracking continues when the app is closed." },
 			});
-
+			if (!isCurrent()) return;
+			setTripId(tid);
+			setSegment(seg);
+			setStatus("recording");
 			toast({ type: "success", title: "Recording started" });
-		} catch (err) {
-			// rollback if either watcher fails ------------------------------------
-			console.log("Error starting location updates:", err);
-
-			await stopLocationWatcher();
-			await Location.stopLocationUpdatesAsync(TASK_NAME).catch(() => {});
-			await clearActiveTrip();
-
-			setStatus("idle");
-			setTripId(null);
-			setSegment(null);
-
-			toast({
-				type: "danger",
-				title: "Could not start recording",
-				msg: err.message,
-			});
+		} catch (error) {
+			if (attempt) {
+				await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip, clearActiveTrip });
+				if (isCurrent()) {
+					await stopLocationWatcher();
+					await setTripRecordingStatus(attempt.tripId, "paused", attempt.userId);
+					await refreshPending();
+				}
+			}
+			if (isCurrent()) toast({ type: "danger", title: "Could not start recording", msg: error.message });
+		} finally {
+			try {
+				if (attempt && !isCurrent()) await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip, clearActiveTrip });
+			} finally {
+				lifecycleRequest.current = false;
+			}
 		}
 	};
 
 	const handlePauseResume = async () => {
-		if (status === "recording") {
-			await stopLocationWatcher();
-			// stop background updates
-			await Location.stopLocationUpdatesAsync(TASK_NAME);
-			await clearActiveTrip();
-			//--------------------------------//
+		if (lifecycleRequest.current || stopRequest.current || isRestoring) return;
+		const session = { ...useAuthStore.getState() };
+		if (!tripId || !session.token || session.user?._id !== user?._id) return;
+		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
+			&& useAuthStore.getState().token === session.token;
+		lifecycleRequest.current = true;
+		let attempt;
+		try {
+			if (status === "recording") {
+				await stopLocationWatcher();
+				if (await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) await Location.stopLocationUpdatesAsync(TASK_NAME);
+				if (!isCurrent()) return;
+				await clearActiveTrip();
+				await setTripRecordingStatus(tripId, "paused", session.user._id);
+				if (!isCurrent()) return;
+				setStatus("paused");
+				toast({ type: "info", title: "Paused" });
+			} else if (status === "paused") {
+				if (!(await requestRecordingAccess()) || !isCurrent()) return;
+				await setTripRecordingStatus(tripId, "recording", session.user._id);
+				if (!isCurrent()) return;
+				const seg = startSegment();
+				attempt = { tripId, segmentId: seg, userId: session.user._id };
+				await setActiveTrip(tripId, seg, session.user._id);
+				if (!isCurrent()) return;
+				try {
+					await Location.startLocationUpdatesAsync(TASK_NAME, {
+						accuracy: Location.Accuracy.High, timeInterval: TIME_INTERVAL, distanceInterval: DISTANCE_INTERVAL,
+						showsBackgroundLocationIndicator: true,
+						foregroundService: { notificationTitle: "Recording trip", notificationBody: "Tracking continues when the app is closed." },
+					});
+					if (!isCurrent()) return;
+					await startLocationWatcher();
+					if (!isCurrent()) return;
+					setSegment(seg);
+					setStatus("recording");
+					toast({ type: "success", title: "Resumed" });
+				} catch (error) {
+					if (isCurrent()) {
+						await stopLocationWatcher();
+						if (await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) await Location.stopLocationUpdatesAsync(TASK_NAME);
+						await clearActiveTrip();
+						await setTripRecordingStatus(tripId, "paused", session.user._id);
+					}
+					throw error;
+				}
+			}
+			if (isCurrent()) await refreshPending();
+		} catch (error) {
+			if (isCurrent()) toast({ type: "danger", title: "Could not change recording state", msg: error.message });
+		} finally {
+			try {
+				if (attempt && !isCurrent()) await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip, clearActiveTrip });
+			} finally {
+				lifecycleRequest.current = false;
+			}
+		}
+	};
+
+	const handleRecover = async (tid) => {
+		if (isRestoring || lifecycleRequest.current || uploadRequest.current || ["recording", "paused"].includes(status)) return;
+		const session = { ...useAuthStore.getState() };
+		if (!session.token || session.user?._id !== user?._id) return;
+		lifecycleRequest.current = true;
+		try {
+			await setTripRecordingStatus(tid, "paused", session.user._id);
+			if (useAuthStore.getState().user?._id !== session.user._id || useAuthStore.getState().token !== session.token) return;
+			metadataDraft.current = null;
+			firstPoint.current = null;
+			lastPoint.current = null;
+			tripEndTime.current = null;
+			setTripId(tid);
+			setSegment(null);
 			setStatus("paused");
-			toast({ type: "info", title: "Paused" });
-		} else {
-			// Recheck permissions and session before resuming a saved track.
-			if (!(await requestRecordingAccess())) return;
-			const uid = useAuthStore.getState().user?._id;
-			if (!uid || uid !== user?._id || !(await ownsLocalTrip(tripId, uid))) return;
-			if (useAuthStore.getState().user?._id !== uid) return;
-			const seg = startSegment();
-			setSegment(seg);
-			setStatus("recording");
+			await refreshPending();
+			toast({ type: "info", title: "Recovered paused trip", msg: "Resume recording, or tap Stop to review and save its details." });
+		} catch (error) {
+			toast({ type: "warning", title: "Could not recover trip", msg: error.message });
+		} finally {
+			lifecycleRequest.current = false;
+		}
+	};
 
-			await setActiveTrip(tripId, seg, user?._id);
-
-			// resume background updates
-			await Location.startLocationUpdatesAsync(TASK_NAME, {
-				accuracy: Location.Accuracy.High,
-				timeInterval: TIME_INTERVAL,
-				distanceInterval: DISTANCE_INTERVAL,
-				showsBackgroundLocationIndicator: true,
-				foregroundService: {
-					notificationTitle: "Recording trip",
-					notificationBody: "Tracking continues when the app is closed.",
-				},
-			});
-			// await startLocation(tripId, seg);
-			await startLocationWatcher();
-			//----------------------------------//
-			toast({ type: "success", title: "Resumed" });
+	const handleDelete = async (tid) => {
+		if (isRestoring || uploadRequest.current || lifecycleRequest.current || (tid === tripId && status !== "stopped")) return;
+		try {
+			await deleteTrip(tid, user?._id);
+			await refreshPending();
+			if (tid === tripId) resetState();
+		} catch (error) {
+			toast({ type: "warning", title: "Could not delete trip", msg: error.message });
 		}
 	};
 
 	const handleEditDetails = async (tid = tripId) => {
-		const session = useAuthStore.getState();
+		const session = { ...useAuthStore.getState() };
 		if (!tid || !session.token || session.user?._id !== user?._id) return;
 		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
 			&& useAuthStore.getState().token === session.token;
@@ -297,7 +374,7 @@ export default function RecordScreen() {
 	};
 
 	const handleStop = async () => {
-		if (stopRequest.current) return;
+		if (stopRequest.current || lifecycleRequest.current || isRestoring) return;
 		Alert.alert("Stop recording?", "Are you sure you want to finish this track?", [
 			{ text: "Continue", style: "cancel" },
 			{
@@ -305,7 +382,7 @@ export default function RecordScreen() {
 				style: "destructive",
 				onPress: async () => {
 					if (stopRequest.current) return;
-					const session = useAuthStore.getState();
+					const session = { ...useAuthStore.getState() };
 					if (!tripId || !user?._id || session.user?._id !== user._id) return;
 					const operation = { token: session.token, userId: user._id };
 					stopRequest.current = operation;
@@ -378,7 +455,11 @@ export default function RecordScreen() {
 	};
 
 	const handleUpload = async (tid = tripId) => {
-		if (uploadRequest.current) return;
+		if (uploadRequest.current || lifecycleRequest.current || isRestoring || (tid === tripId && ["recording", "paused"].includes(status))) return;
+		const session = { ...useAuthStore.getState() };
+		if (!session.token || session.user?._id !== user?._id) return;
+		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
+			&& useAuthStore.getState().token === session.token;
 		uploadRequest.current = true;
 		setIsUploading(true);
 		setUploadingTripId(tid);
@@ -387,14 +468,16 @@ export default function RecordScreen() {
 			// const payload = await buildTripJsonForUpload(tid);
 			const payload = await buildTripJsonForUpload(tid, user?.settings || {}, user?._id);
 
-			if (useAuthStore.getState().user?._id !== user?._id) throw new Error("Account changed; upload cancelled");
+			if (!isCurrent()) throw new Error("Account changed; upload cancelled");
 			await uploadTripJson(payload, true, user?._id);
 			await markTripUploaded(tid, user?._id); // keeps it for history but not in pending
+			if (!isCurrent()) return;
 			toast({ type: "success", title: "Uploaded!" });
 
 			await refreshPending();
 			if (tid === tripId) resetState();
 		} catch (err) {
+			if (!isCurrent()) return;
 			if (err.code === "TRIP_METADATA_REQUIRED") {
 				await handleEditDetails(tid);
 				toast({ type: "info", title: "Review trip details before uploading" });
@@ -421,7 +504,7 @@ export default function RecordScreen() {
 
 	// secondary buttons
 	const handleAddPoi = () => {
-		const session = useAuthStore.getState();
+		const session = { ...useAuthStore.getState() };
 		if (!tripId || !["recording", "paused"].includes(status) || !user?._id || session.user?._id !== user._id || !session.token) {
 			toast({ type: "warning", title: "Start or resume a trip before adding a POI" });
 			return;
@@ -440,7 +523,7 @@ export default function RecordScreen() {
 	const handlePoiSubmit = async ({ note }) => {
 		const context = pendingPoi.current;
 		const isCurrent = () => {
-			const session = useAuthStore.getState();
+			const session = { ...useAuthStore.getState() };
 			return context && context.tripId === tripId && ["recording", "paused"].includes(status)
 				&& session.user?._id === context.userId && session.token === context.token;
 		};
@@ -526,7 +609,7 @@ export default function RecordScreen() {
 					</View>
 				)}
 
-			{status === "idle" && <CircleButton icon="play" color="green" onPress={handleStart} />}
+			{status === "idle" && !isRestoring && <CircleButton icon="play" color="green" onPress={handleStart} />}
 
 			{(status === "recording" || status === "paused") && (
 				<>
@@ -580,10 +663,10 @@ export default function RecordScreen() {
 								isUploading={isUploading}
 								uploadingTripId={uploadingTripId}
 								onUpload={() => handleUpload(item.id)}
-								onDelete={async () => {
-									await deleteTrip(item.id, user?._id);
-									await refreshPending();
-								}}
+								onDelete={() => handleDelete(item.id)}
+								onRecover={() => handleRecover(item.id)}
+								isActive={isRestoring || (item.id === tripId && ["recording", "paused"].includes(status))}
+								canRecover={!isRestoring && !["recording", "paused"].includes(status)}
 							/>
 						)}
 					/>
@@ -601,18 +684,24 @@ export default function RecordScreen() {
 	);
 }
 
-const PendingRow = ({ item, onUpload, onDelete, isUploading, uploadingTripId }) => {
+const PendingRow = ({ item, onUpload, onDelete, onRecover, isActive, canRecover, isUploading, uploadingTripId }) => {
 	const isCurrentlyUploadingThisItem = isUploading && uploadingTripId === item.id;
 	const isAnotherItemUploading = isUploading && uploadingTripId !== null && uploadingTripId !== item.id;
 
-	const uploadButtonDisabled = isAnotherItemUploading;
-	const deleteButtonDisabled = isUploading; // Disable delete if any upload is in progress
+	const unfinished = item.status !== "stopped";
+	const uploadButtonDisabled = isAnotherItemUploading || isActive || unfinished;
+	const deleteButtonDisabled = isUploading || isActive || unfinished; // Disable delete if any upload is in progress
 
 	return (
 		<View style={{ flexDirection: "row", paddingVertical: 4, alignItems: "center" }}>
 			<Text style={{ color: theme.colors.text, flex: 1 }}>
-				{new Date(item.start_time).toLocaleDateString()} · {item.pointsCount} pts
+				{new Date(item.start_time).toLocaleDateString()} · {item.pointsCount} pts{unfinished ? " · unfinished" : ""}
 			</Text>
+			{unfinished && !isActive && canRecover && !isUploading && (
+				<TouchableOpacity accessibilityLabel="Recover recording" onPress={onRecover} style={{ marginRight: 16 }}>
+					<Text style={{ color: theme.colors.link }}>Recover</Text>
+				</TouchableOpacity>
+			)}
 			{isCurrentlyUploadingThisItem ? (
 				<ActivityIndicator size="small" color="green" style={{ marginRight: 16 }} />
 			) : (
