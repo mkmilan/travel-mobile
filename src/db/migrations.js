@@ -59,6 +59,8 @@ export const runMigrations = async () => {
 		`ALTER TABLE trips ADD COLUMN default_trip_visibility TEXT DEFAULT 'public';`,
 		`ALTER TABLE trips ADD COLUMN description TEXT;`,
 		`ALTER TABLE trips ADD COLUMN end_time TEXT;`, // Add missing end_time
+		// NULL preserves legacy rows; only an explicit Save confirms new metadata.
+		`ALTER TABLE trips ADD COLUMN metadata_confirmed INTEGER;`,
 
 		// Recommendations table additions - add name and description columns
 		`ALTER TABLE recommendations ADD COLUMN name TEXT;`,

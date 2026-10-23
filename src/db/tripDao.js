@@ -5,6 +5,25 @@ import { openDatabase } from "./openDatabase";
  * Creates the standardized payload structure for backend API
  * This ensures consistency between what we store and what we send
  */
+const TRIP_MODES = ["motorhome", "campervan", "car", "motorcycle", "bicycle", "walking"];
+const TRIP_VISIBILITIES = ["public", "followers_only", "private"];
+const hasValidMetadata = (trip) => TRIP_MODES.includes(trip.default_transport_mode)
+	&& TRIP_VISIBILITIES.includes(trip.default_trip_visibility);
+
+// Before this column existed, finishTrip was the only writer of stopped/end_time.
+// Preserve those explicitly saved legacy choices without backfilling any rows.
+export const hasConfirmedTripMetadata = (trip) => hasValidMetadata(trip) && (
+	trip.metadata_confirmed === 1 || (trip.metadata_confirmed == null
+		&& ["stopped", "uploaded"].includes(trip.status) && Boolean(trip.end_time))
+);
+export const tripMetadataDefaults = (trip, settings = {}) => ({
+	mode: ([0, 1].includes(trip.metadata_confirmed) || hasConfirmedTripMetadata(trip))
+		? trip.default_transport_mode : settings.defaultTravelMode || trip.default_transport_mode || "car",
+	visibility: ([0, 1].includes(trip.metadata_confirmed) || hasConfirmedTripMetadata(trip))
+		? trip.default_trip_visibility : settings.defaultTripVisibility || trip.default_trip_visibility || "public",
+});
+const metadataRequired = () => Object.assign(new Error("Review and save this trip's details before uploading."), { code: "TRIP_METADATA_REQUIRED" });
+
 const createTripPayload = (trip, segments, pois = [], recommendations = [], userSettings = {}) => {
 	// Reliable ISO for fallbacks
 	const isoStart = trip.start_time || segments[0]?.startTime || new Date().toISOString();
@@ -46,6 +65,8 @@ const createTripPayload = (trip, segments, pois = [], recommendations = [], user
 export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId) => {
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
+	if (trip.status !== "stopped") throw new Error("Stop this recording before uploading.");
+	if (!hasConfirmedTripMetadata(trip)) throw metadataRequired();
 
 	// ---- points → segments --------------------------------------------------
 	const rows = await db.getAllAsync(`SELECT * FROM track_points WHERE trip_id = ? ORDER BY timestamp ASC`, [tripId]);
@@ -97,7 +118,9 @@ export const ownsLocalTrip = async (tripId, userId) => {
 };
 
 // ─────── lifecycle helpers ────────────────────────────────────────────────
-export const startTrip = async (userId) => {
+export const getLocalTrip = async (tripId, userId) => getOwnedTrip(await openDatabase(), tripId, userId);
+
+export const startTrip = async (userId, settings = {}) => {
 	requireUserId(userId);
 	try {
 		const db = await openDatabase();
@@ -105,9 +128,11 @@ export const startTrip = async (userId) => {
 		const startTime = new Date().toISOString();
 		console.log("About to insert trip TRIP DAO", tripId, userId, startTime);
 		await db.runAsync(
-			`INSERT INTO trips (id, user_id, start_time, status)
-     VALUES (?, ?, ?, ?)`,
-			[tripId, userId, startTime, "recording"]
+			`INSERT INTO trips (id, user_id, start_time, status, default_transport_mode, default_trip_visibility, metadata_confirmed)
+     VALUES (?, ?, ?, ?, ?, ?, 0)`,
+			[tripId, userId, startTime, "recording",
+				TRIP_MODES.includes(settings.defaultTravelMode) ? settings.defaultTravelMode : "car",
+				TRIP_VISIBILITIES.includes(settings.defaultTripVisibility) ? settings.defaultTripVisibility : "public"]
 		);
 		console.log("TRIP DAO Trip insert successful");
 		return tripId;
@@ -117,11 +142,23 @@ export const startTrip = async (userId) => {
 	}
 };
 
+// Persist the stop independently of the optional metadata form. Cancel must not
+// leave a stopped collector represented as an active recording after relaunch.
+export const stopTrip = async (tripId, endTime, userId) => {
+	const db = await openDatabase();
+	await getOwnedTrip(db, tripId, userId);
+	await db.runAsync(`UPDATE trips SET status = 'stopped', end_time = COALESCE(end_time, ?), metadata_confirmed = CASE WHEN metadata_confirmed IS NULL AND status IN ('recording','paused') THEN -1 ELSE metadata_confirmed END WHERE id = ? AND user_id = ? AND status IN ('recording','paused','stopped')`, [endTime, tripId, userId]);
+};
+
 export const finishTrip = async (
 	tripId,
-	{ endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility }
+	{ endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility },
+	userId
 ) => {
 	const db = await openDatabase();
+	const trip = await getOwnedTrip(db, tripId, userId);
+	if (trip.status !== "stopped") throw new Error("Stop this recording before saving its details.");
+	if (!TRIP_MODES.includes(defaultTransportMode) || !TRIP_VISIBILITIES.includes(defaultTripVisibility)) throw metadataRequired();
 	await db.runAsync(
 		`UPDATE trips
        SET status = 'stopped',
@@ -131,9 +168,10 @@ export const finishTrip = async (
            start_name = ?,
            end_name = ?,
            default_transport_mode = ?,
-           default_trip_visibility = ?
-     WHERE id = ?`,
-		[endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility, tripId]
+           default_trip_visibility = ?,
+           metadata_confirmed = 1
+     WHERE id = ? AND user_id = ? AND status = 'stopped'`,
+		[endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility, tripId, userId]
 	);
 };
 

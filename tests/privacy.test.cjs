@@ -19,7 +19,7 @@ function fixture() {
       queries.push({sql, params});
       if (sql.includes('AND user_id = ?')) {
         return params[0] === 'trip-a' && params[1] === 'alice'
-          ? [{id:'trip-a', user_id:'alice', start_time:'2026-01-01T00:00:00Z'}] : [];
+          ? [{id:'trip-a', user_id:'alice', start_time:'2026-01-01T00:00:00Z',status:'stopped',end_time:'2026-01-01T01:00:00Z',default_trip_visibility:'public',default_transport_mode:'car'}] : [];
       }
       if (sql.includes('WHERE t.user_id = ?')) return [{id:`trip-${params[0]}`}];
       return [];

@@ -12,10 +12,13 @@ import {
 	deleteTrip,
 	finishTrip,
 	getPendingTrips,
+	getLocalTrip,
+	tripMetadataDefaults,
 	markTripUploaded,
 	ownsLocalTrip,
 	startSegment,
 	startTrip,
+	stopTrip,
 } from "@/src/db/tripDao";
 import { uploadTripJson } from "@/src/services/api";
 import { getTripLocationNames } from "@/src/services/locationNames";
@@ -56,6 +59,8 @@ export default function RecordScreen() {
 	const pendingNames = useRef({ startName: "Unknown", endName: "Unknown" });
 	const tripEndTime = useRef(null);
 	const stopRequest = useRef(null);
+	const metadataDraft = useRef(null);
+	const uploadRequest = useRef(false);
 
 	const user = useAuthStore((s) => s.user);
 
@@ -63,6 +68,7 @@ export default function RecordScreen() {
 	useEffect(() => {
 		let cancelled = false;
 		stopRequest.current = null;
+		metadataDraft.current = null;
 		setIsResolvingLocation(false);
 		setPending([]);
 		setStatus("idle");
@@ -177,7 +183,8 @@ export default function RecordScreen() {
 		const uid = user?._id;
 		if (!uid) return;
 		console.log("UID:", uid);
-		const tid = await startTrip(uid);
+		const tid = await startTrip(uid, useAuthStore.getState().user?.settings || {});
+		metadataDraft.current = null;
 		tripEndTime.current = null;
 		console.log("Trip started:", tid);
 		const seg = startSegment();
@@ -270,6 +277,25 @@ export default function RecordScreen() {
 		}
 	};
 
+	const handleEditDetails = async (tid = tripId) => {
+		const session = useAuthStore.getState();
+		if (!tid || !session.token || session.user?._id !== user?._id) return;
+		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
+			&& useAuthStore.getState().token === session.token;
+		const trip = await getLocalTrip(tid, session.user._id);
+		if (!isCurrent()) return;
+		if (trip.status !== "stopped") throw new Error("Stop this recording before editing its details.");
+		const previous = metadataDraft.current;
+		if (previous?.tripId === tid && previous.userId === session.user._id && previous.token === session.token) {
+			sheetRef.current?.reopen();
+			return;
+		}
+		metadataDraft.current = { tripId: tid, userId: session.user._id, token: session.token,
+			endTime: trip.end_time, startName: trip.start_name || "Unknown", endName: trip.end_name || "Unknown" };
+		const defaults = tripMetadataDefaults(trip, session.user.settings || {});
+		sheetRef.current?.open(trip.title || "Recorded trip", defaults.mode, defaults.visibility, trip.description || "");
+	};
+
 	const handleStop = async () => {
 		if (stopRequest.current) return;
 		Alert.alert("Stop recording?", "Are you sure you want to finish this track?", [
@@ -298,7 +324,10 @@ export default function RecordScreen() {
 						await clearActiveTrip();
 						if (!isCurrent()) return;
 						tripEndTime.current = new Date().toISOString();
+						await stopTrip(tripId, tripEndTime.current, operation.userId);
+						if (!isCurrent()) return;
 						setStatus("stopped");
+						await refreshPending();
 
 						let names = {};
 						try {
@@ -311,7 +340,12 @@ export default function RecordScreen() {
 						const endName = names?.endName || "Unknown";
 						pendingNames.current = { startName, endName };
 						const title = names?.startName && names?.endName ? `From ${startName} to ${endName}` : "Recorded trip";
-						sheetRef.current?.open(title, user?.settings?.defaultTravelMode || "car");
+						const trip = await getLocalTrip(tripId, operation.userId);
+						if (!isCurrent()) return;
+						metadataDraft.current = { tripId, userId: operation.userId, token: operation.token,
+							endTime: trip.end_time, startName: trip.start_name || startName, endName: trip.end_name || endName };
+						const defaults = tripMetadataDefaults(trip, useAuthStore.getState().user?.settings || {});
+						sheetRef.current?.open(trip.title || title, defaults.mode, defaults.visibility, trip.description || "");
 					} catch (error) {
 						if (isCurrent()) toast({ type: "danger", title: "Could not stop recording", msg: error?.message || "Please try Stop again." });
 					} finally {
@@ -326,25 +360,26 @@ export default function RecordScreen() {
 	};
 
 	const handleSaveMeta = async ({ title, mode, visibility, description }) => {
-		const endTime = tripEndTime.current ?? new Date().toISOString();
-		tripEndTime.current = endTime;
-
-		await finishTrip(tripId, {
-			endTime,
-			title,
-			description,
-			startName: pendingNames.current.startName,
-			endName: pendingNames.current.endName,
+		const draft = metadataDraft.current;
+		const isCurrent = () => draft && useAuthStore.getState().user?._id === draft.userId
+			&& useAuthStore.getState().token === draft.token;
+		if (!isCurrent()) throw new Error("Account changed. Reopen this trip's details.");
+		await finishTrip(draft.tripId, {
+			endTime: draft.endTime,
+			title, description,
+			startName: draft.startName,
+			endName: draft.endName,
 			defaultTransportMode: mode,
 			defaultTripVisibility: visibility,
-		});
-
-		setStatus("stopped");
-		toast({ type: "warning", title: "Recording stopped" });
+		}, draft.userId);
+		if (!isCurrent()) return;
+		toast({ type: "success", title: "Trip details saved" });
 		await refreshPending();
 	};
 
 	const handleUpload = async (tid = tripId) => {
+		if (uploadRequest.current) return;
+		uploadRequest.current = true;
 		setIsUploading(true);
 		setUploadingTripId(tid);
 		try {
@@ -360,9 +395,15 @@ export default function RecordScreen() {
 			await refreshPending();
 			if (tid === tripId) resetState();
 		} catch (err) {
+			if (err.code === "TRIP_METADATA_REQUIRED") {
+				await handleEditDetails(tid);
+				toast({ type: "info", title: "Review trip details before uploading" });
+				return;
+			}
 			console.error("Upload failed:", err);
 			toast({ type: "danger", title: "Upload failed", msg: err.message });
 		} finally {
+			uploadRequest.current = false;
 			setIsUploading(false);
 			setUploadingTripId(null);
 		}
@@ -375,6 +416,7 @@ export default function RecordScreen() {
 		firstPoint.current = null;
 		lastPoint.current = null;
 		tripEndTime.current = null;
+		metadataDraft.current = null;
 	};
 
 	// secondary buttons
@@ -513,7 +555,7 @@ export default function RecordScreen() {
 
 			{status === "stopped" && (
 				<>
-					<TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit trip details" onPress={() => sheetRef.current?.reopen()} disabled={isUploading} style={{ marginBottom: 24 }}>
+					<TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit trip details" onPress={() => handleEditDetails().catch((error) => toast({ type: "danger", title: "Could not open trip details", msg: error.message }))} disabled={isUploading} style={{ marginBottom: 24 }}>
 						<Text style={{ color: theme.colors.link, fontSize: 16 }}>Edit trip details</Text>
 					</TouchableOpacity>
 					<CircleButton icon="cloud-upload" color="green" onPress={() => handleUpload()} />
@@ -548,7 +590,7 @@ export default function RecordScreen() {
 				</View>
 			)}
 
-			<TripSaveModal ref={sheetRef} onConfirm={handleSaveMeta} />
+			<TripSaveModal key={user?._id || "signed-out"} ref={sheetRef} onConfirm={handleSaveMeta} />
 			<AddPoiModal ref={poiModalRef} onSubmit={handlePoiSubmit} />
 			<AddRecommendationModal
 				ref={addRecommendationModalRef}

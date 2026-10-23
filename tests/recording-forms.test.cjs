@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {read,load,fixture,nodes,theme,native} = require('./helpers/component-fixture.cjs');
+const noteTools = load('src/utils/poiNote.js', '({POI_NOTE_MAX_LENGTH,validatePoiNote,getPoiNote})');
+const tripTools = load('src/db/tripDao.js','({tripMetadataDefaults})');
 const deferred = () => {let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const tripForm = onConfirm => fixture('src/components/modals/TripSaveModal.js','TripSaveModal',{onConfirm},{...native,theme,TransportIcon:'TransportIcon',RecordingFormModal:'RecordingFormModal',useAuthStore:select=>select({user:{settings:{defaultTravelMode:'walking'}}})});
 const saveButton = tree => nodes(tree,'Pressable').find(node=>node.props.testID==='trip-save');
@@ -59,19 +61,19 @@ test('screen saves selected transport key and DAO retains metadata in SQL and up
   let saved;
   const vm=require('node:vm');
   const handler=vm.runInNewContext(source.slice(start,end)+';handleSaveMeta',{
-    tripId:'fixture-trip',tripEndTime:{current:'2026-01-01T00:00:00.000Z'},pendingNames:{current:{startName:'A',endName:'B'}},finishTrip:async(id,data)=>{saved={id,data};},setStatus(){},toast(){},refreshPending:async()=>{},
+    metadataDraft:{current:{tripId:'fixture-trip',userId:'owner',token:'token',endTime:'2026-01-01T00:00:00.000Z',startName:'A',endName:'B'}},useAuthStore:{getState:()=>({user:{_id:'owner'},token:'token'})},finishTrip:async(id,data)=>{saved={id,data};},setStatus(){},toast(){},refreshPending:async()=>{},
   });
   await handler({title:'Title',mode:'walking',visibility:'private',description:'Description'});
   assert.equal(saved.data.endTime,'2026-01-01T00:00:00.000Z');assert.equal(saved.data.defaultTransportMode,'walking');assert.equal(saved.data.defaultTravelMode,undefined);
   let sql,params;
-  const dao=load('src/db/tripDao.js','({finishTrip,createTripPayload})',{openDatabase:async()=>({runAsync:async(query,values)=>{sql=query;params=values;}})});
-  await dao.finishTrip(saved.id,saved.data);
-  assert.match(sql,/UPDATE trips/); assert.equal(JSON.stringify(params.slice(1)),JSON.stringify(['Title','Description','A','B','walking','private','fixture-trip']));
+  const dao=load('src/db/tripDao.js','({finishTrip,createTripPayload})',{openDatabase:async()=>({getAllAsync:async()=>[{status:'stopped'}],runAsync:async(query,values)=>{sql=query;params=values;}})});
+  await dao.finishTrip(saved.id,saved.data,'owner');
+  assert.match(sql,/UPDATE trips/); assert.equal(JSON.stringify(params.slice(1)),JSON.stringify(['Title','Description','A','B','walking','private','fixture-trip','owner']));
   const payload=dao.createTripPayload({title:params[1],description:params[2],start_name:params[3],end_name:params[4],default_transport_mode:params[5],default_trip_visibility:params[6]},[]);
   assert.equal(payload.defaultTravelMode,'walking');assert.equal(payload.defaultTripVisibility,'private');assert.equal(payload.description,'Description');assert.equal(payload.startLocationName,'A');assert.equal(payload.endLocationName,'B');
 });
 
-const poiForm = onSubmit => fixture('src/components/modals/AddPoiModal.js','AddPoiModal',{onSubmit},{...native,theme,RecordingFormModal:'RecordingFormModal'});
+const poiForm = onSubmit => fixture('src/components/modals/AddPoiModal.js','AddPoiModal',{onSubmit},{...native,theme,...noteTools,RecordingFormModal:'RecordingFormModal'});
 const poiButton = tree => nodes(tree,'Pressable').find(node=>node.props.testID==='poi-save');
 test('POI form awaits persistence, deduplicates taps, retains failed note and supports retry/cancel/reopen',async()=>{
   const pending=deferred();let calls=0;let result=pending.promise;
@@ -131,12 +133,12 @@ test('Cancel returns to a stopped-screen action that reopens the same trip draft
   nodes(tree).find(node=>node.props.label==='bicycle').props.onPress();nodes(tree).find(node=>node.props.label==='private').props.onPress();
   tree=form.render();tree.props.onClose();assert.equal(form.render().props.visible,false);
   const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {
-    ...native,theme,useAuthStore:select=>select({user:{_id:'fixture'}}),CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',Ionicons:'Ionicons',StyleSheet:{create:styles=>styles,absoluteFillObject:{}},
+    ...native,theme,useAuthStore:Object.assign(select=>select({user:{_id:'fixture'}}),{getState:()=>({user:{_id:'fixture'},token:'token'})}),getLocalTrip:async()=>({status:'stopped'}),...tripTools,CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',Ionicons:'Ionicons',StyleSheet:{create:styles=>styles,absoluteFillObject:{}},
   });
-  screen.setState(0,'stopped');const screenTree=screen.render();
+  screen.setState(0,'stopped');screen.setState(1,'trip');screen.setState(18,{current:{tripId:'trip',userId:'fixture',token:'token'}});const screenTree=screen.render();
   nodes(screenTree,'TripSaveModal')[0].props.ref.current=form.ref.current;
   const edit=nodes(screenTree,'TouchableOpacity').find(node=>node.props.accessibilityLabel==='Edit trip details');
-  assert.ok(edit);assert.equal(edit.props.disabled,false);edit.props.onPress();
+  assert.ok(edit);assert.equal(edit.props.disabled,false);await edit.props.onPress();
   tree=form.render();assert.equal(tree.props.visible,true);assert.equal(nodes(tree,'TextInput')[0].props.value,'Edited title');assert.equal(nodes(tree,'TextInput')[1].props.value,'Edited description');
   await saveButton(tree).props.onPress();assert.equal(saved.mode,'bicycle');assert.equal(saved.visibility,'private');assert.equal(saved.description,'Edited description');
 });
@@ -149,7 +151,7 @@ function stopHandlers({running=true,names=async()=>({startName:null,endName:null
     tripId:'fixture-trip',user:{...session.user,settings:{defaultTravelMode:'walking'}},useAuthStore:{getState:()=>session},stopRequest,tripEndTime,pendingNames,firstPoint:{current:null},lastPoint:{current:null},TASK_NAME:'fixture-task',
     Alert:{alert:(_,__,buttons)=>{button=buttons.find(b=>b.text==='Stop');}},stopLocationWatcher:async()=>events.push('foreground-stop'),
     Location:{hasStartedLocationUpdatesAsync:async()=>running,stopLocationUpdatesAsync:async()=>{events.push('background-stop');await stopBackground();}},
-    clearActiveTrip:async()=>events.push('clear-active'),getTripLocationNames:names,setStatus:status=>events.push(status),setIsResolvingLocation:busy=>events.push(busy),
+    clearActiveTrip:async()=>events.push('clear-active'),stopTrip:async()=>events.push('persist-stop'),refreshPending:async()=>{},getLocalTrip:async()=>({status:'stopped',metadata_confirmed:0,default_transport_mode:'walking',default_trip_visibility:'private'}),metadataDraft:{current:null},...tripTools,getTripLocationNames:names,setStatus:status=>events.push(status),setIsResolvingLocation:busy=>events.push(busy),
     sheetRef:{current:{open:(...args)=>opened.push(args)}},toast:notice=>notices.push(notice),
   });
   return {handler,confirm:()=>button.onPress(),session,events,opened,notices,tripEndTime,pendingNames,stopRequest};
@@ -159,7 +161,7 @@ test('Stop without GPS or with failed names still reaches stopped Save form and 
   for(const names of [async()=>({startName:null,endName:null}),async()=>{throw Error('lookup failed');}]) {
     const screen=stopHandlers({names});await screen.handler();await screen.confirm();
     assert.ok(screen.events.includes('stopped'));assert.equal(screen.events.at(-1),false);
-    assert.equal(JSON.stringify(screen.opened),JSON.stringify([['Recorded trip','walking']]));
+    assert.equal(JSON.stringify(screen.opened),JSON.stringify([['Recorded trip','walking','private','']]));
     assert.equal(JSON.stringify(screen.pendingNames.current),JSON.stringify({startName:'Unknown',endName:'Unknown'}));assert.ok(screen.tripEndTime.current);
   }
 });
