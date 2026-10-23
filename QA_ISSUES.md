@@ -3,6 +3,7 @@
 Scope: review-branch fixes, one focused commit per issue, with local automated checks.
 **No builds, deployments, OTA updates, production changes, or deletion of local recordings.**
 Private screenshots, identities, locations and account data must not be added here.
+Priority: resolve and validate existing major issues before deferred navigation or gallery-discoverability enhancements.
 
 ## Issue register
 
@@ -16,6 +17,8 @@ Private screenshots, identities, locations and account data must not be added he
 | MOB-006 | Low — deferred | Profile update navigation can push another copy of the user profile. Separate navigation UX investigation; do not mix with loading fixes. | Review back-stack behavior before changing. |
 | MOB-007 | Low — deferred | Test registration messaging suggests email delivery despite the isolated test service having delivery disabled. Separate test-environment UX task. | Keep production account flows unchanged. |
 | MOB-008 | Low — deferred | Gallery → recommendation opens an item only after it is present in loaded recommendation pages. A direct lookup for an off-page target is a separate enhancement; these fixes deliberately do not add unbounded auto-pagination. | Verify target access and missing-item UX before implementing. |
+| MOB-009 | Low — deferred at user's request | Add swipe-left/right navigation to the later backlog. The affected screens and the action expected for each direction are unspecified; do not assume tab, item or history navigation. | Clarify screens and direction semantics when prioritized. No implementation requested now. |
+| MOB-010 | Low — deferred at user's request | The gallery within a trip is reported as insufficiently visible/discoverable. This is a later UX enhancement, separate from the profile Gallery request fix in MOB-005. | Review the trip-gallery entry point and expected discoverability with the user when prioritized. No implementation requested now. |
 
 ## Baseline and acceptance boundaries
 
@@ -26,6 +29,12 @@ Private screenshots, identities, locations and account data must not be added he
 - Existing fixture runner: `npm test` (Node tests, no native build).
 - Native emulator/device interaction is unavailable in this checkout. Automated checks can prove handler, request and component contracts, not actual Android touch dispatch or keyboard geometry.
 - Follow-up native acceptance must include stop → edit metadata → save; POI during recording/paused state; typing, scrolling and chip selection; Android Back, backdrop and explicit cancel; reopen; repeated taps; failure/retry; pending-trip upload; login/root navigation smoke test.
+
+## User phone smoke test — 2026-10-23
+
+- The user reports that limited testing of editing an existing trip, adding a photo and recommendations seems to work on the installed Travel Test build 3. This is a user-reported smoke observation, not an independently reproduced or comprehensive acceptance result.
+- Installed build 3 does not contain the latest unbuilt fixes recorded at `a64e5c3`. This report does not validate MOB-001–005 or close their device gates.
+- MOB-009/010 are recorded for later only; existing major issues take priority. No navigation or gallery-discoverability implementation is part of this backlog update.
 
 ## Implementation history
 
@@ -42,11 +51,11 @@ Private screenshots, identities, locations and account data must not be added he
 
 - `d338ac4` (MOB-005): gallery cache/request/CSRF cleanup.
 
-## Final local verification
+## Local verification checkpoint — 2026-10-22
 
 - `npm test`: **82/82 passed** on the final code; includes existing auth/root-navigation, recording-permission, upload, account/privacy and configuration fixtures plus the new recording/profile regressions.
 - Parsed all **139** application/source JavaScript/JSX files with the installed Babel parser; `git diff --check` passed. No lint/typecheck script is configured in this JavaScript project.
 - Independent source review and a separate full test run found no source-level blockers. Fixtures use synthetic data and mocked native/SQLite/network boundaries; they are not device or real-backend acceptance.
 - **No build, bundle export, deployment, OTA publication, production access or native emulator run was performed.** Publication is restricted to the explicitly authorized review branch; no main update or merge. No migrations, collector changes or destructive recording-data operations were added.
 - Native acceptance remains pending: recording form hit testing, keyboard/scroll geometry, Android Back/Cancel/reopen/save, three-button versus gesture navigation, POI success/retry; gallery empty-list pull refresh, pagination scroll position (native visible-content anchoring retained), viewer close → source navigation; then recording/upload and login/root-navigation smoke tests.
-- MOB-006/007/008 remain deferred. Preserve the working installed test app until a new build is separately authorized.
+- MOB-006–010 remain deferred. Preserve the working installed test app until a new build is separately authorized.
