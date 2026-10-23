@@ -12,6 +12,14 @@ export default function PhotoGallery({ photoIds = [], canDelete = false, deleteD
 	const [openId, setOpenId] = useState(null);
 	const { getPhotoSource, mediaKey } = usePhotoSource();
 	useEffect(() => setOpenId(null), [mediaKey]);
+	const viewerPhotos = photoIds.map((id) => ({ id, source: getPhotoSource(id) })).filter((photo) => Boolean(photo.source));
+	const selectedIndex = openId ? viewerPhotos.findIndex((photo) => photo.id === openId) : -1;
+	// DELETE or refresh can remove an image while its preview is open. Hide it
+	// immediately, before effects run, and forget it so a later refresh cannot
+	// unexpectedly reopen the viewer. Keep a still-present selection by ID.
+	useEffect(() => {
+		if (openId && selectedIndex < 0) setOpenId(null);
+	}, [openId, selectedIndex]);
 
 	/* render single thumb */
 	const renderItem = ({ item }) => (
@@ -52,9 +60,9 @@ export default function PhotoGallery({ photoIds = [], canDelete = false, deleteD
 			{/* full-screen preview with ImageViewing */}
 			<ImageViewing
 				key={mediaKey}
-				images={photoIds.map(getPhotoSource).filter(Boolean)}
-				imageIndex={openId ? photoIds.indexOf(openId) : 0}
-				visible={!!openId}
+				images={viewerPhotos.map((photo) => photo.source)}
+				imageIndex={selectedIndex >= 0 ? selectedIndex : 0}
+				visible={selectedIndex >= 0}
 				onRequestClose={() => setOpenId(null)}
 				swipeToCloseEnabled={true}
 				doubleTapToZoomEnabled={false}
