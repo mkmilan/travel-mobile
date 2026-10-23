@@ -78,7 +78,7 @@ const DropdownMenu = ({ isVisible, onClose, onEdit, onDelete, onAddRecommendatio
 export default function TripDetailScreen() {
 	const router = useRouter();
 	const { id: tripId } = useLocalSearchParams();
-	const { user: currentUser, token, isAuthenticated } = useAuthStore();
+	const { user: currentUser, token, isAuthenticated, sessionEpoch, isSessionChanging } = useAuthStore();
 	const { setRecCount, setLikeState, setCommentCount } = useTripSocialStore();
 
 	const [trip, setTrip] = useState(null); // Will store the full trip object including its own commentsCount
@@ -108,20 +108,21 @@ export default function TripDetailScreen() {
 	const [isCommentsSectionVisible, setIsCommentsSectionVisible] = useState(false);
 	const [isCommentListExpanded, setIsCommentListExpanded] = useState(false);
 	const screenContext = useRef(null);
+	const recommendationContext = useRef(null);
 	const screenMounted = useRef(true);
 	const commentsRequest = useRef(null);
-	if (!screenContext.current || screenContext.current.tripId !== tripId || screenContext.current.userId !== currentUser?._id || screenContext.current.token !== token) {
-		screenContext.current = { tripId, userId: currentUser?._id, token, key: (screenContext.current?.key || 0) + 1 };
+	if (!screenContext.current || screenContext.current.tripId !== tripId || screenContext.current.userId !== currentUser?._id || screenContext.current.token !== token || screenContext.current.sessionEpoch !== sessionEpoch) {
+		screenContext.current = { tripId, userId: currentUser?._id, token, sessionEpoch, key: (screenContext.current?.key || 0) + 1 };
 	}
 	const renderContext = screenContext.current;
 	const isCurrentContext = (context) => {
 		const session = useAuthStore.getState();
-		return screenMounted.current && context === screenContext.current && session.token === context.token && session.user?._id === context.userId;
+		return screenMounted.current && context === screenContext.current && session.token === context.token && session.user?._id === context.userId && session.sessionEpoch === context.sessionEpoch && !session.isSessionChanging;
 	};
 	useEffect(() => {
 		setIsAddCommentModalVisible(false);
 		setCommentsLoading(false);
-	}, [tripId, currentUser?._id, token]);
+	}, [tripId, currentUser?._id, token, sessionEpoch, isSessionChanging]);
 	useEffect(() => {
 		screenMounted.current = true;
 		return () => { screenMounted.current = false; };
@@ -199,13 +200,13 @@ export default function TripDetailScreen() {
 
 	useEffect(() => {
 		fetchTripDetails();
-	}, [tripId, currentUser?._id, token]); // Reload when the screen or auth session changes.
+	}, [tripId, currentUser?._id, token, sessionEpoch, isSessionChanging]); // Reload when the screen or auth session changes.
 
 	useFocusEffect(
 		useCallback(() => {
 			// Refetch trip details when the screen comes into focus to sync server state
 			fetchTripDetails(true);
-		}, [tripId, currentUser?._id, token])
+		}, [tripId, currentUser?._id, token, sessionEpoch, isSessionChanging])
 	);
 
 	const isOwner = isAuthenticated && trip && trip.user?._id === currentUser?._id;
@@ -456,6 +457,8 @@ export default function TripDetailScreen() {
 	const handleShare = () => Alert.alert("Share", "Share functionality to be implemented.");
 
 	const handleViewRecommendationDetail = (rec) => {
+		if (!isCurrentContext(renderContext)) return;
+		recommendationContext.current = renderContext;
 		const freshRec = trip.recommendations?.find((r) => r._id === rec._id) || rec;
 		console.log("🔍 Opening recommendation detail:", freshRec.name, "photos:", freshRec.photos?.length || 0);
 		setSelectedRecommendation(freshRec);
@@ -579,9 +582,10 @@ export default function TripDetailScreen() {
 		}
 	};
 
-	// Optimistic photo deletion handler
-	const handleOptimisticPhotoDelete = (recommendationId, photoId) => {
-		// Update trip state immediately for instant UI feedback
+	// Apply only a confirmed photo deletion from the detail modal.
+	const handlePhotoDeleted = (recommendationId, photoId) => {
+		if (!isCurrentContext(renderContext)) return;
+		// Keep the trip and its open recommendation in sync after confirmation.
 		setTrip((prevTrip) => {
 			if (!prevTrip) return prevTrip;
 
@@ -798,14 +802,15 @@ export default function TripDetailScreen() {
 			/>
 			<AddRecommendationModal key={screenContext.current.key} ref={addRecommendationModalRef} onSubmit={handleRecommendationSubmit} />
 			<RecommendationDetailModal
-				isVisible={isRecDetailModalVisible}
+				key={renderContext.key}
+				isVisible={isRecDetailModalVisible && recommendationContext.current === renderContext}
 				onClose={() => setIsRecDetailModalVisible(false)}
-				recommendation={selectedRecommendation}
+				recommendation={recommendationContext.current === renderContext ? selectedRecommendation : null}
 				tripUserId={trip?.user?._id}
 				onEdit={handleEditRecommendation}
 				tripRouteCoordinates={mapCoords}
 				onRefresh={() => fetchTripDetails(true)}
-				onOptimisticPhotoDelete={handleOptimisticPhotoDelete}
+				onPhotoDeleted={handlePhotoDeleted}
 			/>
 			<LikersModal
 				isVisible={isLikersModalVisible}

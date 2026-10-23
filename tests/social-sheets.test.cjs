@@ -132,11 +132,14 @@ test('recommendation detail Back returns to list; navigation closes both and cha
   tree=sheet.render();open();identity={};tree=sheet.render();assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.isVisible,false);assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.recommendation,null);
 });
 
-test('recommendation destination handlers use source close callback, retaining ordinary Back semantics',()=>{
-  const events=[];const props={isVisible:true,onClose:()=>events.push('detail-close'),onNavigateClose:()=>events.push('all-close'),recommendation:{_id:'rec',user:{_id:'author',username:'Fixture'},associatedTrip:'trip',photos:[]}};
-  const form=lifecycle('src/components/modals/RecommendationDetailModal.js','RecommendationDetailModal',props,{Ionicons:'Ionicons',InteractiveTripMap:'InteractiveTripMap',PhotoGallery:'PhotoGallery',useRouter:()=>({push:path=>events.push(path)})});
-  const tree=form.render();nodes(tree,'ModalHeader')[0].props.onClose();assert.deepEqual(events,['detail-close']);
-  const links=nodes(tree,'Pressable');links[0].props.onPress();links[1].props.onPress();assert.deepEqual(events,['detail-close','all-close','/user/author','all-close','/trip/trip']);
+test('recommendation destination handlers close their source once; stale handlers cannot navigate after Back',()=>{
+  const events=[];
+  const create=()=>lifecycle('src/components/modals/RecommendationDetailModal.js','RecommendationDetailModal',{isVisible:true,onClose:()=>events.push('detail-close'),onNavigateClose:()=>events.push('all-close'),recommendation:{_id:'rec',user:{_id:'author',username:'Fixture'},associatedTrip:'trip',photos:[]}},
+    {Ionicons:'Ionicons',InteractiveTripMap:'InteractiveTripMap',PhotoGallery:'PhotoGallery',useProfileContext:()=>({isCurrent:()=>true}),usePhotoManager:()=>({photos:[],isDeleting:()=>false}),useRouter:()=>({push:path=>events.push(path)})});
+  const tree=create().render();nodes(tree,'ModalHeader')[0].props.onClose();
+  const staleLinks=nodes(tree,'Pressable');staleLinks[0].props.onPress();staleLinks[1].props.onPress();assert.deepEqual(events,['detail-close']);
+  nodes(create().render(),'Pressable')[0].props.onPress();nodes(create().render(),'Pressable')[1].props.onPress();
+  assert.deepEqual(events,['detail-close','all-close','/user/author','all-close','/trip/trip']);
 });
 
 test('social pending GETs, like rollback, and post-send refresh cannot repopulate reset cache',async()=>{

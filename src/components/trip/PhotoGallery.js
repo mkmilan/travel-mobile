@@ -8,7 +8,7 @@ const { width } = Dimensions.get("window");
 const GAP = 6;
 const ITEM = (width - GAP * 4) / 3; // 3-col grid
 
-export default function PhotoGallery({ photoIds = [], canDelete = false, onDelete = () => {} }) {
+export default function PhotoGallery({ photoIds = [], canDelete = false, deleteDisabled = false, onDelete = () => {} }) {
 	const [openId, setOpenId] = useState(null);
 	const { getPhotoSource, mediaKey } = usePhotoSource();
 	useEffect(() => setOpenId(null), [mediaKey]);
@@ -18,7 +18,7 @@ export default function PhotoGallery({ photoIds = [], canDelete = false, onDelet
 		<Pressable
 			onPress={() => setOpenId(item)}
 			onLongPress={
-				canDelete
+				canDelete && !deleteDisabled
 					? () =>
 							Alert.alert("Delete photo?", "", [
 								{ text: "Cancel", style: "cancel" },

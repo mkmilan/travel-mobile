@@ -135,9 +135,10 @@ export default function RecommendationsTab({ userId, isSelf }) {
 		}
 	};
 
-	// ADD THIS: Handle optimistic photo deletion in detail modal
-	const handleOptimisticPhotoDelete = (recommendationId, photoId) => {
-		// Update the selected recommendation immediately
+	// Apply only a confirmed photo deletion from the detail modal.
+	const handlePhotoDeleted = (recommendationId, photoId) => {
+		if (currentIdentity.current !== identity) return;
+		// Keep the selected recommendation and list in sync after confirmation.
 		setSelection((previous) => {
 			if (previous?.identity !== identity || previous.rec?._id !== recommendationId) return previous;
 			return { identity, rec: { ...previous.rec, photos: previous.rec.photos?.filter((id) => id !== photoId) || [] } };
@@ -213,7 +214,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 					tripRouteCoordinates={routeCoords}
 					onEdit={() => handleEditRecommendation(selRec)} // Use the new handler
 					onRefresh={onRefresh}
-					onOptimisticPhotoDelete={handleOptimisticPhotoDelete}
+					onPhotoDeleted={handlePhotoDeleted}
 				/>
 			)}
 

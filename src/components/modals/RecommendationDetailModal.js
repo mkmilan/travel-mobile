@@ -1,12 +1,13 @@
 import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
 import PhotoGallery from "@/src/components/trip/PhotoGallery";
-import { deleteRecommendationPhoto } from "@/src/services/api";
+import usePhotoManager from "@/src/hooks/usePhotoManager";
+import useProfileContext from "@/src/hooks/useProfileContext";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { Feather, Ionicons } from "@expo/vector-icons"; // Added Ionicons
 import { useRouter } from "expo-router"; // Import useRouter
-import { forwardRef } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
+import { forwardRef, useRef } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
 import Avatar from "../ui/Avatar";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
@@ -47,7 +48,7 @@ const RecommendationDetailModal = forwardRef(
 			onEdit,
 			tripRouteCoordinates,
 			onRefresh,
-			onOptimisticPhotoDelete,
+			onPhotoDeleted,
 			readOnly = false,
 		},
 		ref
@@ -55,13 +56,24 @@ const RecommendationDetailModal = forwardRef(
 		/* run hooks unconditionally */
 		const { user: currentUser } = useAuthStore();
 		const router = useRouter();
-		// console.log("RecommendationDetailModal rec", {  recommendation });
+		const detailContext = useProfileContext(`${isVisible}:${recommendation?._id || "empty"}`);
+		const closedContext = useRef(null);
+		const deleteOperation = useRef(null);
+		const failedPhoto = useRef(null);
+		const photoManager = usePhotoManager({ context: "recommendation",
+			id: isVisible ? recommendation?._id : null, initial: isVisible ? recommendation?.photos || [] : [] });
+		const isCurrentDetail = () => isVisible && closedContext.current !== detailContext && detailContext.isCurrent();
+		const closeDetail = () => {
+			if (photoManager.isDeleting()) return;
+			closedContext.current = detailContext; // Invalidate native Alert callbacks before the next render.
+			onClose();
+		};
 
 		/* if nothing to show just render an empty modal (keeps hook order) */
 		if (!recommendation) {
 			return (
-				<BottomModal visible={isVisible} onClose={onClose}>
-					<ModalHeader title="Recommendation" onClose={onClose} />
+				<BottomModal visible={isVisible} onClose={closeDetail}>
+					<ModalHeader title="Recommendation" onClose={closeDetail} />
 				</BottomModal>
 			);
 		}
@@ -76,7 +88,6 @@ const RecommendationDetailModal = forwardRef(
 			rating,
 			primaryCategory,
 			attributeTags,
-			photos = [],
 			location,
 			user, // Destructure user from recommendation
 			associatedTrip,
@@ -103,63 +114,46 @@ const RecommendationDetailModal = forwardRef(
 		/* handlers                                                         */
 		/* ---------------------------------------------------------------- */
 		const handleEdit = () => {
-			onClose();
+			if (!isCurrentDetail() || photoManager.isDeleting()) return;
+			closeDetail();
 			onEdit?.(recommendation);
 		};
-		const handleRemovePhoto = async (photoId) => {
-			try {
-				// 1. IMMEDIATE FEEDBACK - Update UI optimistically
-				if (onOptimisticPhotoDelete) {
-					onOptimisticPhotoDelete(recommendation._id, photoId);
+		const handleRemovePhoto = (photoId) => {
+			if (!canEdit || !isCurrentDetail()) return Promise.resolve(false);
+			if (deleteOperation.current?.context === detailContext) return deleteOperation.current.promise;
+			if (!photoManager.getPhotos().includes(photoId)) return Promise.resolve(true);
+			const operation = { context: detailContext, promise: null };
+			deleteOperation.current = operation;
+			failedPhoto.current = photoId;
+			operation.promise = (async () => {
+				try {
+					// Keep the thumbnail on failure. The shared editor hook owns the
+					// single-flight DELETE, visible error and session/draft safeguards.
+					const removed = await photoManager.removePhoto(photoId);
+					if (!removed || !isCurrentDetail()) return false;
+					onPhotoDeleted?.(_id, photoId);
+					// Refresh is read-only and must not turn a confirmed DELETE into
+					// a retry of the write. Parent lists expose their own refresh error.
+					void Promise.resolve().then(() => {
+						if (isCurrentDetail()) return onRefresh?.();
+					}).catch(() => { /* confirmed local removal stays */ });
+					return true;
+				} finally {
+					if (deleteOperation.current === operation) deleteOperation.current = null;
 				}
-
-				// 2. API CALL - Delete from server
-				await deleteRecommendationPhoto(_id, photoId);
-
-				// 3. SUCCESS FEEDBACK
-				Alert.alert("Success", "Photo deleted successfully");
-
-				// 4. SYNC - Refresh to ensure consistency
-				if (onRefresh) {
-					onRefresh();
-				}
-			} catch (e) {
-				// 5. ERROR HANDLING - Revert optimistic update
-				Alert.alert("Delete failed", e.message);
-
-				// Revert the optimistic update by refreshing
-				if (onRefresh) {
-					onRefresh();
-				}
-			}
-
-			// try {
-			// 	await deleteRecommendationPhoto(_id, photoId);
-			// 	// setSelectedRecommendation((prev) =>
-			// 	// 	prev
-			// 	// 		? {
-			// 	// 				...prev,
-			// 	// 				photos: prev.photos.filter((id) => id !== photoId),
-			// 	// 		  }
-			// 	// 		: prev
-			// 	// );
-
-			// 	Alert.alert("Success", "Photo deleted successfully");
-			// 	if (onRefresh) {
-			// 		onRefresh();
-			// 	}
-			// } catch (e) {
-			// 	Alert.alert("Delete failed", e.message);
-			// }
+			})();
+			return operation.promise;
 		};
 		const handleNavigateToTrip = () => {
-			if (associatedTrip) {
+			if (associatedTrip && isCurrentDetail() && !photoManager.isDeleting()) {
+				closedContext.current = detailContext;
 				(onNavigateClose || onClose)(); // Dismiss any source list as well.
 				router.push(`/trip/${associatedTrip}`);
 			}
 		};
 		const handleNavigateToUserProfile = () => {
-			if (user?._id) {
+			if (user?._id && isCurrentDetail() && !photoManager.isDeleting()) {
+				closedContext.current = detailContext;
 				(onNavigateClose || onClose)(); // Dismiss any source list as well.
 				router.push(`/user/${user._id}`); // Navigate to the user's profile
 			}
@@ -168,8 +162,8 @@ const RecommendationDetailModal = forwardRef(
 		/* render                                                           */
 		/* ---------------------------------------------------------------- */
 		return (
-			<BottomModal visible={isVisible} onClose={onClose}>
-				<ModalHeader title={name || "Recommendation"} onClose={onClose} />
+			<BottomModal visible={isVisible} onClose={closeDetail}>
+				<ModalHeader title={name || "Recommendation"} onClose={closeDetail} />
 
 				<ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: theme.space.lg }}>
 					{/* header row ------------------------------------------------ */}
@@ -222,7 +216,7 @@ const RecommendationDetailModal = forwardRef(
 								</Text>
 							</Pressable>
 							{canEdit && (
-								<Pressable onPress={handleEdit} style={styles.editIconInline}>
+								<Pressable onPress={handleEdit} disabled={photoManager.deleting} style={styles.editIconInline}>
 									<Feather name="edit-2" size={20} color={theme.colors.primary} />
 								</Pressable>
 							)}
@@ -286,10 +280,17 @@ const RecommendationDetailModal = forwardRef(
 
 					{/* gallery -------------------------------------- */}
 
-					{photos.length > 0 && (
+					{photoManager.photos.length > 0 && (
 						<View style={styles.section}>
 							<Text style={styles.sectionTitle}>Gallery</Text>
-							<PhotoGallery photoIds={photos} canDelete={!readOnly && canEdit} onDelete={handleRemovePhoto} />
+							<PhotoGallery photoIds={photoManager.photos} canDelete={canEdit} deleteDisabled={photoManager.deleting} onDelete={handleRemovePhoto} />
+							{photoManager.deleting && <Text accessibilityLiveRegion="polite">Removing photo…</Text>}
+							{photoManager.deleteError && <View>
+								<Text accessibilityRole="alert" style={{ color: theme.colors.error }}>{photoManager.deleteError}</Text>
+								<Pressable accessibilityRole="button" testID="recommendation-photo-delete-retry" onPress={() => handleRemovePhoto(failedPhoto.current)}>
+									<Text>Retry remove photo</Text>
+								</Pressable>
+							</View>}
 						</View>
 					)}
 				</ScrollView>

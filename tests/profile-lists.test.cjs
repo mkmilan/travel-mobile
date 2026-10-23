@@ -123,14 +123,14 @@ test('Recommendations isolate detail/editor and late route responses across sele
   screen.switchList(createPagedList(async()=>({data:[],totalPages:0})));tree=screen.render();
   assert.equal(nodes(tree,'RecommendationDetailModal').length,0);assert.equal(nodes(tree,'AddRecommendationModal').length,0);
 });
-test('Recommendations editor refresh and optimistic deletion still update the same list without a focus loop',async()=>{
+test('Recommendations editor refresh and confirmed deletion still update the same list without a focus loop',async()=>{
   let calls=0,updates=0,deletes=0,edited;const rec={_id:'fixture',name:'Fixture',photos:['photo']};
   const screen=recommendationsFixture(async()=>{calls++;return {data:deletes?[]:[rec],totalPages:1};},{},{updateRecommendation:async()=>updates++,deleteRecommendation:async()=>deletes++});
   await screen.list.ensureLoaded();let tree=screen.render();await nodes(tree,'FlatList')[0].props.renderItem({item:rec}).props.onPress();tree=screen.render();
   const editor=nodes(tree,'AddRecommendationModal')[0];editor.props.ref.current={openEdit:rec=>{edited=rec;}};
   nodes(tree,'RecommendationDetailModal')[0].props.onEdit();assert.equal(edited._id,'fixture');
   const result=await editor.props.onSubmit(rec,true);assert.equal(updates,1);assert.equal(calls,2);await result.refreshCallback();assert.equal(calls,3);
-  tree=screen.render();nodes(tree,'RecommendationDetailModal')[0].props.onOptimisticPhotoDelete('fixture','photo');assert.equal(screen.list.getSnapshot().items[0].photos.length,0);
+  tree=screen.render();nodes(tree,'RecommendationDetailModal')[0].props.onPhotoDeleted('fixture','photo');assert.equal(screen.list.getSnapshot().items[0].photos.length,0);
   nodes(tree,'FlatList')[0].props.renderItem({item:rec}).props.onLongPress();const confirm=screen.alerts.at(-1)[2].find(button=>button.text==='Delete');await confirm.onPress();
   assert.equal(deletes,1);assert.equal(screen.list.getSnapshot().items.length,0);await screen.list.ensureLoaded();assert.equal(calls,4);
 });
