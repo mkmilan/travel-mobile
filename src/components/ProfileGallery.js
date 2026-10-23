@@ -7,7 +7,7 @@ import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, Text, useWindowDimensions } from "react-native";
-import ImageViewing from "react-native-image-viewing";
+import ImageViewing from "@/src/components/SafeImageViewing";
 
 const PAGE_SIZE = 20;
 const loadGalleryPage = async (userId, page, limit) => {
@@ -108,8 +108,9 @@ export default function ProfileGallery({ userId }) {
 				FooterComponent={() =>
 					chosen && (
 						<BlurView intensity={50} tint="dark" style={{ padding: 16, alignItems: "center" }}>
-							<Pressable onPress={openSource}>
-								<Text style={{ color: "#fff", fontWeight: "600", fontSize: 16 }}>{chosen.context}</Text>
+							<Text style={{ color: "#fff", textAlign: "center", marginBottom: 8 }}>{chosen.context}</Text>
+							<Pressable accessibilityRole="button" accessibilityLabel={chosen.sourceType === "trip" ? "Open trip" : "Open recommendation"} onPress={openSource} style={{ minHeight: 48, alignSelf: "stretch", alignItems: "center", justifyContent: "center", paddingHorizontal: 16, borderRadius: 8, backgroundColor: "#2463A8" }}>
+								<Text style={{ color: "#fff", fontWeight: "600", fontSize: 16 }}>{chosen.sourceType === "trip" ? "Open trip" : "Open recommendation"}</Text>
 							</Pressable>
 						</BlurView>
 					)

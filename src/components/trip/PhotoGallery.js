@@ -2,7 +2,7 @@
 import { usePhotoSource } from "@/src/hooks/usePhotoSource";
 import { useEffect, useState } from "react";
 import { Alert, Dimensions, FlatList, Image, Pressable, StyleSheet } from "react-native";
-import ImageViewing from "react-native-image-viewing";
+import ImageViewing from "@/src/components/SafeImageViewing";
 
 const { width } = Dimensions.get("window");
 const GAP = 6;
