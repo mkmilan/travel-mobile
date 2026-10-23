@@ -55,12 +55,15 @@ export default function RecordScreen() {
 
 	const pendingNames = useRef({ startName: "Unknown", endName: "Unknown" });
 	const tripEndTime = useRef(null);
+	const stopRequest = useRef(null);
 
 	const user = useAuthStore((s) => s.user);
 
 	// ─────── migrations + first load ─────────────────────────────────────────
 	useEffect(() => {
 		let cancelled = false;
+		stopRequest.current = null;
+		setIsResolvingLocation(false);
 		setPending([]);
 		setStatus("idle");
 		setTripId(null);
@@ -83,6 +86,7 @@ export default function RecordScreen() {
 		})();
 		return () => {
 			cancelled = true;
+			stopRequest.current = null;
 			locationWatcher.current?.remove();
 			locationWatcher.current = null;
 		};
@@ -267,45 +271,55 @@ export default function RecordScreen() {
 	};
 
 	const handleStop = async () => {
+		if (stopRequest.current) return;
 		Alert.alert("Stop recording?", "Are you sure you want to finish this track?", [
 			{ text: "Continue", style: "cancel" },
 			{
 				text: "Stop",
 				style: "destructive",
 				onPress: async () => {
-					await stopLocationWatcher();
-					// stop background updates
-					await Location.stopLocationUpdatesAsync(TASK_NAME);
-					await clearActiveTrip();
-					//--------------------------------//
-					tripEndTime.current = new Date().toISOString();
+					if (stopRequest.current) return;
+					const session = useAuthStore.getState();
+					if (!tripId || !user?._id || session.user?._id !== user._id) return;
+					const operation = { token: session.token, userId: user._id };
+					stopRequest.current = operation;
+					const isCurrent = () => stopRequest.current === operation
+						&& useAuthStore.getState().token === operation.token
+						&& useAuthStore.getState().user?._id === operation.userId;
 					setIsResolvingLocation(true);
 					try {
-						const { startName, endName } = await getTripLocationNames({
-							start: firstPoint.current ?? {},
-							end: lastPoint.current ?? {},
-						});
-
-						// toast({ type: "warning", title: "Recording stopped" });
-
-						pendingNames.current = { startName, endName };
-						const defaultMode = user?.settings?.defaultTravelMode || "car";
-
+						await stopLocationWatcher();
+						if (!isCurrent()) return;
+						// Paused trips may already have no background task to stop.
+						const running = await Location.hasStartedLocationUpdatesAsync(TASK_NAME);
+						if (!isCurrent()) return;
+						if (running) await Location.stopLocationUpdatesAsync(TASK_NAME);
+						if (!isCurrent()) return;
+						await clearActiveTrip();
+						if (!isCurrent()) return;
+						tripEndTime.current = new Date().toISOString();
 						setStatus("stopped");
-						setIsResolvingLocation(false);
 
-						sheetRef.current?.open(`From ${startName} to ${endName}`, defaultMode);
+						let names = {};
+						try {
+							names = await getTripLocationNames({ start: firstPoint.current, end: lastPoint.current });
+						} catch {
+							// Missing/failed optional names must not strand a stopped recording.
+						}
+						if (!isCurrent()) return;
+						const startName = names?.startName || "Unknown";
+						const endName = names?.endName || "Unknown";
+						pendingNames.current = { startName, endName };
+						const title = names?.startName && names?.endName ? `From ${startName} to ${endName}` : "Recorded trip";
+						sheetRef.current?.open(title, user?.settings?.defaultTravelMode || "car");
 					} catch (error) {
-						console.error("Error getting location names:", error);
-						toast({
-							type: "danger",
-							title: "Error",
-							msg: "Could not resolve location names. Add it manually",
-						});
-						setIsResolvingLocation(false);
-						// Optionally, reset status if needed, e.g., setStatus("idle");
+						if (isCurrent()) toast({ type: "danger", title: "Could not stop recording", msg: error?.message || "Please try Stop again." });
+					} finally {
+						if (stopRequest.current === operation) {
+							stopRequest.current = null;
+							setIsResolvingLocation(false);
+						}
 					}
-					// await refreshPending();
 				},
 			},
 		]);

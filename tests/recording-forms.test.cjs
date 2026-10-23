@@ -140,3 +140,55 @@ test('Cancel returns to a stopped-screen action that reopens the same trip draft
   tree=form.render();assert.equal(tree.props.visible,true);assert.equal(nodes(tree,'TextInput')[0].props.value,'Edited title');assert.equal(nodes(tree,'TextInput')[1].props.value,'Edited description');
   await saveButton(tree).props.onPress();assert.equal(saved.mode,'bicycle');assert.equal(saved.visibility,'private');assert.equal(saved.description,'Edited description');
 });
+
+function stopHandlers({running=true,names=async()=>({startName:null,endName:null}),stopBackground=async()=>{}}={}) {
+  const source=read('app/(tabs)/record/index.js');const start=source.indexOf('const handleStop = '),end=source.indexOf('\n\tconst handleSaveMeta',start);
+  const session={user:{_id:'fixture-owner'},token:'fixture-token'};const events=[],opened=[],notices=[];let button;
+  const stopRequest={current:null},tripEndTime={current:null},pendingNames={current:null};
+  const handler=require('node:vm').runInNewContext(source.slice(start,end)+';handleStop',{
+    tripId:'fixture-trip',user:{...session.user,settings:{defaultTravelMode:'walking'}},useAuthStore:{getState:()=>session},stopRequest,tripEndTime,pendingNames,firstPoint:{current:null},lastPoint:{current:null},TASK_NAME:'fixture-task',
+    Alert:{alert:(_,__,buttons)=>{button=buttons.find(b=>b.text==='Stop');}},stopLocationWatcher:async()=>events.push('foreground-stop'),
+    Location:{hasStartedLocationUpdatesAsync:async()=>running,stopLocationUpdatesAsync:async()=>{events.push('background-stop');await stopBackground();}},
+    clearActiveTrip:async()=>events.push('clear-active'),getTripLocationNames:names,setStatus:status=>events.push(status),setIsResolvingLocation:busy=>events.push(busy),
+    sheetRef:{current:{open:(...args)=>opened.push(args)}},toast:notice=>notices.push(notice),
+  });
+  return {handler,confirm:()=>button.onPress(),session,events,opened,notices,tripEndTime,pendingNames,stopRequest};
+}
+
+test('Stop without GPS or with failed names still reaches stopped Save form and clears loading',async()=>{
+  for(const names of [async()=>({startName:null,endName:null}),async()=>{throw Error('lookup failed');}]) {
+    const screen=stopHandlers({names});await screen.handler();await screen.confirm();
+    assert.ok(screen.events.includes('stopped'));assert.equal(screen.events.at(-1),false);
+    assert.equal(JSON.stringify(screen.opened),JSON.stringify([['Recorded trip','walking']]));
+    assert.equal(JSON.stringify(screen.pendingNames.current),JSON.stringify({startName:'Unknown',endName:'Unknown'}));assert.ok(screen.tripEndTime.current);
+  }
+});
+
+test('Stop from paused skips missing background task; collector failure remains retryable rather than false success',async()=>{
+  const paused=stopHandlers({running:false,names:async()=>({startName:'A',endName:'B'})});await paused.handler();await paused.confirm();
+  assert.equal(paused.events.includes('background-stop'),false);assert.equal(paused.opened[0][0],'From A to B');
+  let fail=true;const failed=stopHandlers({stopBackground:async()=>{if(fail)throw Error('Native stop failed');}});
+  await failed.handler();await failed.confirm();assert.equal(failed.opened.length,0);assert.equal(failed.events.includes('stopped'),false);assert.equal(failed.events.at(-1),false);assert.equal(failed.notices.length,1);
+  fail=false;await failed.handler();await failed.confirm();assert.equal(failed.opened.length,1);
+});
+
+test('pending Stop ignores duplicate confirmation and old-session name completion cannot open a form',async()=>{
+  const pending=deferred();const screen=stopHandlers({names:()=>pending.promise});await screen.handler();const work=screen.confirm();await screen.confirm();
+  await Promise.resolve();await Promise.resolve();await Promise.resolve();await Promise.resolve();
+  assert.equal(screen.events.filter(x=>x==='foreground-stop').length,1);screen.session.token='new-session';
+  pending.resolve({startName:'Old',endName:'Session'});await work;assert.equal(screen.opened.length,0);assert.equal(screen.events.at(-1),false);
+});
+
+test('location naming accepts zero coordinates, skips missing GPS and bounds hung lookups',async()=>{
+  let timeout,cleared=0;const calls=[];
+  const helper=load('src/services/locationNames.js','getTripLocationNames',{
+    reverseGeocode:async(lat,lon)=>{calls.push([lat,lon]);return 'Fixture place';},setTimeout:fn=>{timeout=fn;return 1;},clearTimeout:()=>cleared++,
+  });
+  const missing=await helper({start:null,end:{}});assert.equal(missing.startName,null);assert.equal(calls.length,0);
+  const zero=await helper({start:{lat:0,lon:0},end:{lat:1,lon:2}});assert.equal(zero.startName,'Fixture place');assert.equal(calls.length,2);assert.equal(cleared,2);
+  const hanging=load('src/services/locationNames.js','getTripLocationNames',{
+    reverseGeocode:()=>new Promise(()=>{}),setTimeout:(fn,ms)=>{assert.equal(ms,5000);timeout=fn;return 2;},clearTimeout:()=>cleared++,
+  });
+  const pending=hanging({start:{lat:1,lon:2},end:{lat:3,lon:4}});timeout();const fallback=await pending;
+  assert.equal(fallback.startName,null);assert.equal(fallback.endName,null);assert.equal(cleared,3);
+});

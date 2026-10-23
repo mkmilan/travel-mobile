@@ -8,8 +8,9 @@ const cache = new Map();
  * @param {{ lat:number, lon:number }} end
  */
 export async function getTripLocationNames({ start, end }) {
-	console.log("getTripLocationNames from locationNames.js", start, end);
-	const lookup = async ({ lat, lon }) => {
+	const lookup = async (point) => {
+		const { lat, lon } = point || {};
+		if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
 		const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
 		if (cache.has(key)) return cache.get(key);
 		const name = await reverseGeocode(lat, lon);
@@ -17,6 +18,14 @@ export async function getTripLocationNames({ start, end }) {
 		return name;
 	};
 
-	const [startName, endName] = await Promise.all([lookup(start), lookup(end)]);
-	return { startName, endName };
+	let timeout;
+	try {
+		// Naming is optional metadata: an offline/hung lookup cannot block Save.
+		return await Promise.race([
+			Promise.all([lookup(start), lookup(end)]).then(([startName, endName]) => ({ startName, endName })),
+			new Promise((resolve) => { timeout = setTimeout(() => resolve({ startName: null, endName: null }), 5000); }),
+		]);
+	} finally {
+		clearTimeout(timeout);
+	}
 }
