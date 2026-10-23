@@ -7,7 +7,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const ids=value=>Array.from(value||[]);
 const rec=()=>({_id:'rec',name:'Saved place',user:{_id:'actor'},photos:['photo','other']});
-const defaults={...native,theme,StyleSheet:{create:x=>x},Feather:'Feather',Ionicons:'Ionicons',Avatar:'Avatar',BottomModal:'BottomModal',ModalHeader:'ModalHeader',InteractiveTripMap:'InteractiveTripMap',PhotoGallery:'PhotoGallery',useRouter:()=>({push(){}})};
+const defaults={...native,theme,console:{log(){},warn(){},error(){}},StyleSheet:{create:x=>x},Feather:'Feather',Ionicons:'Ionicons',Avatar:'Avatar',BottomModal:'BottomModal',ModalHeader:'ModalHeader',InteractiveTripMap:'InteractiveTripMap',PhotoGallery:'PhotoGallery',useRouter:()=>({push(){}})};
 function detailEnvironment(props,remove,auth=authFixture()){
   const host=hooksFixture(),galleryHost=hooksFixture(),alerts=[];
   const useProfileContext=load('src/hooks/useProfileContext.js','useProfileContext',{...host.hooks,useAuthStore:auth.store});
