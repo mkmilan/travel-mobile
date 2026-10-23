@@ -555,3 +555,7 @@ export const fetchUserPhotosApi = async (userId, page = 1, limit = 20) => {
 // router.get("/search", protect, searchUsers);
 // router.get("users/:userId/pois", getUserPois);
 // `${API_URL}/photos/${entry.photoId}`;
+
+// Existing visibility-filtered POI endpoint; coordinates are not needed for the list.
+export const getUserPois = async (userId, page = 1, limit = 15) =>
+	apiFetch(`/users/${userId}/pois?${new URLSearchParams({ page, limit })}`, { method: "GET" });

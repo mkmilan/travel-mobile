@@ -1,158 +1,44 @@
-// fetch helpers
 import useRequireAuth from "@/src/hooks/useRequireAuth";
+import { useResolvedTheme } from "@/src/hooks/useResolvedTheme";
+import useProfileContext from "@/src/hooks/useProfileContext";
 import { getPublicUserById, getUserById } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { darkTheme, theme as lightTheme } from "@/src/theme";
+import { createProfileData, profileStats } from "@/src/utils/profileData";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, View, useColorScheme } from "react-native";
+import { useFocusEffect } from "expo-router/react-navigation";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import ProfileTabsLayout from "./ProfileTabsLayout";
 
-/* ───────────────── constants ───────────────── */
-const FUTURE_TOP_NAVBAR_HEIGHT = 0;
-
-/* ───────────────── screen ───────────────── */
 export default function ProfileScreen() {
-	/* ─── step 1: guard ───────────────────────────────────────── */
 	const ready = useRequireAuth();
-
-	/* routing & auth ----------------------------------------------------- */
-	const { userId } = useLocalSearchParams(); // /user/[userId] – undefined on “Me”
-	const authUser = useAuthStore((s) => s.user);
-	const doLogout = useAuthStore((s) => s.logout);
-
-	const profileId = userId || authUser?._id;
-	const isSelf = authUser && profileId === authUser._id;
-
-	/* theme -------------------------------------------------------------- */
-	const pref = useAuthStore((s) => s.theme);
-	const sys = useColorScheme();
-	const colors =
-		pref === "system"
-			? sys === "dark"
-				? darkTheme.colors
-				: lightTheme.colors
-			: pref === "dark"
-			? darkTheme.colors
-			: lightTheme.colors;
-
-	/* data ---------------------------------------------------------------- */
-	const [displayedUser, setDisplayedUser] = useState(isSelf ? authUser : null);
-	const [stats, setStats] = useState({
-		totalDistance: 0,
-		totalTrips: 0,
-		recommendationCount: 0,
-		followers: 0,
-		following: 0,
-		poi: 0,
-	});
-	const [loading, setLoading] = useState(!isSelf);
-
-	/* fetch whenever profileId changes ----------------------------------- */
-	useEffect(() => {
-		if (!ready || !profileId) return;
-		let cancelled = false;
-		// fetchUserPhotosApi(userId ? userId : authUser?._id, 1, 20)
-		// 	.then((photos) => console.log("Gallery payload →", photos))
-		// 	.catch((err) => console.error("Gallery fetch error", err));
-		(async () => {
-			setLoading(true);
-			try {
-				const data = isSelf ? await getUserById(profileId) : await getPublicUserById(profileId);
-				// console.log("ProfileScreen fetch", data);
-
-				if (cancelled) return;
-
-				setDisplayedUser(data);
-				setStats({
-					totalDistance: data.totalDistance ?? 0,
-					totalTrips: data.totalTrips ?? 0,
-					recommendationCount: data.totalRecommendations ?? 0,
-					followers: data.followersCount ?? 0,
-					following: data.followingCount ?? 0,
-					poi: data.totalPois ?? 0,
-				});
-			} catch (e) {
-				console.warn("Profile fetch failed:", e);
-			} finally {
-				!cancelled && setLoading(false);
-			}
-		})();
-		return () => {
-			cancelled = true;
-		};
-	}, [ready, profileId, isSelf]);
-
-	useEffect(() => {
-		if (isSelf) {
-			// copy the latest authUser into local state
-			setDisplayedUser(authUser);
-
-			// optional: refresh counters if backend returned them
-			setStats((prev) => ({
-				...prev,
-				totalTrips: authUser.totalTrips ?? prev.totalTrips,
-				totalDistance: authUser.totalDistance ?? prev.totalDistance,
-				recommendationCount: authUser.totalRecommendations ?? prev.recommendationCount,
-				followers: authUser.followersCount ?? prev.followers,
-				following: authUser.followingCount ?? prev.following,
-				poi: authUser.totalPois ?? prev.poi,
-			}));
-		}
-	}, [isSelf, authUser]);
-
-	const refetchProfile = async () => {
-		try {
-			const data = isSelf ? await getUserById(profileId) : await getPublicUserById(profileId);
-			setDisplayedUser(data);
-			setStats({
-				totalDistance: data.totalDistance ?? 0,
-				totalTrips: data.totalTrips ?? 0,
-				recommendationCount: data.totalRecommendations ?? 0,
-				followers: data.followersCount ?? 0,
-				following: data.followingCount ?? 0,
-				poi: data.totalPois ?? 0,
-			});
-		} catch (e) {
-			console.warn("Profile refetch failed:", e);
-		}
-	};
+	const { userId } = useLocalSearchParams();
+	const authUser = useAuthStore((state) => state.user);
+	const doLogout = useAuthStore((state) => state.logout);
+	const profileId = (Array.isArray(userId) ? userId[0] : userId) || authUser?._id;
+	const isSelf = profileId === authUser?._id;
+	const context = useProfileContext(profileId);
+	const resolvedTheme = useResolvedTheme();
+	const colors = resolvedTheme === "dark" ? darkTheme.colors : lightTheme.colors;
+	const profile = useMemo(() => createProfileData(
+		() => isSelf ? getUserById(profileId) : getPublicUserById(profileId), context.isCurrent
+	), [context, isSelf, profileId]);
+	const { user: displayedUser, loading, error } = useSyncExternalStore(profile.subscribe, profile.getSnapshot, profile.getSnapshot);
+	useFocusEffect(useCallback(() => { if (ready) void profile.refresh(); }, [ready, profile]));
 
 	if (!ready || !authUser) return <View style={styles.centered} />;
-
-	/* loading / error ---------------------------------------------------- */
-	if (loading || !displayedUser) {
-		return (
-			<View style={[styles.centered, { backgroundColor: colors.background }]}>
-				<ActivityIndicator size="large" color={colors.primary} />
-			</View>
-		);
-	}
-
-	/* summary-data bundled for child tabs -------------------------------- */
-	const summaryData = {
-		displayedUser,
-		stats,
-		colors,
-		isSelf,
-		onLogout: async () => {
-			await doLogout();
-		},
-	};
-
-	/* render ------------------------------------------------------------- */
-	return (
-		<ProfileTabsLayout
-			isSelf={isSelf}
-			userId={profileId}
-			summaryData={summaryData}
-			topOffset={FUTURE_TOP_NAVBAR_HEIGHT}
-			onProfileStatsChange={refetchProfile}
-		/>
+	if (!displayedUser) return (
+		<View style={[styles.centered, { backgroundColor: colors.background }]}>
+			{error ? <><Text accessibilityRole="alert" style={{ color: colors.error }}>Could not load profile: {error}</Text>
+				<Pressable accessibilityRole="button" onPress={profile.refresh} style={{ padding: 16 }}><Text style={{ color: colors.link }}>Retry</Text></Pressable></>
+				: <ActivityIndicator size="large" color={colors.primary} />}
+		</View>
 	);
+	const summaryData = { displayedUser, stats: profileStats(displayedUser), colors, isSelf,
+		onLogout: doLogout, refreshing: loading, refreshError: error, onRefresh: profile.refresh };
+	return <ProfileTabsLayout key={displayedUser.isFollowing ? "following" : "not-following"}
+		isSelf={isSelf} userId={profileId} summaryData={summaryData} onProfileStatsChange={profile.refresh} />;
 }
 
-/* ───────────────── styles ───────────────── */
-const styles = StyleSheet.create({
-	centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-});
+const styles = StyleSheet.create({ centered: { flex: 1, justifyContent: "center", alignItems: "center" } });

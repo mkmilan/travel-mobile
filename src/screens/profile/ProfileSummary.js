@@ -1,10 +1,11 @@
+import { profileDistance } from "@/src/utils/profileData";
 import Avatar from "@/src/components/ui/Avatar";
 import { theme as baseTheme } from "@/src/theme";
 import { Feather } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout, onStatPress }) {
+export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout, onStatPress, refreshError, onRefresh }) {
 	const statMeta = {
 		Trips: { icon: "map", color: "#4A90E2" },
 		Distance: { icon: "activity", color: "#50E3C2" },
@@ -16,6 +17,7 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 
 	return (
 		<View>
+			{refreshError && <TouchableOpacity accessibilityRole="button" onPress={onRefresh} style={{ padding: 16 }}><Text accessibilityRole="alert" style={{ color: colors.error }}>Could not refresh profile. Tap to retry.</Text></TouchableOpacity>}
 			<View style={[styles.profileHeaderRow, { borderBottomColor: colors.inputBorder }]}>
 				<Avatar user={displayedUser} photoId={displayedUser.profilePictureUrl} size={84} />
 				<View style={styles.profileInfoCol}>
@@ -43,7 +45,7 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 			<View style={styles.statsSection}>
 				{[
 					["Trips", stats.totalTrips],
-					["Distance", stats.totalDistance],
+					["Distance", profileDistance(stats.totalDistance)],
 					["Followers", stats.followers],
 					["Following", stats.following],
 					["Recs", stats.recommendationCount],
@@ -55,6 +57,8 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 						return (
 							<TouchableOpacity
 								key={label}
+								accessibilityRole="button"
+								accessibilityLabel={`${label}: ${val}`}
 								style={[styles.statItem, { backgroundColor: colors.inputBackground }]}
 								activeOpacity={0.7}
 								onPress={() => onStatPress?.(label)}

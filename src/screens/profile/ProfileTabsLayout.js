@@ -1,3 +1,4 @@
+import ProfileStatModal from "@/src/components/modals/ProfileStatModal";
 import UserListModal from "@/src/components/modals/UserListModal";
 import ProfileGallery from "@/src/components/ProfileGallery";
 import { Feather } from "@expo/vector-icons";
@@ -22,16 +23,11 @@ export default function ProfileTabsLayout({
 }) {
 	const insets = useSafeAreaInsets();
 	const [modal, setModal] = useState({ open: false, stat: null });
-	const [stats, setStats] = useState(summaryData.stats);
-	const [galleryPhotos, setGalleryPhotos] = useState([]);
-	const [galleryLoaded, setGalleryLoaded] = useState(false);
 
-	const handleStatPress = (label) => {
-		setModal({ open: true, stat: label });
-	};
 
-	const handleStatsUpdate = (updates) => {
-		setStats((prev) => ({ ...prev, ...updates }));
+	const handleStatPress = (label, navigation) => {
+		if (label === "Trips" || label === "Recs") navigation.navigate(label);
+		else setModal({ open: true, stat: label });
 	};
 
 	return (
@@ -53,7 +49,7 @@ export default function ProfileTabsLayout({
 					name="Overview"
 					options={{ tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} /> }}
 				>
-					{() => <OverviewTab summaryData={summaryData} onStatPress={handleStatPress} />}
+					{({ navigation }) => <OverviewTab summaryData={summaryData} onStatPress={(label) => handleStatPress(label, navigation)} />}
 				</TopTabs.Screen>
 
 				<TopTabs.Screen
@@ -61,7 +57,7 @@ export default function ProfileTabsLayout({
 					options={{ tabBarIcon: ({ color }) => <Feather name="map" size={22} color={color} /> }}
 				>
 					{/* <TopTabs.Screen name="Trips" options={{ title: "Trips" }}> */}
-					{() => <TripsTab userId={userId} isSelf={isSelf} />}
+					{() => <TripsTab key={summaryData.stats.totalTrips} userId={userId} isSelf={isSelf} />}
 				</TopTabs.Screen>
 
 				<TopTabs.Screen
@@ -69,7 +65,7 @@ export default function ProfileTabsLayout({
 					options={{ tabBarIcon: ({ color }) => <Feather name="star" size={22} color={color} /> }}
 				>
 					{/* <TopTabs.Screen name="Recs" options={{ title: "Recs" }}> */}
-					{() => <RecommendationsTab userId={userId} isSelf={isSelf} />}
+					{() => <RecommendationsTab key={summaryData.stats.recommendationCount} userId={userId} isSelf={isSelf} />}
 				</TopTabs.Screen>
 				<TopTabs.Screen
 					name="Gallery"
@@ -78,13 +74,15 @@ export default function ProfileTabsLayout({
 					{() => <ProfileGallery userId={userId} />}
 				</TopTabs.Screen>
 			</TopTabs.Navigator>
-			<UserListModal
+			{modal.open && ["Followers", "Following"].includes(modal.stat) && <UserListModal
 				visible={modal.open}
 				stat={modal.stat}
 				userId={userId}
 				onClose={() => setModal({ open: false, stat: null })}
 				onStatsUpdate={onProfileStatsChange}
-			/>
+			/>}
+			{modal.open && ["Distance", "POIs"].includes(modal.stat) && <ProfileStatModal
+				stat={modal.stat} userId={userId} stats={summaryData.stats} onClose={() => setModal({ open: false, stat: null })} />}
 		</>
 	);
 }
