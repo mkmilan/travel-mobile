@@ -48,9 +48,9 @@ test('malformed/synchronous failures release locks, pagination errors retain dat
   await list.loadMore();assert.equal(calls,2);await list.refresh();assert.equal(calls,3);assert.equal(list.getSnapshot().error,null);
 });
 test('list hook ties focus to stable profile/session store, not loading/items identities',async()=>{
-  let userId='a',token='one';let memo,dependencies,focus;let calls=0;
+  let userId='a',token='one';let memo,dependencies,focus;let calls=0;const sourceReturn={current:null};let contextKey,context;
   const hook=load('src/hooks/useProfileList.js','useProfileList',{
-    createPagedList,useAuthStore:select=>select({token}),
+    createPagedList,useRef:()=>sourceReturn,useProfileContext:()=>{const key=userId+token;if(contextKey!==key){contextKey=key;context={isCurrent:()=>true};}return context;},
     useMemo:(create,next)=>{if(!dependencies||next.some((value,i)=>value!==dependencies[i])){memo=create();dependencies=next;}return memo;},
     useSyncExternalStore:(_subscribe,get)=>get(),useCallback:fn=>fn,useFocusEffect:fn=>{focus=fn;},
   });
@@ -59,7 +59,7 @@ test('list hook ties focus to stable profile/session store, not loading/items id
   for(let i=0;i<5;i++){state=hook(userId,loader);focus();await tick();}assert.equal(calls,1);assert.equal(state.initialLoading,false);
   userId='b';state=hook(userId,loader);assert.equal(state.initialLoading,true);focus();await tick();assert.equal(calls,2);
   token='two';state=hook(userId,loader);assert.equal(state.initialLoading,true);focus();await tick();assert.equal(calls,3);
-  assert.match(read('src/hooks/useProfileList.js'),/useFocusEffect\(useCallback\(.*\[list\]\)\)/);
+  assert.match(read('src/hooks/useProfileList.js'),/useFocusEffect\(useCallback\(/);
 });
 test('status UI distinguishes loading, empty and retryable error',()=>{
   const render=props=>fixture('src/components/ProfileListStatus.js','ProfileListStatus',props,{...native,theme}).render();

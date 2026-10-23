@@ -18,7 +18,7 @@ import { theme } from "@/src/theme";
 /* ------------------------------------------------------------------ */
 export default function TripsTab({ userId }) {
 	/* ---------------- local list state ---------------- */
-	const { identity, items, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore } = useProfileList(userId, getTripsByUser);
+	const { identity, items, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore, refreshOnNextFocus } = useProfileList(userId, getTripsByUser);
 
 	/* ---------------- sheet state ---------------- */
 	const [sheet, setSheet] = useState(null);
@@ -44,7 +44,7 @@ export default function TripsTab({ userId }) {
 						user={item.user}
 						trip={item}
 						onOpenSheet={openSheet}
-						onPress={() => router.push(`/trip/${item._id}`)}
+						onPress={() => { refreshOnNextFocus(); router.push(`/trip/${item._id}`); }}
 					/>
 				)}
 				contentContainerStyle={{
