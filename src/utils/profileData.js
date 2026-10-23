@@ -7,7 +7,11 @@ export function profileStats(user) {
 	};
 }
 
-export const profileDistance = (meters) => `${Number((meters / 1000).toFixed(3))} km`;
+// Profile presentation only; do not round stored measurements or trip displays.
+export const profileDistance = (meters) => {
+	if (!Number.isFinite(meters) || meters < 0) return "–";
+	return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
+};
 
 // One bounded request per current profile/login; a failed refresh keeps the
 // last confirmed data and exposes an error instead of substituting fake zeros.

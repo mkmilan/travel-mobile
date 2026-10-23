@@ -6,17 +6,17 @@ const { createProfileData, profileStats, profileDistance } = load('src/utils/pro
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b; }); return {promise,resolve,reject}; };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-test('profile maps the actual server counters and displays meters as explicit km including a short trip', () => {
+test('profile maps the actual server counters and displays short distances in meters and longer distances in kilometers', () => {
   const stats = profileStats({totalDistance:3,totalTrips:1,totalRecommendations:2,totalPois:3,followersCount:4,followingCount:5});
   assert.deepEqual(JSON.parse(JSON.stringify(stats)),{totalDistance:3,totalTrips:1,recommendationCount:2,poi:3,followers:4,following:5});
-  assert.equal(profileDistance(stats.totalDistance),'0.003 km'); assert.equal(profileDistance(1250),'1.25 km'); assert.equal(profileDistance(0),'0 km');
+  assert.equal(profileDistance(stats.totalDistance),'3 m'); assert.equal(profileDistance(1250),'1.3 km'); assert.equal(profileDistance(0),'0 m');
   const pressed=[];
   const tree=fixture('src/screens/profile/ProfileSummary.js','ProfileSummary',{displayedUser:{_id:'one'},isSelf:true,stats,colors:{},onStatPress:value=>pressed.push(value)},
     {...native,baseTheme:theme,StyleSheet:{create:x=>x},Feather:'Feather',Avatar:'Avatar',Link:'Link',profileDistance}).render();
   const cards=nodes(tree,'TouchableOpacity').filter(node=>node.props.accessibilityLabel);
   assert.equal(cards.length,6); cards.forEach(card=>card.props.onPress());
   assert.deepEqual(pressed,['Trips','Distance','Followers','Following','Recs','POIs']);
-  assert.equal(cards[1].props.accessibilityLabel,'Distance: 0.003 km');
+  assert.equal(cards[1].props.accessibilityLabel,'Distance: 3 m');
 });
 
 test('profile refresh is single flight, maps success, preserves confirmed counters on failure, and retry recovers', async () => {
