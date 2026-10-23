@@ -1,7 +1,7 @@
 # Mobile test issues — 2026-10-22
 
 Scope: review-branch fixes, one focused commit per issue, with local automated checks.
-**No builds, deployments, OTA updates, production changes, or deletion of local recordings.**
+**No build is performed in this source-fix pass. No deployments, OTA updates, production changes, or deletion of local recordings.**
 Private screenshots, identities, locations and account data must not be added here.
 Priority: resolve and validate existing major issues before deferred navigation or gallery-discoverability enhancements.
 
@@ -24,7 +24,8 @@ Priority: resolve and validate existing major issues before deferred navigation 
 | MOB-013 | High — implemented; device validation pending | Comment forms allow dismissal during pending submission; social-sheet submission can remain busy after rejection. Guard duplicate sends and dismissal, retain rejected drafts, ignore old completions after context changes, and distinguish committed POST from failed list refresh so retry cannot repost an already-saved comment. | 6 focused fixtures cover both surfaces, double taps, failure/retry, dismissal/reopen and stale trip changes, plus GET-only recovery after successful POST. Commit: `033b0b5`. |
 | MOB-014 | High — implemented; device validation pending | Social-sheet initial load failures have no recovery UI; avatar/detail navigation can leave a source modal covering the destination, and old responses can cross context changes. Add bounded load/error/retry, close all source sheets before navigation, retain ordinary detail Back to list, and isolate cached lists and async completions by trip/session. | 10 additional social fixtures cover no-loop retry, all-layer navigation, stale detail state, direct session change, reset/request races, POST-versus-refresh and trip-detail comment interruption. Full social suite 16/16 passed; native modal dismissal timing remains a device gate. Commit: `bf84346`. |
 | MOB-015 | High — implemented; device validation pending | Photo uploads silently absorb individual failures, allowing trip/recommendation forms to announce success and discard failed local drafts. Preserve confirmed server IDs and failed URIs, report partial failure, retry only unconfirmed files, and retain a newly created recommendation ID so retries update rather than recreate it. | 14 focused fixtures cover success, partial/all/malformed failure, duplicate calls, missing target, stale picker/draft, trip edit failure/retry, recommendation created-ID reuse and cancel/reopen, plus interrupted trip/session/unmount continuation guards. No backend idempotency change: a lost response after server commit remains ambiguous. Commit: `a73f19d`. |
-| MOB-016 | High — implemented; device validation pending | Stopping before a first GPS fix can throw during location-name lookup after recording has already stopped, leaving no reachable Save form. Make names optional with a five-second fallback, mark stopped after collectors stop, skip an absent paused background task, and guard duplicate/stale-session completion. | 4 added recording fixtures cover absent/zero GPS, rejected/hung names, paused stop, collector-stop failure/retry, duplicate confirmation and session change. Recording suite 13/13 passed; native background-task behavior remains a gate. |
+| MOB-016 | High — implemented; device validation pending | Stopping before a first GPS fix can throw during location-name lookup after recording has already stopped, leaving no reachable Save form. Make names optional with a five-second fallback, mark stopped after collectors stop, skip an absent paused background task, and guard duplicate/stale-session completion. | 4 added recording fixtures cover absent/zero GPS, rejected/hung names, paused stop, collector-stop failure/retry, duplicate confirmation and session change. Recording suite 13/13 passed; native background-task behavior remains a gate. Commit: `ba7ef58`. |
+| MOB-017 | Low — deferred | Keep Expo SDK 57 per the user's 2026-10-23 decision. Evaluate SDK 58 only as a separate, later migration; do not mix dependency changes into these save/UI fixes. | No dependency files changed by this pass. |
 
 ## Baseline and acceptance boundaries
 
@@ -65,3 +66,27 @@ Priority: resolve and validate existing major issues before deferred navigation 
 - **No build, bundle export, deployment, OTA publication, production access or native emulator run was performed.** Publication is restricted to the explicitly authorized review branch; no main update or merge. No migrations, collector changes or destructive recording-data operations were added.
 - Native acceptance remains pending: recording form hit testing, keyboard/scroll geometry, Android Back/Cancel/reopen/save, three-button versus gesture navigation, POI success/retry; gallery empty-list pull refresh, pagination scroll position (native visible-content anchoring retained), viewer close → source navigation; then recording/upload and login/root-navigation smoke tests.
 - MOB-006–010 remain deferred. Preserve the working installed test app until a new build is separately authorized.
+
+
+## Analogous save-flow audit — 2026-10-23
+
+Scope: inspect other live modal/save paths for related layout, asynchronous submission and navigation-overlay failures; fix confirmed major defects without implementing deferred swipe or gallery-discoverability enhancements.
+
+| Issue | Focused implementation commit |
+| --- | --- |
+| MOB-011 shared modal insets and route-map sizing | `b0bcf2a` |
+| MOB-012 recommendation pending/error lifecycle | `313d3ec` |
+| MOB-013 recoverable comment saves | `033b0b5` |
+| MOB-014 social loading, session isolation and source-overlay dismissal | `bf84346` |
+| MOB-015 partial-photo retry and interrupted-save isolation | `a73f19d` |
+| MOB-016 stopped-trip Save fallback | `ba7ef58` |
+
+Verification and next acceptance gate:
+
+- `npm test`: **121/121 passed** on the final code (39 additional regressions beyond the prior 82-test checkpoint).
+- All **140** app/source JavaScript/JSX files parsed with the installed Babel parser; baseline-to-HEAD `git diff --check` passed. These are test/static checks, not a bundle or native build.
+- Source fixtures exercise synthetic component/state/network boundaries, including repeated actions, failure/retry, partial success, stale requests and changed trip/session/unmount contexts. They do not establish native hit testing, actual modal transition timing, real SQLite, or real upload/backend acceptance.
+- No new native build, export, deployment or OTA update was performed in this pass. A separately authorized test build must use the exact reviewed commit after final independent source review. Expo SDK 57 and dependency files are unchanged.
+- Device acceptance must cover recommendation create/edit/category/tags, comments from trip and social sheets, Android Back/keyboard/navigation-bar insets, source-sheet → profile/trip navigation, successful/partial/failed photo uploads and retry, interrupted navigation, stop before GPS/from pause/offline, and existing recording/upload/login smoke flows. Preserve local recordings and the working installed app.
+- Confirmed photo successes are not resent on retry; a server commit whose response is lost remains ambiguous without server idempotency support. No automatic create retry or destructive rollback was added.
+- Exact equivalence to the original whole-form native touch lock remains unproven. Lower-priority settings-save deduplication and social pagination/count accuracy remain follow-up investigations; unused legacy modal components were not rewritten. MOB-006–010 and MOB-017 remain deferred.
