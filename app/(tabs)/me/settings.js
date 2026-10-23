@@ -13,13 +13,14 @@ import {
 	travelModeOptions,
 	tripVisibilityOptions,
 } from "@/src/constants/settingsOptions";
+import useProfileContext from "@/src/hooks/useProfileContext";
 import useRequireAuth from "@/src/hooks/useRequireAuth";
 import { updateUserSettings } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import Feather from "@expo/vector-icons/Feather";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /* ---------------------------------------------------- *
@@ -69,21 +70,37 @@ export default function SettingsScreen() {
 	const router = useRouter();
 	const user = useAuthStore((s) => s.user);
 	const updateUser = useAuthStore((s) => s.updateUser);
+	const context = useProfileContext("settings");
+	const draftSession = useRef(null);
+	if (!draftSession.current) draftSession.current = useAuthStore.getState().captureSession();
+	const session = draftSession.current;
+	const pending = useRef(null);
+	const [saving, setSaving] = useState(false);
 
 	/* local draft of the settings being edited */
 	const [s, setS] = useState({ ...user?.settings });
 
-	if (!ready || !user) return <View style={styles.blank} />;
+	if (!ready || !user || !context.isCurrent() || !useAuthStore.getState().isSessionCurrent(session)) return <View style={styles.blank} />;
 
 	const updateField = (k, v) => setS((p) => ({ ...p, [k]: v }));
 
 	const save = async () => {
+		if (pending.current || !context.isCurrent() || !useAuthStore.getState().isSessionCurrent(session)) return;
+		const operation = { session };
+		operation.isCurrent = () => pending.current === operation && context.isCurrent()
+			&& useAuthStore.getState().isSessionCurrent(operation.session);
+		pending.current = operation;
+		setSaving(true);
 		try {
 			const updated = await updateUserSettings(true, getEditableSettings(s));
-			await updateUser(updated); // bullet-proof merge inside the store
-			router.push(`/(tabs)/user/${user._id}`);
+			if (!operation.isCurrent()) return;
+			const applied = await updateUser(updated, operation.session, operation.isCurrent);
+			if (applied && operation.isCurrent()) router.push(`/(tabs)/user/${operation.session.userId}`);
 		} catch (e) {
-			Alert.alert("Error", e.message);
+			if (operation.isCurrent()) Alert.alert("Error", e.message);
+		} finally {
+			if (operation.isCurrent()) setSaving(false);
+			if (pending.current === operation) pending.current = null;
 		}
 	};
 
@@ -184,8 +201,8 @@ export default function SettingsScreen() {
 			)}
 
 			{/* ── Save button ─────────────────────────────── */}
-			<TouchableOpacity style={styles.button} onPress={save}>
-				<Text style={styles.buttonTxt}>Save settings</Text>
+			<TouchableOpacity style={styles.button} onPress={save} disabled={saving}>
+				<Text style={styles.buttonTxt}>{saving ? "Saving…" : "Save settings"}</Text>
 			</TouchableOpacity>
 		</ScrollView>
 	);

@@ -36,12 +36,13 @@ function authFixture(storedSettings = savedSettings()) {
 }
 function settingsFixture({ enabled = false, fail = false } = {}) {
   const auth = authFixture();
-  auth.state.user = {_id:'fixture', username:'Fixture', settings:savedSettings()};
+  auth.state.user = {_id:'fixture', username:'Fixture', token:'fixture-token', settings:savedSettings()};
+  auth.state.token = 'fixture-token'; auth.state.isAuthenticated = true;
   const requests = [], routes = [], errors = [];
   const component = fixture('app/(tabs)/me/settings.js', 'SettingsScreen', {}, {
     ...native, ...options, ...preferences,
     ENABLE_LANGUAGE_AND_THEME_PREFERENCES:enabled,
-    useRequireAuth:()=>true, useAuthStore:auth.useAuthStore,
+    useRequireAuth:()=>true, useAuthStore:auth.useAuthStore, useProfileContext:()=>({isCurrent:()=>true}),
     useRouter:()=>({push:route=>routes.push(route)}),
     updateUserSettings:async(csrf, settings)=>{
       requests.push({csrf, settings:plain(settings)});
