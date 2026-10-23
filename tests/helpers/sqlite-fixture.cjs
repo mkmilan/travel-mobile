@@ -15,7 +15,7 @@ async function sqliteFixture(filename = ':memory:') {
   const dependencies = {...noteTools,getActiveTrip:async()=>active,openDatabase:async()=>db,uuid:{v4:()=>`synthetic-trip-${++nextId}`}};
   const migrate = load('src/db/migrations.js','runMigrations',dependencies);
   await migrate();
-  const dao = load('src/db/tripDao.js','({startTrip,stopTrip,finishTrip,getLocalTrip,getPendingTrips,buildTripJsonForUpload,hasConfirmedTripMetadata,tripMetadataDefaults,insertTrackPoint,addPoi,deleteTrip,markTripUploaded,setTripRecordingStatus,getPoiForEdit,updatePoiNote})',dependencies);
+  const dao = load('src/db/tripDao.js','({startTrip,stopTrip,finishTrip,getLocalTrip,ownsLocalTrip,getPendingTrips,buildTripJsonForUpload,hasConfirmedTripMetadata,tripMetadataDefaults,insertTrackPoint,addPoi,deleteTrip,markTripUploaded,setTripRecordingStatus,getPoiForEdit,updatePoiNote})',dependencies);
   return {sqlite,db,dao,migrate,setActive:value=>{active=value;},close:()=>sqlite.close()};
 }
 module.exports = {sqliteFixture};

@@ -29,7 +29,7 @@ import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { clearActiveTrip, getActiveTrip, setActiveTrip } from "@/src/utils/activeTrip";
 import { toast } from "@/src/utils/toast";
-import { stopAbandonedRecording } from "@/src/utils/recordingAttempt";
+import { stopAbandonedRecording, readRecordingTaskState } from "@/src/utils/recordingAttempt";
 import { ensureRecordingPermissions } from "@/src/utils/recordingPermissions";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -42,7 +42,7 @@ const DISTANCE_INTERVAL = 10;
 
 export default function RecordScreen() {
 	// ─────── state ────────────────────────────────────────────────────────────
-	const [status, setStatus] = useState("idle"); // idle | recording | paused | stopped
+	const [status, setStatus] = useState("idle"); // idle | recording | paused | stopped | cleanup_required
 	const [tripId, setTripId] = useState(null);
 	const [segmentId, setSegment] = useState(null);
 	const [pending, setPending] = useState([]); // local trips not yet uploaded
@@ -70,12 +70,21 @@ export default function RecordScreen() {
 	const watcherRequest = useRef(0);
 	const poiRepairModalRef = useRef(null);
 	const pendingPoiRepair = useRef(null);
+	const recoveryRequest = useRef(null);
+	const [recoveryError, setRecoveryError] = useState(null);
 
 	const user = useAuthStore((s) => s.user);
+	const token = useAuthStore((s) => s.token);
+	const sessionEpoch = useAuthStore((s) => s.sessionEpoch);
+	const isSessionChanging = useAuthStore((s) => s.isSessionChanging);
 
 	// ─────── migrations + first load ─────────────────────────────────────────
 	useEffect(() => {
 		let cancelled = false;
+		let busy = false;
+		const isCurrent = () => !cancelled && useAuthStore.getState().user?._id === user?._id
+			&& useAuthStore.getState().token === token && useAuthStore.getState().sessionEpoch === sessionEpoch
+			&& !useAuthStore.getState().isSessionChanging;
 		stopRequest.current = null;
 		metadataDraft.current = null;
 		pendingPoiRepair.current = null;
@@ -89,50 +98,88 @@ export default function RecordScreen() {
 		setStatus("idle");
 		setTripId(null);
 		setSegment(null);
+		setRecoveryError(null);
 		setIsRestoring(true);
-		(async () => {
+		const recover = async () => {
+			if (busy || !isCurrent()) return;
+			busy = true;
+			setIsRestoring(true);
 			try {
 				await runMigrations();
+				if (!isCurrent()) return;
 				await refreshPending();
-				const { tripId: tid, segmentId: seg, userId: ownerId } = await getActiveTrip();
-				const running = await Location.hasStartedLocationUpdatesAsync(TASK_NAME);
-				if (cancelled || ownerId !== user?._id || !tid || !seg) return;
-				const trip = await getLocalTrip(tid, ownerId);
-				if (cancelled || useAuthStore.getState().user?._id !== ownerId) return;
-				if (!["recording", "paused"].includes(trip.status)) {
-					// Older versions allowed upload while the collector was still active.
-					// Stop that exact stale task; never rewrite or delete its history.
-					await stopAbandonedRecording({ tripId: tid, segmentId: seg, userId: ownerId,
-						location: Location, taskName: TASK_NAME, getActiveTrip, clearActiveTrip });
-					if (!cancelled) toast({ type: "info", title: "Stale recording stopped", msg: "Your saved trip data has been kept." });
+				if (!isCurrent()) return;
+				const active = await getActiveTrip();
+				const running = await readRecordingTaskState(Location, TASK_NAME);
+				if (!isCurrent()) return;
+				const { tripId: tid, segmentId: seg, userId: ownerId } = active;
+				if (tid && ownerId !== user?._id) throw new Error("A different account owns the recording marker. Sign in to that account to stop it safely.");
+				let trip;
+				if (tid && seg && ownerId) {
+					try { trip = await getLocalTrip(tid, ownerId); }
+					catch (error) {
+						// Build 4 could delete an active row. Only absence, not an
+						// arbitrary SQLite failure, permits missing-row cleanup.
+						if (await ownsLocalTrip(tid, ownerId)) throw error;
+					}
+				}
+				if (!isCurrent()) return;
+				if (active.cleanupId || (!trip && (running || tid)) || (trip && !["recording", "paused"].includes(trip.status))) {
+					setStatus("cleanup_required");
+					const outcome = await stopAbandonedRecording({ ...active, location: Location,
+						taskName: TASK_NAME, getActiveTrip, isCurrent });
+					if (!isCurrent()) return;
+					if (outcome !== "stopped") throw new Error("The recording changed during recovery. Try Stop again to check its current state.");
+					setStatus("idle");
+					setRecoveryError(null);
+					toast({ type: "info", title: "Stale recording stopped", msg: "Your saved trip data has been kept." });
 					return;
 				}
+				if (!trip) {
+					setStatus("idle");
+					setRecoveryError(null);
+					return;
+				}
+				// A newer marker must never be downgraded by an old restore.
+				const latest = await getActiveTrip();
+				if (!isCurrent()) return;
+				if (latest.tripId !== tid || latest.segmentId !== seg || latest.userId !== ownerId || latest.cleanupId) throw new Error("The recording changed during recovery. Try Stop again.");
 				setTripId(tid);
 				setSegment(seg);
 				if (running) {
 					setStatus("recording");
 					await startLocationWatcher();
-					if (cancelled) await stopLocationWatcher();
+					if (!isCurrent()) await stopLocationWatcher();
 				} else {
 					// A killed/failed native collector is recoverable, never auto-uploaded.
-					await clearActiveTrip();
+					if (await clearActiveTrip(active) === false) throw new Error("The recording changed during recovery. Try Stop again.");
+					if (!isCurrent()) return;
 					await setTripRecordingStatus(tid, "paused", ownerId);
-					if (!cancelled) setStatus("paused");
+					if (isCurrent()) setStatus("paused");
 				}
+				if (isCurrent()) setRecoveryError(null);
 			} catch (error) {
-				if (!cancelled) toast({ type: "warning", title: "Recording recovery needs attention", msg: error.message });
+				if (isCurrent()) {
+					setStatus("cleanup_required");
+					setRecoveryError(error.message);
+					toast({ type: "warning", title: "Recording recovery needs attention", msg: error.message });
+				}
 			} finally {
-				if (!cancelled) setIsRestoring(false);
+				busy = false;
+				if (isCurrent()) setIsRestoring(false);
 			}
-		})();
+		};
+		recoveryRequest.current = recover;
+		recover();
 		return () => {
 			cancelled = true;
+			if (recoveryRequest.current === recover) recoveryRequest.current = null;
 			stopRequest.current = null;
 			watcherRequest.current++;
 			locationWatcher.current?.remove();
 			locationWatcher.current = null;
 		};
-	}, [user?._id]);
+	}, [user?._id, token, sessionEpoch, isSessionChanging]);
 
 	const refreshPending = async () => {
 		const uid = user?._id;
@@ -154,7 +201,8 @@ export default function RecordScreen() {
 		const session = { ...useAuthStore.getState() };
 		const isCurrent = () => request === watcherRequest.current
 			&& useAuthStore.getState().user?._id === session.user?._id
-			&& useAuthStore.getState().token === session.token;
+			&& useAuthStore.getState().token === session.token
+			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
 		const watcher = await Location.watchPositionAsync(
 			{
 				accuracy: Location.Accuracy.High,
@@ -229,7 +277,15 @@ export default function RecordScreen() {
 			const session = { ...useAuthStore.getState() };
 			const uid = session.user?._id;
 			if (!uid || uid !== user?._id || !session.token) return;
-			isCurrent = () => useAuthStore.getState().user?._id === uid && useAuthStore.getState().token === session.token;
+			isCurrent = () => useAuthStore.getState().user?._id === uid && useAuthStore.getState().token === session.token
+			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
+			const existing = await getActiveTrip();
+			if (!isCurrent()) return;
+			if (existing.cleanupId || existing.tripId) {
+				setStatus("cleanup_required");
+				setRecoveryError("The previous collector still needs checking. Try Stop before starting another trip.");
+				return;
+			}
 			const tid = await startTrip(uid, session.user.settings || {});
 			if (!isCurrent()) return; // Retain this owner's unsynced row for recovery.
 			const seg = startSegment();
@@ -252,9 +308,19 @@ export default function RecordScreen() {
 			toast({ type: "success", title: "Recording started" });
 		} catch (error) {
 			if (attempt) {
-				await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip, clearActiveTrip });
+				if (isCurrent()) await stopLocationWatcher();
+				try {
+					const outcome = await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip });
+					if (outcome !== "stopped") throw new Error("The previous collector still needs checking. Try Stop again.");
+				} catch (cleanupError) {
+					if (isCurrent()) {
+						setStatus("cleanup_required");
+						setRecoveryError(cleanupError.message);
+						toast({ type: "warning", title: "Recording recovery needs attention", msg: cleanupError.message });
+					}
+					return;
+				}
 				if (isCurrent()) {
-					await stopLocationWatcher();
 					await setTripRecordingStatus(attempt.tripId, "paused", attempt.userId);
 					await refreshPending();
 				}
@@ -262,7 +328,9 @@ export default function RecordScreen() {
 			if (isCurrent()) toast({ type: "danger", title: "Could not start recording", msg: error.message });
 		} finally {
 			try {
-				if (attempt && !isCurrent()) await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip, clearActiveTrip });
+				if (attempt && !isCurrent()) await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip });
+			} catch {
+				// Persisted cleanup evidence is retried by the next live screen.
 			} finally {
 				lifecycleRequest.current = false;
 			}
@@ -270,11 +338,12 @@ export default function RecordScreen() {
 	};
 
 	const handlePauseResume = async () => {
-		if (lifecycleRequest.current || stopRequest.current || isRestoring) return;
+		if (lifecycleRequest.current || stopRequest.current || isRestoring || status === "cleanup_required") return;
 		const session = { ...useAuthStore.getState() };
 		if (!tripId || !session.token || session.user?._id !== user?._id) return;
 		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
-			&& useAuthStore.getState().token === session.token;
+			&& useAuthStore.getState().token === session.token
+			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
 		lifecycleRequest.current = true;
 		let attempt;
 		try {
@@ -310,8 +379,13 @@ export default function RecordScreen() {
 				} catch (error) {
 					if (isCurrent()) {
 						await stopLocationWatcher();
-						if (await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) await Location.stopLocationUpdatesAsync(TASK_NAME);
-						await clearActiveTrip();
+						try {
+							const outcome = await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip });
+							if (outcome !== "stopped") throw new Error("The previous collector still needs checking. Try Stop again.");
+						} catch (cleanupError) {
+							if (isCurrent()) { setStatus("cleanup_required"); setRecoveryError(cleanupError.message); }
+							throw cleanupError;
+						}
 						await setTripRecordingStatus(tripId, "paused", session.user._id);
 					}
 					throw error;
@@ -322,7 +396,9 @@ export default function RecordScreen() {
 			if (isCurrent()) toast({ type: "danger", title: "Could not change recording state", msg: error.message });
 		} finally {
 			try {
-				if (attempt && !isCurrent()) await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip, clearActiveTrip });
+				if (attempt && !isCurrent()) await stopAbandonedRecording({ ...attempt, location: Location, taskName: TASK_NAME, getActiveTrip });
+			} catch {
+				// Cleanup-only marker remains available to the next live session.
 			} finally {
 				lifecycleRequest.current = false;
 			}
@@ -330,7 +406,7 @@ export default function RecordScreen() {
 	};
 
 	const handleRecover = async (tid) => {
-		if (isRestoring || lifecycleRequest.current || uploadRequest.current || ["recording", "paused"].includes(status)) return;
+		if (isRestoring || lifecycleRequest.current || uploadRequest.current || ["recording", "paused", "cleanup_required"].includes(status)) return;
 		const session = { ...useAuthStore.getState() };
 		if (!session.token || session.user?._id !== user?._id) return;
 		lifecycleRequest.current = true;
@@ -354,7 +430,7 @@ export default function RecordScreen() {
 	};
 
 	const handleDelete = async (tid) => {
-		if (isRestoring || uploadRequest.current || lifecycleRequest.current || (tid === tripId && status !== "stopped")) return;
+		if (isRestoring || status === "cleanup_required" || uploadRequest.current || lifecycleRequest.current || (tid === tripId && status !== "stopped")) return;
 		try {
 			await deleteTrip(tid, user?._id);
 			await refreshPending();
@@ -368,7 +444,8 @@ export default function RecordScreen() {
 		const session = { ...useAuthStore.getState() };
 		if (!tid || !session.token || session.user?._id !== user?._id) return;
 		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
-			&& useAuthStore.getState().token === session.token;
+			&& useAuthStore.getState().token === session.token
+			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
 		const trip = await getLocalTrip(tid, session.user._id);
 		if (!isCurrent()) return;
 		if (trip.status !== "stopped") throw new Error("Stop this recording before editing its details.");
@@ -465,11 +542,12 @@ export default function RecordScreen() {
 	};
 
 	const handleUpload = async (tid = tripId) => {
-		if (uploadRequest.current || lifecycleRequest.current || isRestoring || (tid === tripId && ["recording", "paused"].includes(status))) return;
+		if (uploadRequest.current || lifecycleRequest.current || isRestoring || status === "cleanup_required" || (tid === tripId && ["recording", "paused"].includes(status))) return;
 		const session = { ...useAuthStore.getState() };
 		if (!session.token || session.user?._id !== user?._id) return;
 		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
-			&& useAuthStore.getState().token === session.token;
+			&& useAuthStore.getState().token === session.token
+			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
 		uploadRequest.current = true;
 		setIsUploading(true);
 		setUploadingTripId(tid);
@@ -641,6 +719,18 @@ export default function RecordScreen() {
 					</View>
 				)}
 
+			{status === "cleanup_required" && (
+				<View style={{ alignSelf: "stretch", marginBottom: 24 }}>
+					<Text accessibilityRole="alert" style={{ color: theme.colors.text, marginBottom: 12 }}>
+						{recoveryError || "Stopping an unfinished GPS collector. Your saved trip data will not be changed."}
+					</Text>
+					<TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry Stop" disabled={isRestoring}
+						onPress={() => recoveryRequest.current?.()}>
+						<Text style={{ color: theme.colors.link }}>{isRestoring ? "Checking GPS…" : "Retry Stop"}</Text>
+					</TouchableOpacity>
+				</View>
+			)}
+
 			{status === "idle" && !isRestoring && <CircleButton icon="play" color="green" onPress={handleStart} />}
 
 			{(status === "recording" || status === "paused") && (
@@ -697,8 +787,8 @@ export default function RecordScreen() {
 								onUpload={() => handleUpload(item.id)}
 								onDelete={() => handleDelete(item.id)}
 								onRecover={() => handleRecover(item.id)}
-								isActive={isRestoring || (item.id === tripId && ["recording", "paused"].includes(status))}
-								canRecover={!isRestoring && !["recording", "paused"].includes(status)}
+								isActive={isRestoring || status === "cleanup_required" || (item.id === tripId && ["recording", "paused"].includes(status))}
+								canRecover={!isRestoring && !["recording", "paused", "cleanup_required"].includes(status)}
 							/>
 						)}
 					/>

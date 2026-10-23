@@ -52,24 +52,31 @@ test('upload marker is owner-scoped and anonymous recording is rejected', async(
   const update=queries.find(q=>q.sql.startsWith('UPDATE'));assert.match(update.sql,/AND user_id = \?/); assert.equal(update.params[1],'alice');
   await assert.rejects(dao.startTrip(),/Sign in/);
 });
-test('logout clears active marker before stopping native collection', async()=> {
-  const calls=[];
+test('logout disables the marker before native stop and retains failed cleanup for retry', async()=> {
+  const {recordingFixture}=require('./helpers/recording-fixture.cjs');
+  let marker={tripId:'trip',segmentId:'segment',userId:'owner'},running=true,fail=true;
+  const markers=recordingFixture(()=>marker,value=>{marker=value;});
   const {stopActiveRecording}=load('src/utils/stopActiveRecording.js',['stopActiveRecording'], {
-    clearActiveTrip:async()=>calls.push('clear'),
-    Location:{hasStartedLocationUpdatesAsync:async()=>true,stopLocationUpdatesAsync:async()=>calls.push('stop')}
+    ...markers,
+    Location:{hasStartedLocationUpdatesAsync:async()=>running,stopLocationUpdatesAsync:async()=>{
+      assert.equal(marker.tripId,undefined);assert.ok(marker.cleanupId);
+      if(fail)throw Error('Native failure');running=false;
+    }}
   });
-  await stopActiveRecording(); assert.deepEqual(calls,['clear','stop']);
+  await assert.rejects(stopActiveRecording(),/Native failure/);assert.ok(marker.cleanupId);
+  fail=false;await stopActiveRecording();assert.equal(running,false);assert.deepEqual(marker,{});
 });
 test('logout with no registered tracking task does not attempt to stop it', async()=> {
-  let stopped=false;
+  const {recordingFixture}=require('./helpers/recording-fixture.cjs');
+  let stopped=false,marker={};
   const {stopActiveRecording}=load('src/utils/stopActiveRecording.js',['stopActiveRecording'], {
-    clearActiveTrip:async()=>{}, Location:{hasStartedLocationUpdatesAsync:async()=>false,stopLocationUpdatesAsync:async()=>{stopped=true;}}
+    ...recordingFixture(()=>marker,value=>{marker=value;}), Location:{hasStartedLocationUpdatesAsync:async()=>false,stopLocationUpdatesAsync:async()=>{stopped=true;}}
   });
-  await stopActiveRecording(); assert.equal(stopped,false);
+  await stopActiveRecording(); assert.equal(stopped,false);assert.deepEqual(marker,{});
 });
 test('active marker requires and persists an owner', async()=> {
   let stored;
-  const {setActiveTrip}=load('src/utils/activeTrip.js',['setActiveTrip'],{SecureStore:{setItemAsync:async(k,v)=>{stored=JSON.parse(v);}}});
+  const {setActiveTrip}=load('src/utils/activeTrip.js',['setActiveTrip'],{SecureStore:{getItemAsync:async()=>null,setItemAsync:async(k,v)=>{stored=JSON.parse(v);}}});
   await assert.rejects(setActiveTrip('trip-a','segment'),/Sign in/);
   await setActiveTrip('trip-a','segment','alice'); assert.equal(stored.userId,'alice');
 });
