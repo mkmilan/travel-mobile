@@ -75,3 +75,61 @@ test('MOB-041 filtered sources and shared close preserve valid indices, swipe an
   screen.thumbnail('invalid').onPress(); after = screen.viewer();
   assert.equal(after.visible, false); assert.equal(after.imageIndex, 0);
 });
+
+// Run the actual adapter and installed swipe-index hook with a tiny keyed React
+// host. Native list/layout/gestures remain mocked; momentum events are real hook
+// inputs. Both keys matter: the gallery lifetime and EnhancedImageViewing's
+// imageIndex key. A prop-only viewer mock cannot catch swipe/remount regressions.
+function nativeViewer(screen) {
+  const {load} = require('./helpers/component-fixture.cjs');
+  let host, lifetime, mounts = 0;
+  const h = (type, props, ...children) => ({type, props: props || {}, children: children.flat()});
+  const hooks = Object.fromEntries(['useState', 'useRef', 'useCallback', 'useEffect'].map(name => [name, (...args) => host.hooks[name](...args)]));
+  const useImageIndexChange = load('node_modules/react-native-image-viewing/dist/hooks/useImageIndexChange.js', 'useImageIndexChange', hooks);
+  const Enhanced = load('src/components/SafeImageViewing.js', 'EnhancedImageViewing', {
+    ...native, ...hooks, h, React: {createElement: h},
+    SafeAreaInsetsContext: {Provider: 'InsetsReset'}, SafeAreaFrameContext: {Provider: 'FrameReset'},
+    Animated: {View: 'AnimatedView'}, Dimensions: {get: () => ({width: 400, height: 800})},
+    StyleSheet: {create: value => value}, VirtualizedList: 'VirtualizedList', ImageItem: 'ImageItem', StatusBarManager: 'StatusBarManager',
+    useImageIndexChange, useAnimatedComponents: () => [[], [], () => {}], useRequestClose: fn => [1, fn],
+  });
+  const render = () => {
+    const props = screen.viewer();
+    const inner = Enhanced(props);
+    const nextLifetime = JSON.stringify([props.key, inner.props.key]);
+    if (nextLifetime !== lifetime) {host = hooksFixture(); lifetime = nextLifetime; mounts++;}
+    return host.render(() => inner.type(inner.props));
+  };
+  const swipeTo = index => {
+    nodes(render(), 'VirtualizedList')[0].props.onMomentumScrollEnd({nativeEvent: {contentOffset: {x: index * 400}}});
+    render(); // index effect informs gallery about the actually viewed photo
+    render(); // apply gallery rerender without resetting the native gesture/list
+  };
+  return {render, swipeTo, mounts: () => mounts};
+}
+
+test('MOB-041 actual horizontal swipe tracks selected ID without remount and closes when that photo disappears', () => {
+  const screen = gallery(); screen.thumbnail('a').onPress();
+  const viewer = nativeViewer(screen); viewer.render(); const opened = viewer.mounts();
+  viewer.swipeTo(1);
+  assert.equal(viewer.mounts(), opened, 'swipe must not remount native modal/list');
+  screen.props.photoIds = ['a'];
+  assert.equal(viewer.render(), null, 'removing currently viewed B must close even though initial A remains');
+  screen.props.photoIds = ['a', 'b']; assert.equal(viewer.render(), null);
+  screen.thumbnail('a').onPress();
+  assert.equal(nodes(viewer.render(), 'VirtualizedList')[0].props.initialScrollIndex, 0);
+});
+
+test('MOB-041 actual swiped photo survives initial-photo removal and reorder at a valid native index', () => {
+  const screen = gallery({photoIds: ['a', 'b', 'c']}); screen.thumbnail('a').onPress();
+  const viewer = nativeViewer(screen); viewer.render(); viewer.swipeTo(1);
+  screen.props.photoIds = ['c', 'b'];
+  let list = nodes(viewer.render(), 'VirtualizedList')[0];
+  assert.ok(list, 'removing initial A must not close current B');
+  assert.equal(list.props.initialScrollIndex, 1); assert.equal(list.props.getItem(null, 1).uri, 'fixture:b');
+  screen.props.photoIds = ['b', 'c'];
+  list = nodes(viewer.render(), 'VirtualizedList')[0];
+  assert.equal(list.props.initialScrollIndex, 0); assert.equal(list.props.getItem(null, 0).uri, 'fixture:b');
+  const before = viewer.mounts(); viewer.swipeTo(1); assert.equal(viewer.mounts(), before);
+  screen.props.photoIds = ['b']; assert.equal(viewer.render(), null, 'later swipes use refreshed photo identities');
+});
