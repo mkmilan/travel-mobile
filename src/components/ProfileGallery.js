@@ -22,6 +22,9 @@ export default function ProfileGallery({ userId }) {
 	const [selection, setSelection] = useState(null);
 	const chosen = selection && selection.identity === identity ? selection.photo : null;
 	const sourceReturn = useRef(null);
+	const sourceNavigationPending = useRef(false);
+	const currentSelection = useRef(selection);
+	currentSelection.current = chosen ? selection : null;
 	const router = useRouter();
 	const nav = useNavigation();
 	const isFocused = useIsFocused();
@@ -39,7 +42,9 @@ export default function ProfileGallery({ userId }) {
 
 	/* ---------- link from viewer footer ---------- */
 	const openSource = () => {
-		if (!chosen) return;
+		if (!viewerOpen || !chosen || currentSelection.current !== selection || sourceNavigationPending.current) return;
+		if (!["trip", "recommendation"].includes(chosen.sourceType) || !chosen.sourceId) return;
+		sourceNavigationPending.current = true;
 		if (chosen.sourceType === "trip") {
 			sourceReturn.current = identity;
 			setViewerOpen(false);
@@ -70,6 +75,7 @@ export default function ProfileGallery({ userId }) {
 				renderItem={({ item }) => (
 					<Pressable
 						onPress={() => {
+							sourceNavigationPending.current = false;
 							setSelection({ identity, photo: item });
 							setViewerOpen(true);
 						}}
