@@ -5,11 +5,10 @@ import { RECOMMENDATION_CATEGORIES, RECOMMENDATION_TAGS } from "@/src/constants/
 import usePhotoManager from "@/src/hooks/usePhotoManager";
 import { theme } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
 	Alert,
-	KeyboardAvoidingView,
-	Platform,
+	ActivityIndicator,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -203,6 +202,9 @@ const PhotoSection = ({ photos, uploading, addPhotos, removePhoto, maxPhotos = 5
 
 const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, ref) => {
 	const [visible, setVisible] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const [saveError, setSaveError] = useState("");
+	const submitting = useRef(false);
 	const [isEditMode, setIsEditMode] = useState(false);
 	const [associatedTrip, setAssociatedTrip] = useState(null);
 	const [editingRecommendationId, setEditingRecommendationId] = useState(null);
@@ -241,6 +243,8 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 
 	useImperativeHandle(ref, () => ({
 		open(locationData = null, tripId = null) {
+			if (submitting.current) return;
+			setSaveError("");
 			setIsEditMode(false);
 			setEditingRecommendationId(null);
 			setAssociatedTrip(tripId);
@@ -281,6 +285,8 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		},
 
 		openEdit(recommendation) {
+			if (submitting.current) return;
+			setSaveError("");
 			setIsEditMode(true);
 			setEditingRecommendationId(recommendation._id);
 			setAssociatedTrip(recommendation.associatedTrip);
@@ -314,7 +320,12 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		},
 	}));
 
+	const handleClose = () => {
+		if (!submitting.current && !uploading) setVisible(false);
+	};
+
 	const updateField = (field, value) => {
+		if (submitting.current) return;
 		setFormData((prev) => ({ ...prev, [field]: value }));
 	};
 
@@ -325,6 +336,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 	};
 
 	const handleSubmit = async () => {
+		if (submitting.current || uploading) return;
 		// Basic validation
 		if (!formData.name.trim()) return Alert.alert("Error", "Please enter a name for the recommendation");
 		if (!formData.description.trim()) return Alert.alert("Error", "Please enter a description");
@@ -334,7 +346,6 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		if (formData.lat === null || formData.lon === null)
 			return Alert.alert("Error", "Please select a location on the map");
 
-		if (uploading) return Alert.alert("Please wait", "Photos are still uploading…");
 
 		// Get server photo IDs only (ignore local files for now)
 		const serverPhotoIds = photos.filter((p) => !p.startsWith("file://"));
@@ -352,10 +363,14 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 			photoIds,
 		});
 
+		submitting.current = true;
+		setSaving(true);
+		setSaveError("");
 		try {
 			if (isEditMode) {
 				// For editing: include existing server photos
 				const updatedRec = await onSubmit({ ...buildPayload(serverPhotoIds), _id: editingRecommendationId }, true);
+				if (!updatedRec) throw new Error("The recommendation update was not confirmed. Please try again.");
 				// Upload any new local files
 				if (localFiles.length > 0) {
 					await uploadPendingPhotos(editingRecommendationId);
@@ -394,17 +409,20 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 			}
 		} catch (err) {
 			console.error("Error saving recommendation:", err);
-			Alert.alert("Error", err.message || "Could not save recommendation.");
+			setSaveError(err?.message || "Could not save recommendation. Please try again.");
+		} finally {
+			submitting.current = false;
+			setSaving(false);
 		}
 	};
 
 	return (
-		<BottomModal visible={visible} onClose={() => setVisible(false)}>
+		<BottomModal visible={visible} onClose={handleClose}>
 			<ModalHeader
 				title={isEditMode ? "Edit Recommendation" : "Add Recommendation"}
-				onClose={() => setVisible(false)}
+				onClose={handleClose}
 			/>
-			<KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+			<View style={{ flex: 1 }} pointerEvents={saving ? "none" : "auto"}>
 				<ScrollView
 					showsVerticalScrollIndicator={false}
 					contentContainerStyle={{ paddingBottom: theme.space.lg }}
@@ -413,6 +431,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 					<View style={styles.field}>
 						<Text style={styles.label}>Name / Title</Text>
 						<TextInput
+							editable={!saving}
 							value={formData.name}
 							onChangeText={(v) => updateField("name", v)}
 							placeholder="Enter recommendation name…"
@@ -425,6 +444,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 					<View style={styles.field}>
 						<Text style={styles.label}>Description</Text>
 						<TextInput
+							editable={!saving}
 							value={formData.description}
 							onChangeText={(v) => updateField("description", v)}
 							placeholder="Describe this place…"
@@ -493,11 +513,13 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 						<Text style={{ color: "orange", marginTop: 8 }}>You can add images after uploading the trip.</Text>
 					)}
 
-					<Pressable onPress={handleSubmit} style={[styles.button, { backgroundColor: theme.colors.primary }]}>
+					{saveError ? <Text accessibilityRole="alert" style={{ color: theme.colors.error }}>{saveError}</Text> : null}
+					<Pressable testID="recommendation-save" onPress={handleSubmit} disabled={saving || uploading} style={[styles.button, { backgroundColor: theme.colors.primary, opacity: saving ? 0.5 : 1 }]}>
+						{saving && <ActivityIndicator color="#fff" />}
 						<Text style={styles.buttonText}>{isEditMode ? "Update Recommendation" : "Save Recommendation"}</Text>
 					</Pressable>
 				</ScrollView>
-			</KeyboardAvoidingView>
+			</View>
 		</BottomModal>
 	);
 });

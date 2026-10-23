@@ -173,8 +173,8 @@ export default function RecommendationsTab({ userId, isSelf }) {
 			}
 			await onRefresh(); // Reload data from page 1
 		} catch (error) {
-			console.error("[RecommendationsTab] Failed to save recommendation:", error.response?.data || error.message);
-			Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
+			console.error("[RecommendationsTab] Failed to save recommendation:", error?.response?.data || error?.message);
+			throw error; // The form must retain its draft instead of reporting false success.
 		}
 	};
 

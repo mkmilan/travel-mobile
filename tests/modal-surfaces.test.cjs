@@ -33,3 +33,56 @@ test('route-map modal fills remaining space below its header without overflowing
   const map=nodes(tree,'View')[0];assert.equal(map.props.style.flex,1);assert.equal(map.props.style.height,undefined);
   assert.equal(tree.props.style.padding,0); // shared modal still preserves its inner bottom inset
 });
+
+function recommendationForm(onSubmit) {
+  const alerts=[];
+  const form=fixture('src/components/modals/AddRecommendationModal.js','AddRecommendationModal',{onSubmit},{
+    ...native,theme,console:{log(){},error(){}},StyleSheet:styles,BottomModal:'BottomModal',ModalHeader:'ModalHeader',TripPhotoThumb:'TripPhotoThumb',Ionicons:'Ionicons',MapView:'MapView',Marker:'Marker',StarRating:'StarRating',
+    RECOMMENDATION_CATEGORIES:[{value:'nature',label:'Nature'}],RECOMMENDATION_TAGS:[{value:'quiet',label:'Quiet'}],
+    Alert:{alert:(...args)=>alerts.push(args)},usePhotoManager:()=>({photos:[],uploading:false,setPhotos(){},uploadPendingPhotos:async()=>{}}),
+  });
+  form.render();return {...form,alerts};
+}
+const recommendationButton=tree=>nodes(tree,'Pressable').find(n=>n.props.testID==='recommendation-save');
+function fillRecommendation(form) {
+  form.ref.current.open({lat:1,lon:2},'trip');const tree=form.render();
+  nodes(tree,'TextInput')[0].props.onChangeText('Fixture name');nodes(tree,'TextInput')[1].props.onChangeText('Fixture description');
+  nodes(tree,'StarRating')[0].props.onRatingChange(4);
+  nodes(tree).find(n=>n.props.onCategoryChange).props.onCategoryChange('nature');nodes(tree).find(n=>n.props.onTagsChange).props.onTagsChange(['quiet']);
+  return form.render();
+}
+const existingRecommendation={_id:'fixture-rec',name:'Existing',description:'Description',rating:4,primaryCategory:'nature',attributeTags:['quiet'],location:{coordinates:[2,1]},photos:[]};
+
+test('recommendation save is single-flight, blocks dismissal/reopen and retains draft after rejection',async()=>{
+  let pending=deferred();const calls=[];const form=recommendationForm(data=>{calls.push(data);return pending.promise;});
+  let tree=fillRecommendation(form);const save=recommendationButton(tree).props.onPress;const work=save();await save();
+  tree=form.render();assert.equal(calls.length,1);assert.equal(recommendationButton(tree).props.disabled,true);
+  tree.props.onClose();nodes(tree,'ModalHeader')[0].props.onClose();form.ref.current.openEdit(existingRecommendation);
+  tree=form.render();assert.equal(tree.props.visible,true);assert.equal(nodes(tree,'TextInput')[0].props.value,'Fixture name');
+  assert.equal(nodes(tree,'TextInput')[0].props.editable,false);
+  pending.reject(Error('Save failed'));await work;tree=form.render();
+  assert.equal(tree.props.visible,true);assert.equal(recommendationButton(tree).props.disabled,false);
+  assert.equal(nodes(tree,'TextInput')[1].props.value,'Fixture description');assert.ok(nodes(tree,'Text').some(n=>n.props.accessibilityRole==='alert'));
+  assert.equal(form.alerts.filter(x=>x[0]==='Success').length,0);
+  pending=deferred();const retry=recommendationButton(tree).props.onPress();pending.resolve({_id:'fixture-created'});await retry;
+  assert.equal(form.render().props.visible,false);assert.equal(calls.length,2);assert.equal(calls[0].associatedTrip,'trip');
+  assert.doesNotMatch(read('src/components/modals/AddRecommendationModal.js'),/KeyboardAvoidingView/);
+});
+
+test('recommendation editing requires confirmed callback result and supports cancel/reopen after failure',async()=>{
+  const form=recommendationForm(async()=>undefined);form.ref.current.openEdit(existingRecommendation);
+  await recommendationButton(form.render()).props.onPress();let tree=form.render();
+  assert.equal(tree.props.visible,true);assert.equal(form.alerts.length,0);
+  assert.ok(nodes(tree,'Text').some(n=>n.props.accessibilityRole==='alert'));
+  tree.props.onClose();assert.equal(form.render().props.visible,false);
+  form.ref.current.open({lat:1,lon:2});tree=form.render();assert.equal(tree.props.visible,true);assert.equal(nodes(tree,'TextInput')[0].props.value,'');
+  assert.equal(nodes(tree,'Text').filter(n=>n.props.accessibilityRole==='alert').length,0);
+});
+
+test('profile recommendation callback propagates a rejected update to the editing form',async()=>{
+  const source=read('src/screens/profile/tabs/RecommendationsTab.js');const start=source.indexOf('const handleRecommendationSubmitted = '),end=source.indexOf('/* ---------------- render',start);
+  let refreshes=0;const handler=require('node:vm').runInNewContext(source.slice(start,end)+';handleRecommendationSubmitted',{
+    console:{log(){},error(){}},updateRecommendation:async()=>{throw Error('API failed');},onRefresh:async()=>refreshes++,Alert:{alert(){throw Error('unexpected alert');}},
+  });
+  await assert.rejects(handler({_id:'fixture-rec'},true),/API failed/);assert.equal(refreshes,0);
+});
