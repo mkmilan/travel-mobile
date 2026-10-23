@@ -77,7 +77,7 @@ const DropdownMenu = ({ isVisible, onClose, onEdit, onDelete, onAddRecommendatio
 export default function TripDetailScreen() {
 	const router = useRouter();
 	const { id: tripId } = useLocalSearchParams();
-	const { user: currentUser, isAuthenticated } = useAuthStore();
+	const { user: currentUser, token, isAuthenticated } = useAuthStore();
 	const { setRecCount, setLikeState, setCommentCount } = useTripSocialStore();
 
 	const [trip, setTrip] = useState(null); // Will store the full trip object including its own commentsCount
@@ -105,6 +105,18 @@ export default function TripDetailScreen() {
 	const [isAddCommentModalVisible, setIsAddCommentModalVisible] = useState(false);
 	const [isCommentsSectionVisible, setIsCommentsSectionVisible] = useState(false);
 	const [isCommentListExpanded, setIsCommentListExpanded] = useState(false);
+	const commentContext = useRef(null);
+	const commentMounted = useRef(true);
+	if (!commentContext.current || commentContext.current.tripId !== tripId || commentContext.current.userId !== currentUser?._id || commentContext.current.token !== token) {
+		commentContext.current = { tripId, userId: currentUser?._id, token, key: (commentContext.current?.key || 0) + 1 };
+	}
+	useEffect(() => {
+		setIsAddCommentModalVisible(false);
+	}, [tripId, currentUser?._id, token]);
+	useEffect(() => {
+		commentMounted.current = true;
+		return () => { commentMounted.current = false; };
+	}, []);
 	// --- Map Modal State ---
 	const [isMapModalVisible, setMapModalVisible] = useState(false);
 
@@ -284,25 +296,30 @@ export default function TripDetailScreen() {
 	};
 
 	const handleAddCommentSubmit = async (text) => {
-		if (!tripId || !isAuthenticated) {
+		const context = commentContext.current;
+		const isCurrent = () => {
+			const session = useAuthStore.getState();
+			return commentMounted.current && context === commentContext.current && session.token === context.token && session.user?._id === context.userId;
+		};
+		if (!tripId || !isAuthenticated || !isCurrent()) {
 			Alert.alert("Error", "You must be logged in to comment.");
 			throw new Error("Not authenticated");
 		}
 		try {
-			const newComment = await addTripComment(tripId, text);
-			setComments((prevComments) => [newComment, ...(prevComments || [])]);
+			const newComment = await addTripComment(context.tripId, text);
+			if (!isCurrent()) return;
+			setComments((prevComments) => isCurrent() ? [newComment, ...(prevComments || [])] : prevComments);
 			if (trip) {
-				setTrip((prevTrip) => ({
+				setTrip((prevTrip) => isCurrent() && prevTrip?._id === context.tripId ? {
 					...prevTrip,
 					commentsCount: (prevTrip.commentsCount || 0) + 1,
-				}));
+				} : prevTrip);
 				setCommentCount(tripId, (trip?.commentsCount || 0) + 1);
 			}
 			if (!isCommentListExpanded) setIsCommentListExpanded(true);
 			if (!isCommentsSectionVisible) setIsCommentsSectionVisible(true);
 		} catch (err) {
-			console.error("Failed to add comment:", err);
-			Alert.alert("Error", err.message || "Could not post comment.");
+			if (isCurrent()) Alert.alert("Error", err?.message || "Could not post comment.");
 			throw err;
 		}
 	};
@@ -770,6 +787,7 @@ export default function TripDetailScreen() {
 				error={likersError}
 			/>
 			<AddCommentModal
+				key={commentContext.current.key}
 				isVisible={isAddCommentModalVisible}
 				onClose={() => setIsAddCommentModalVisible(false)}
 				onSubmit={handleAddCommentSubmit}

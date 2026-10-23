@@ -8,6 +8,7 @@ import {
 	unlikeTrip,
 } from "@/src/services/api";
 import { create } from "zustand";
+import { useAuthStore } from "@/src/stores/auth";
 
 /**
  * Slice that tracks live social state per trip.
@@ -25,12 +26,42 @@ import { create } from "zustand";
  *   }
  */
 
+let cacheGeneration = 0;
+const loadVersions = new Map();
+let socialSession = null;
+// Cache entries carry an opaque identity, not credentials. Auth subscribers can
+// immediately reject old-session lists without waiting for a replacement GET.
+export const getSocialSessionScope = () => {
+	const { token, user } = useAuthStore.getState();
+	if (!socialSession || socialSession.token !== token || socialSession.userId !== user?._id) {
+		socialSession = { token, userId: user?._id, scope: {} };
+	}
+	return socialSession.scope;
+};
+const scopedTrip = (state, tripId) => {
+	const scope = getSocialSessionScope();
+	return state.trips[tripId]?.session === scope ? state.trips[tripId] : { session: scope };
+};
+const captureSession = () => {
+	const generation = cacheGeneration;
+	const scope = getSocialSessionScope();
+	return () => generation === cacheGeneration && scope === getSocialSessionScope();
+};
+const beginLoad = (kind, tripId) => {
+	const key = `${kind}:${tripId}`;
+	const version = (loadVersions.get(key) || 0) + 1;
+	loadVersions.set(key, version);
+	const isCurrentSession = captureSession();
+	return () => isCurrentSession() && loadVersions.get(key) === version;
+};
+
 export const useTripSocialStore = create((set, get) => ({
 	trips: {}, // { [tripId]: {likesCount, isLikedByCurrentUser, ...} }
 
 	/* -------- likes -------- */
 	toggleLike: async (tripId) => {
-		const trip = get().trips[tripId] || {};
+		const isCurrentSession = captureSession();
+		const trip = scopedTrip(get(), tripId);
 		const liked = !trip.isLikedByCurrentUser;
 		// optimistic
 		set((s) => ({
@@ -46,26 +77,31 @@ export const useTripSocialStore = create((set, get) => ({
 		try {
 			liked ? await likeTrip(tripId) : await unlikeTrip(tripId);
 		} catch (e) {
+			if (!isCurrentSession()) return;
 			// revert on error
 			set((s) => ({ trips: { ...s.trips, [tripId]: trip } }));
 		}
 	},
 
 	loadLikers: async (tripId) => {
+		const isCurrent = beginLoad("likers", tripId);
 		const data = await getTripLikers(tripId);
+		if (!isCurrent()) return;
 		set((s) => ({
-			trips: { ...s.trips, [tripId]: { ...s.trips[tripId], likers: data ?? [] } },
+			trips: { ...s.trips, [tripId]: { ...scopedTrip(s, tripId), likers: data ?? [] } },
 		}));
 	},
 
 	/* -------- comments -------- */
 	loadComments: async (tripId, page = 1) => {
-		const data = await getTripComments(tripId, page); // ← array
+		const isCurrent = beginLoad("comments", tripId);
+		const data = await getTripComments(tripId, page);
+		if (!isCurrent()) return;
 		set((s) => ({
 			trips: {
 				...s.trips,
 				[tripId]: {
-					...s.trips[tripId],
+					...scopedTrip(s, tripId),
 					comments: data ?? [],
 					commentsCount: (data ?? []).length, // 🔑 keep counter in sync
 				},
@@ -73,7 +109,9 @@ export const useTripSocialStore = create((set, get) => ({
 		}));
 	},
 	addComment: async (tripId, text) => {
+		const isCurrentSession = captureSession();
 		const comment = await addTripComment(tripId, text);
+		if (!isCurrentSession()) return { comment, refreshError: "Session changed; list was not refreshed." };
 		// A committed POST must not look like a failed send if the following GET
 		// fails: retrying the mutation would create the comment twice.
 		try {
@@ -86,8 +124,10 @@ export const useTripSocialStore = create((set, get) => ({
 
 	/* -------- recommendations -------- */
 	loadRecommendations: async (tripId) => {
+		const isCurrent = beginLoad("recommendations", tripId);
 		// call the new endpoint that returns the full trip JSON
-		const trip = await getTripJsonById(tripId); // ← uses your API
+		const trip = await getTripJsonById(tripId);
+		if (!isCurrent()) return;
 		// console.log(`[tripSocialStore] loadRecommendations for trip `, trip);
 
 		const list = trip?.recommendations ?? []; // always an array
@@ -96,7 +136,7 @@ export const useTripSocialStore = create((set, get) => ({
 			trips: {
 				...s.trips,
 				[tripId]: {
-					...s.trips[tripId],
+					...scopedTrip(s, tripId),
 					recommendations: list,
 					// keep the counter in sync (optional but handy)
 					recommendationCount: list.length,
@@ -111,7 +151,7 @@ export const useTripSocialStore = create((set, get) => ({
 			trips: {
 				...s.trips,
 				[tripId]: {
-					...s.trips[tripId],
+					...scopedTrip(s, tripId),
 					isLikedByCurrentUser: isLiked,
 					likesCount: count,
 				},
@@ -120,12 +160,12 @@ export const useTripSocialStore = create((set, get) => ({
 
 	setCommentCount: (tripId, count) =>
 		set((s) => ({
-			trips: { ...s.trips, [tripId]: { ...s.trips[tripId], commentsCount: count } },
+			trips: { ...s.trips, [tripId]: { ...scopedTrip(s, tripId), commentsCount: count } },
 		})),
 
 	setRecCount: (tripId, count) =>
 		set((s) => ({
-			trips: { ...s.trips, [tripId]: { ...s.trips[tripId], recommendationCount: count } },
+			trips: { ...s.trips, [tripId]: { ...scopedTrip(s, tripId), recommendationCount: count } },
 		})),
 
 	/* -------- helper to prime cache from list endpoints -------- */
@@ -134,7 +174,7 @@ export const useTripSocialStore = create((set, get) => ({
 			trips: {
 				...s.trips,
 				[trip._id]: {
-					...s.trips[trip._id],
+					...scopedTrip(s, trip._id),
 					likesCount: trip.likesCount,
 					commentsCount: trip.commentsCount,
 					recommendationCount: trip.recommendationCount,
@@ -144,5 +184,9 @@ export const useTripSocialStore = create((set, get) => ({
 		})),
 
 	/* ─────────── RESET (for logout) ─────────── */
-	reset: () => set({ trips: {} }),
+	reset: () => {
+		cacheGeneration++;
+		loadVersions.clear();
+		set({ trips: {} });
+	},
 }));

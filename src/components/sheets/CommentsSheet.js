@@ -1,3 +1,5 @@
+import ProfileListStatus from "@/src/components/ProfileListStatus";
+import useSocialSheetLoader from "@/src/hooks/useSocialSheetLoader";
 import useTripSocial from "@/src/hooks/useTripSocial";
 import { deleteTripComment } from "@/src/services/api";
 import { useAuthStore } from "@/src/stores/auth";
@@ -23,6 +25,7 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 	const router = useRouter();
 	/* ---- social slice ---- */
 	const { comments, loadComments, addComment } = useTripSocial(trip || {});
+	const loader = useSocialSheetLoader({ tripId: trip?._id, visible, load: loadComments });
 
 	/* ---- local state ---- */
 	const [text, setText] = useState("");
@@ -42,11 +45,6 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 		setBusy(false);
 	}, [trip?._id, user?._id, token, visible]);
 	useEffect(() => () => { request.current = null; }, []);
-
-	/* ---- fetch when sheet becomes visible ---- */
-	useEffect(() => {
-		if (visible && trip?._id) loadComments();
-	}, [visible, trip?._id]);
 
 	/* ------------------------------------------------------------------ */
 	/* handlers                                                            */
@@ -104,7 +102,7 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 	/* render items                                                        */
 	/* ------------------------------------------------------------------ */
 	const renderItem = ({ item }) => {
-		const mine = item.user._id === user?._id;
+		const mine = Boolean(user?._id) && item.user?._id === user._id;
 
 		const avatarUser = item.user || item; // fallback if user is missing
 		const avatarProfilePictureUrl = item.profilePictureUrl || item.user?.profilePictureUrl;
@@ -116,9 +114,13 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 						profilePictureUrl={avatarProfilePictureUrl}
 						size={26}
 						style={{ marginRight: theme.space.sm }}
-						onPress={() => router.push(`/user/${item.user?._id}`)}
+						onPress={() => {
+							if (!item.user?._id || request.current) return;
+							onClose();
+							router.push(`/user/${item.user._id}`);
+						}}
 					/>
-					<Text style={styles.author}>{item.user.username}</Text>
+					<Text style={styles.author}>{item.user?.username || "Unknown user"}</Text>
 					<Text style={styles.date}>{isoToDate(item.createdAt)}</Text>
 					{mine && (
 						<Pressable onPress={() => onDelete(item._id)} hitSlop={6}>
@@ -145,8 +147,9 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 					<Text style={styles.sendTxt}>Retry list refresh</Text>
 				</Pressable>
 			</View> : null}
+			{loader.error ? <ProfileListStatus error={loader.error} onRetry={loader.retry} /> : null}
 			{comments === undefined ? (
-				<ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
+				loader.loading ? <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} /> : null
 			) : (
 				<>
 					{list.length === 0 ? (
@@ -161,18 +164,18 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 					)}
 
 					{/* BottomModal owns safe-area and keyboard avoidance. */}
-						<View style={styles.inputBar}>
-							<TextInput
-								style={styles.input}
-								placeholder="Add a comment…"
-								value={text}
-								onChangeText={setText}
-								editable={!busy}
-							/>
-							<Pressable testID="comments-send" onPress={onSend} disabled={busy || !text.trim()}>
-								<Text style={styles.sendTxt}>Send</Text>
-							</Pressable>
-						</View>
+					<View style={styles.inputBar}>
+						<TextInput
+							style={styles.input}
+							placeholder="Add a comment…"
+							value={text}
+							onChangeText={setText}
+							editable={!busy}
+						/>
+						<Pressable testID="comments-send" onPress={onSend} disabled={busy || !text.trim()}>
+							<Text style={styles.sendTxt}>Send</Text>
+						</Pressable>
+					</View>
 				</>
 			)}
 		</BaseSheet>

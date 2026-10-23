@@ -41,6 +41,7 @@ const RecommendationDetailModal = forwardRef(
 		{
 			isVisible,
 			onClose,
+			onNavigateClose,
 			recommendation,
 			tripUserId,
 			onEdit,
@@ -153,13 +154,13 @@ const RecommendationDetailModal = forwardRef(
 		};
 		const handleNavigateToTrip = () => {
 			if (associatedTrip) {
-				onClose(); // Close the modal before navigating
+				(onNavigateClose || onClose)(); // Dismiss any source list as well.
 				router.push(`/trip/${associatedTrip}`);
 			}
 		};
 		const handleNavigateToUserProfile = () => {
 			if (user?._id) {
-				onClose(); // Close this modal
+				(onNavigateClose || onClose)(); // Dismiss any source list as well.
 				router.push(`/user/${user._id}`); // Navigate to the user's profile
 			}
 		};

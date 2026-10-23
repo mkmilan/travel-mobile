@@ -1,3 +1,5 @@
+import ProfileListStatus from "@/src/components/ProfileListStatus";
+import useSocialSheetLoader from "@/src/hooks/useSocialSheetLoader";
 import useTripSocial from "@/src/hooks/useTripSocial";
 import { theme } from "@/src/theme";
 import { useRouter } from "expo-router";
@@ -7,12 +9,9 @@ import Avatar from "../ui/Avatar";
 import BaseSheet from "./BaseSheet";
 
 export default function LikersSheet({ trip, visible, onClose }) {
-	const { likers, loadLikers } = useTripSocial(trip);
+	const { likers, loadLikers } = useTripSocial(trip || {});
+	const loader = useSocialSheetLoader({ tripId: trip?._id, visible, load: loadLikers });
 	const router = useRouter();
-
-	React.useEffect(() => {
-		if (visible && trip?._id) loadLikers();
-	}, [visible, trip?._id]);
 
 	const goProfile = (uid) => {
 		onClose();
@@ -21,8 +20,9 @@ export default function LikersSheet({ trip, visible, onClose }) {
 
 	return (
 		<BaseSheet title="Liked By" visible={visible} onClose={onClose}>
+			{loader.error ? <ProfileListStatus error={loader.error} onRetry={loader.retry} /> : null}
 			{!likers ? (
-				<ActivityIndicator color={theme.colors.primary} style={{ marginTop: 40 }} />
+				loader.loading ? <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 40 }} /> : null
 			) : likers.length === 0 ? (
 				<Text style={{ textAlign: "center", marginTop: 40 }}>Be the first to like.</Text>
 			) : (

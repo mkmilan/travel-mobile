@@ -1,6 +1,7 @@
 // hooks/useTripSocial.js
-import { useTripSocialStore } from "@/src/stores/tripSocialStore";
+import { getSocialSessionScope, useTripSocialStore } from "@/src/stores/tripSocialStore";
 import React from "react";
+import { useAuthStore } from "@/src/stores/auth";
 
 /**
  * Central social state hook.
@@ -8,6 +9,9 @@ import React from "react";
  * (even when trip is null) so no DevTools warnings.
  */
 export default function useTripSocial(trip) {
+	useAuthStore(state => state.token);
+	useAuthStore(state => state.user?._id);
+	const scope = getSocialSessionScope();
 	const { primeCounts, toggleLike, loadLikers, loadComments, addComment, loadRecommendations, ...data } =
 		useTripSocialStore();
 
@@ -18,7 +22,7 @@ export default function useTripSocial(trip) {
 		if (trip && trip._id) {
 			primeCounts(trip);
 		}
-	}, [primeCounts, trip?._id]); //  **ALWAYS length-2**
+	}, [primeCounts, trip?._id, scope]); // Stable trip/session identities only.
 
 	/* ------------------------------------------------------------ */
 	/* if no trip yet (sheet closed) → return inert API             */
@@ -46,7 +50,8 @@ export default function useTripSocial(trip) {
 	/* ------------------------------------------------------------ */
 	/* normal path                                                  */
 	/* ------------------------------------------------------------ */
-	const state = data.trips?.[trip._id] ?? {};
+	const cached = data.trips?.[trip._id];
+	const state = cached?.session === scope ? cached : {};
 
 	return {
 		/* counts */
