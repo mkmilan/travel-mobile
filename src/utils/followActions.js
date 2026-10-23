@@ -19,6 +19,7 @@ const invalidateFollowLists = () => {
 export function createFollowActions({ context, follow, unfollow, onChange, reconcile, getFollowing }) {
 	let state = { pending: {}, error: null };
 	const listeners = new Set();
+	const isSessionCurrent = () => context.isSessionCurrent ? context.isSessionCurrent() : context.isCurrent();
 	const update = (patch) => {
 		if (!context.isCurrent()) return;
 		state = { ...state, ...patch };
@@ -34,13 +35,15 @@ export function createFollowActions({ context, follow, unfollow, onChange, recon
 			update({ pending: { ...state.pending, [userId]: true }, error: null });
 			try {
 				await (following ? follow : unfollow)(userId);
-				if (!context.isCurrent()) return;
+				if (!isSessionCurrent()) return;
 				invalidateFollowLists();
 				invalidated = true;
+				if (!context.isCurrent()) return;
 				await onChange(userId, following);
 			} catch (error) {
-				if (!context.isCurrent()) return;
+				if (!isSessionCurrent()) return;
 				if (!invalidated) invalidateFollowLists();
+				if (!context.isCurrent()) return;
 				// A lost response is ambiguous: expose the error and GET status. Do
 				// not send another POST/DELETE until the user explicitly retries.
 				update({ error: `Could not update follow status: ${error?.message || "Please try again."}` });

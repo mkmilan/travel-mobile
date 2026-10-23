@@ -19,9 +19,9 @@ function hooksFixture() {
   };
 }
 function authFixture(){
-  let state={token:'session-one',user:{_id:'actor'}};const listeners=new Set();
+  let state={token:'session-one',user:{_id:'actor'},sessionEpoch:0,isSessionChanging:false};const listeners=new Set();
   const store=select=>select?select(state):state;
   store.getState=()=>state;store.subscribe=listener=>{listeners.add(listener);return()=>listeners.delete(listener);};
-  return {store,set(next){const previous=state;state=next;listeners.forEach(listener=>listener(next,previous));}};
+  return {store,set(next){const previous=state;state={sessionEpoch:state.sessionEpoch+(next.token!==state.token||next.user?._id!==state.user?._id?1:0),isSessionChanging:false,...next};listeners.forEach(listener=>listener(state,previous));}};
 }
 module.exports={hooksFixture,authFixture};
