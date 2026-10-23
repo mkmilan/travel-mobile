@@ -174,16 +174,156 @@ test('direct account/token change immediately hides cached lists and blocks late
 
 test('trip-detail comment completion cannot update a different route/session or an unmounted screen',async()=>{
   const source=read('app/(tabs)/trip/[id].js');
-  assert.match(source,/<AddCommentModal\s+key=\{commentContext.current.key\}/);
+  assert.match(source,/<AddCommentModal\s+key=\{screenContext.current.key\}/);
   const start=source.indexOf('const handleAddCommentSubmit = '),end=source.indexOf('\n\tconst handleDeleteComment',start);
   for(const change of ['trip','session','unmount','none']) {
     const pending=deferred();const session={token:'a',user:{_id:'owner'}};const original={tripId:'trip-a',token:'a',userId:'owner'};
-    const commentContext={current:original},commentMounted={current:true};const calls=[];
-    const handler=require('node:vm').runInNewContext(source.slice(start,end)+';handleAddCommentSubmit',{
-      tripId:'trip-a',isAuthenticated:true,trip:{_id:'trip-a',commentsCount:0},commentContext,commentMounted,useAuthStore:{getState:()=>session},
+    const screenContext={current:original},screenMounted={current:true};const calls=[];
+    const handler=require('node:vm').runInNewContext(source.slice(source.indexOf('const isCurrentContext = '),source.indexOf('\n\tuseEffect',source.indexOf('const isCurrentContext = ')))+'\n'+source.slice(start,end)+';handleAddCommentSubmit',{
+      tripId:'trip-a',isAuthenticated:true,trip:{_id:'trip-a',commentsCount:0},renderContext:original,screenContext,screenMounted,useAuthStore:{getState:()=>session},
       addTripComment:()=>pending.promise,setComments:update=>{calls.push('comments');assert.equal(update([]).length,1);},setTrip:update=>{calls.push('trip');assert.equal(update({_id:'trip-a',commentsCount:0}).commentsCount,1);},setCommentCount:()=>calls.push('count'),setIsCommentListExpanded:()=>calls.push('expand'),setIsCommentsSectionVisible:()=>calls.push('visible'),isCommentListExpanded:false,isCommentsSectionVisible:false,Alert:{alert:()=>calls.push('alert')},
     });
-    const request=handler('Text');if(change==='trip')commentContext.current={...original,tripId:'trip-b'};if(change==='session')session.token='b';if(change==='unmount')commentMounted.current=false;
+    const request=handler('Text');if(change==='trip')screenContext.current={...original,tripId:'trip-b'};if(change==='session')session.token='b';if(change==='unmount')screenMounted.current=false;
     pending.resolve({_id:'posted'});await request;assert.equal(calls.length,change==='none'?5:0);
   }
+});
+
+function tripDetailCallbacks(overrides={}) {
+  const source=read('app/(tabs)/trip/[id].js');
+  const section=(name,end)=>source.slice(source.indexOf(`const ${name} = `),source.indexOf(end,source.indexOf(`const ${name} = `)));
+  const context={tripId:'trip-a',userId:'owner',token:'session-a',key:1};
+  const screenContext={current:context},screenMounted={current:true};const session={token:context.token,user:{_id:context.userId}};
+  const calls=[],requests=[];const record=name=>(...args)=>calls.push({name,args});
+  const api=name=>(...args)=>{requests.push({name,args});return Promise.resolve(name==='trip'?{_id:'trip-a',likes:[],comments:[]}:{_id:'saved'});};
+  const dependencies={
+    renderContext:context,screenContext,screenMounted,commentsRequest:{current:null},useAuthStore:{getState:()=>session},tripId:context.tripId,isAuthenticated:true,currentUser:session.user,trip:{_id:'trip-a',recommendations:[{_id:'existing'}],commentsCount:0},
+    comments:[],commentsLoading:false,isCommentListExpanded:false,isCommentsSectionVisible:false,
+    getTripJsonById:api('trip'),getTripComments:api('comments'),addRecommendation:api('create'),updateRecommendation:api('update'),
+    setLoading:record('loading'),setError:record('error'),setRefreshError:record('refresh-error'),setTrip:record('trip'),setOptimisticLikesCount:record('likes-count'),setIsLikedByCurrentUser:record('liked'),setComments:record('comments'),setCommentsLoading:record('comments-loading'),setCommentsError:record('comments-error'),setRecCount:record('rec-count'),Alert:{alert:record('alert')},...overrides,
+  };
+  const code=[section('isCurrentContext','\n\tuseEffect'),section('fetchTripDetails','\n\tuseEffect'),section('fetchCommentsData','\n\tconst handleToggleCommentsSection'),section('handleRecommendationSubmit','\n\tconst handleShare')].join('\n');
+  const methods=require('node:vm').runInNewContext(code+';({fetchTripDetails,fetchCommentsData,handleRecommendationSubmit})',dependencies);
+  return {...methods,calls,requests,context,change(kind){if(kind==='trip')screenContext.current={...context,tripId:'trip-b',key:2};if(kind==='session')session.token='session-b';if(kind==='unmount')screenMounted.current=false;return screenContext.current;}};
+}
+
+test('trip recommendation create/update suppress late refresh/count/alerts after route, session or unmount changes',async()=>{
+  for(const editing of [false,true])for(const change of ['trip','session','unmount'])for(const fails of [false,true]) {
+    const pending=deferred();let mutations=0;
+    const fixture=tripDetailCallbacks({addRecommendation:()=>{mutations++;return pending.promise;},updateRecommendation:()=>{mutations++;return pending.promise;}});
+    const save=fixture.handleRecommendationSubmit({_id:'rec',name:'Fixture'},editing,true);fixture.change(change);
+    if(fails){pending.reject(Error('old save failure'));await assert.rejects(save,/old save failure/);}else{pending.resolve({_id:'saved'});await save;}
+    assert.equal(mutations,1);assert.equal(fixture.requests.length,0);assert.deepEqual(fixture.calls,[]);
+  }
+  for(const editing of [false,true]) {
+    let mutations=0;const fixture=tripDetailCallbacks({addRecommendation:()=>mutations++,updateRecommendation:()=>mutations++});fixture.change('trip');
+    await assert.rejects(fixture.handleRecommendationSubmit({_id:'rec'},editing),/trip or account changed/);assert.equal(mutations,0);assert.deepEqual(fixture.calls,[]);
+  }
+});
+
+test('successful recommendation callbacks refresh in background and retained callbacks cannot refresh a later screen',async()=>{
+  for(const editing of [false,true]) {
+    const get=deferred();let reads=0;
+    const fixture=tripDetailCallbacks({getTripJsonById:()=>{reads++;return get.promise;}});
+    const saved=await fixture.handleRecommendationSubmit({_id:'rec',name:'Fixture'},editing,true);
+    assert.equal(saved._id,'saved');assert.equal(reads,1);assert.ok(!fixture.calls.some(call=>call.name==='loading'));
+    const count=fixture.calls.find(call=>call.name==='rec-count');if(editing)assert.equal(count,undefined);else assert.deepEqual(count.args,['trip-a',2]);
+    fixture.change('trip');const before=fixture.calls.length;get.resolve({_id:'trip-a',likes:[],comments:[]});await tick();await saved.refreshCallback();assert.equal(reads,1);assert.equal(fixture.calls.length,before);
+  }
+  const source=read('app/(tabs)/trip/[id].js');assert.match(source,/<AddRecommendationModal key=\{screenContext.current.key\}/);
+});
+
+test('trip refresh guards result, failure and loading completion after route/session/unmount change',async()=>{
+  for(const change of ['trip','session','unmount'])for(const fails of [false,true]) {
+    const pending=deferred();let reads=0;const fixture=tripDetailCallbacks({getTripJsonById:()=>{reads++;return pending.promise;}});
+    const request=fixture.fetchTripDetails(false);assert.equal(reads,1);fixture.change(change);const before=fixture.calls.length;
+    if(fails)pending.reject(Error('old read'));else pending.resolve({_id:'old-private-trip',likes:['owner'],comments:[]});await request;
+    assert.equal(fixture.calls.length,before);
+    await fixture.fetchTripDetails(true,fixture.context);assert.equal(reads,1);
+  }
+  const active=tripDetailCallbacks();await active.fetchTripDetails();assert.ok(active.calls.some(call=>call.name==='trip'));assert.equal(active.calls.at(-1).name,'loading');assert.equal(active.calls.at(-1).args[0],false);
+});
+
+test('follow-on comment reload from a recommendation refresh cannot paint after identity changes',async()=>{
+  for(const fails of [false,true]) {
+    const pending=deferred();let commentReads=0;
+    const fixture=tripDetailCallbacks({isCommentListExpanded:true,getTripComments:()=>{commentReads++;return pending.promise;}});
+    const refresh=fixture.fetchTripDetails(true);await tick();assert.equal(commentReads,1);fixture.change('session');const before=fixture.calls.length;
+    if(fails)pending.reject(Error('old comments'));else pending.resolve([{_id:'old-private-comment'}]);await refresh;assert.equal(fixture.calls.length,before);
+  }
+});
+
+
+test('trip comments deduplicate per context but a prior context cannot block or release a newer request',async()=>{
+  const pending=[],requestRef={current:null};
+  const screen=tripDetailCallbacks({commentsRequest:requestRef,getTripComments:()=>{const next=deferred();pending.push(next);return next.promise;}});
+  const first=screen.fetchCommentsData();assert.equal(screen.fetchCommentsData(),first);assert.equal(pending.length,1);
+  const current=screen.change('trip');const second=screen.fetchCommentsData(current);
+  assert.notEqual(second,first);assert.equal(screen.fetchCommentsData(current),second);assert.equal(pending.length,2);
+  const before=screen.calls.length;pending[0].resolve([{_id:'old'}]);await first;
+  assert.equal(screen.calls.length,before);assert.equal(requestRef.current.promise,second);
+  pending[1].resolve([]);await second;assert.equal(requestRef.current,null);
+  assert.equal(screen.calls.at(-1).name,'comments-loading');assert.equal(screen.calls.at(-1).args[0],false);
+});
+
+function tripDetailScreen(overrides={}) {
+  const session={user:{_id:'owner'},token:'session-a',isAuthenticated:true};
+  const useAuthStore=Object.assign(()=>session,{getState:()=>session});
+  const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton'].map(name=>[name,name]));
+  let focus;const params={id:'trip-a'};
+  const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
+    ...defaults,...components,useAuthStore,useLocalSearchParams:()=>params,
+    useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),
+    useCallback:fn=>fn,useFocusEffect:callback=>{focus=callback;},
+    calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',lineStringToCoords:()=>[],
+    addRecommendation:async()=>({_id:'saved'}),updateRecommendation:async()=>({_id:'saved'}),
+    getTripJsonById:async()=>({_id:params.id,likes:[],comments:[]}),Alert:{alert(){}},...overrides,
+  });
+  screen.setState(0,{_id:'trip-a',user:{_id:'owner'},recommendations:[],commentsCount:0});screen.setState(1,false);
+  return {...screen,session,params,useAuthStore,focus:()=>focus()};
+}
+
+test('failed immediate and retained recommendation refresh keep the same form mounted with bounded retry',async()=>{
+  const reads=[];const screen=tripDetailScreen({getTripJsonById:()=>{const request=deferred();reads.push(request);return request.promise;}});
+  const original=nodes(screen.render(),'AddRecommendationModal')[0];
+  const saved=await original.props.onSubmit({_id:'saved'},true,true);assert.equal(reads.length,1);
+  reads[0].reject(Error('Immediate refresh offline'));await tick();
+  let tree=screen.render();let editor=nodes(tree,'AddRecommendationModal')[0];
+  assert.ok(editor);assert.equal(editor.props.key,original.props.key);assert.match(alertText(tree),/Immediate refresh offline/);
+  const refresh=saved.refreshCallback();reads[1].reject(Error('Partial-photo refresh offline'));await refresh;
+  tree=screen.render();editor=nodes(tree,'AddRecommendationModal')[0];
+  assert.ok(editor);assert.equal(editor.props.key,original.props.key);assert.match(alertText(tree),/Partial-photo refresh offline/);
+  const retry=button(tree,'trip-refresh-retry').props.onPress();reads[2].resolve({_id:'trip-a',likes:[],comments:[]});await retry;
+  tree=screen.render();assert.equal(alertText(tree),'');assert.equal(nodes(tree,'AddRecommendationModal')[0].props.key,original.props.key);
+  assert.equal(reads.length,3);
+});
+
+test('partial-photo draft survives its actual parent refresh failure without a new recommendation create',async()=>{
+  const read=deferred();let creates=0,photos=[];
+  const screen=tripDetailScreen({getTripJsonById:()=>read.promise,addRecommendation:async()=>{creates++;return {_id:'created-rec'};}});
+  const original=nodes(screen.render(),'AddRecommendationModal')[0];
+  const editor=fixture('src/components/modals/AddRecommendationModal.js','AddRecommendationModal',original.props,{
+    ...defaults,useAuthStore:screen.useAuthStore,TripPhotoThumb:'TripPhotoThumb',Ionicons:'Ionicons',MapView:'MapView',Marker:'Marker',StarRating:'StarRating',
+    RECOMMENDATION_CATEGORIES:[{value:'nature',label:'Nature'}],RECOMMENDATION_TAGS:[{value:'quiet',label:'Quiet'}],
+    Alert:{alert(){}},console:{error(){}},usePhotoManager:()=>({photos,getPhotos:()=>photos,uploading:false,setPhotos:value=>{photos=value;},uploadPendingPhotos:async()=>{throw Error('Photo upload offline');}}),
+  });
+  editor.render();editor.ref.current.open({lat:1,lon:2},'trip-a');let form=editor.render();
+  nodes(form,'TextInput')[0].props.onChangeText('Retained title');nodes(form,'TextInput')[1].props.onChangeText('Retained description');
+  nodes(form,'StarRating')[0].props.onRatingChange(4);nodes(form).find(node=>node.props.onCategoryChange).props.onCategoryChange('nature');nodes(form).find(node=>node.props.onTagsChange).props.onTagsChange(['quiet']);photos=['file://failed-photo'];
+  await button(editor.render(),'recommendation-save').props.onPress();read.reject(Error('Refresh offline'));await tick();
+  const tree=screen.render();const current=nodes(tree,'AddRecommendationModal')[0];
+  assert.ok(current);assert.equal(current.props.key,original.props.key);assert.match(alertText(tree),/Refresh offline/);
+  form=editor.render();assert.equal(form.props.visible,true);assert.equal(nodes(form,'TextInput')[0].props.value,'Retained title');assert.equal(nodes(form,'TextInput')[1].props.value,'Retained description');
+  assert.match(alertText(form),/already exists.*Photo upload offline/);assert.deepEqual(photos,['file://failed-photo']);assert.equal(creates,1);
+});
+
+test('initial-load error remains blocking but current successful focus refresh recovers it',async()=>{
+  const get=deferred();const screen=tripDetailScreen({getTripJsonById:()=>get.promise});
+  screen.setState(2,'Initial request failed');let tree=screen.render();assert.equal(nodes(tree,'AddRecommendationModal').length,0);
+  assert.ok(nodes(tree,'Text').some(node=>node.children.includes('Initial request failed')));
+  screen.focus();get.resolve({_id:'trip-a',likes:[],comments:[]});await tick();tree=screen.render();assert.equal(nodes(tree,'AddRecommendationModal').length,1);
+  // A different route cannot inherit an old route's background error banner.
+  const failure=deferred();const changed=tripDetailScreen({getTripJsonById:()=>failure.promise});
+  const saved=await nodes(changed.render(),'AddRecommendationModal')[0].props.onSubmit({_id:'rec'},true);
+  failure.reject(Error('Old route refresh failed'));await tick();assert.match(alertText(changed.render()),/Old route refresh failed/);
+  changed.params.id='trip-b';assert.equal(alertText(changed.render()),'');await saved.refreshCallback();
 });

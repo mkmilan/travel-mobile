@@ -83,6 +83,7 @@ export default function TripDetailScreen() {
 	const [trip, setTrip] = useState(null); // Will store the full trip object including its own commentsCount
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
+	const [refreshError, setRefreshError] = useState(null);
 
 	const [selectedRecommendation, setSelectedRecommendation] = useState(null);
 	const [isRecDetailModalVisible, setIsRecDetailModalVisible] = useState(false);
@@ -105,17 +106,24 @@ export default function TripDetailScreen() {
 	const [isAddCommentModalVisible, setIsAddCommentModalVisible] = useState(false);
 	const [isCommentsSectionVisible, setIsCommentsSectionVisible] = useState(false);
 	const [isCommentListExpanded, setIsCommentListExpanded] = useState(false);
-	const commentContext = useRef(null);
-	const commentMounted = useRef(true);
-	if (!commentContext.current || commentContext.current.tripId !== tripId || commentContext.current.userId !== currentUser?._id || commentContext.current.token !== token) {
-		commentContext.current = { tripId, userId: currentUser?._id, token, key: (commentContext.current?.key || 0) + 1 };
+	const screenContext = useRef(null);
+	const screenMounted = useRef(true);
+	const commentsRequest = useRef(null);
+	if (!screenContext.current || screenContext.current.tripId !== tripId || screenContext.current.userId !== currentUser?._id || screenContext.current.token !== token) {
+		screenContext.current = { tripId, userId: currentUser?._id, token, key: (screenContext.current?.key || 0) + 1 };
 	}
+	const renderContext = screenContext.current;
+	const isCurrentContext = (context) => {
+		const session = useAuthStore.getState();
+		return screenMounted.current && context === screenContext.current && session.token === context.token && session.user?._id === context.userId;
+	};
 	useEffect(() => {
 		setIsAddCommentModalVisible(false);
+		setCommentsLoading(false);
 	}, [tripId, currentUser?._id, token]);
 	useEffect(() => {
-		commentMounted.current = true;
-		return () => { commentMounted.current = false; };
+		screenMounted.current = true;
+		return () => { screenMounted.current = false; };
 	}, []);
 	// --- Map Modal State ---
 	const [isMapModalVisible, setMapModalVisible] = useState(false);
@@ -133,8 +141,9 @@ export default function TripDetailScreen() {
 		return () => backHandler.remove();
 	}, []);
 
-	const fetchTripDetails = async (isRefetch = false) => {
-		if (!tripId) {
+	const fetchTripDetails = async (isRefetch = false, context = renderContext) => {
+		if (!isCurrentContext(context)) return;
+		if (!context.tripId) {
 			setError("Trip ID is missing.");
 			setLoading(false);
 			return;
@@ -143,9 +152,12 @@ export default function TripDetailScreen() {
 			// Only show main loading indicator on initial load
 			setLoading(true);
 		}
-		setError(null);
+		if (isRefetch) setRefreshError(null);
+		else setError(null);
 		try {
-			const data = await getTripJsonById(tripId);
+			const data = await getTripJsonById(context.tripId);
+			if (!isCurrentContext(context)) return;
+			setError(null); // A successful focus/retry also recovers an earlier initial-load error.
 			const likesArray = data.likes || [];
 			// Get comment COUNT from initial trip load, but not the comment objects themselves for display
 			const initialCommentsArray = data.comments || [];
@@ -158,8 +170,8 @@ export default function TripDetailScreen() {
 			});
 
 			setOptimisticLikesCount(likesArray.length);
-			if (currentUser?._id) {
-				setIsLikedByCurrentUser(likesArray.includes(currentUser._id));
+			if (context.userId) {
+				setIsLikedByCurrentUser(likesArray.includes(context.userId));
 			} else {
 				setIsLikedByCurrentUser(false);
 			}
@@ -169,13 +181,16 @@ export default function TripDetailScreen() {
 				isCommentListExpanded ||
 				(isCommentsSectionVisible && initialCommentsArray.length > 0 && comments.length === 0)
 			) {
-				await fetchCommentsData(); // Fetch full comments if section is open
+				await fetchCommentsData(context); // Keep follow-on reads in the same screen/session.
 			}
 		} catch (err) {
-			console.error("Failed to fetch trip details:", err);
-			setError(err.message || "Could not load trip details.");
+			if (isCurrentContext(context)) {
+				const message = err?.message || "Could not load trip details.";
+				if (isRefetch) setRefreshError({ context, message });
+				else setError(message);
+			}
 		} finally {
-			if (!isRefetch) {
+			if (!isRefetch && isCurrentContext(context)) {
 				setLoading(false);
 			}
 		}
@@ -183,13 +198,13 @@ export default function TripDetailScreen() {
 
 	useEffect(() => {
 		fetchTripDetails();
-	}, [tripId, currentUser?._id]); // Add currentUser._id as dep for isLikedByCurrentUser init
+	}, [tripId, currentUser?._id, token]); // Reload when the screen or auth session changes.
 
 	useFocusEffect(
 		useCallback(() => {
 			// Refetch trip details when the screen comes into focus to sync server state
 			fetchTripDetails(true);
-		}, [tripId, currentUser?._id]) // Add currentUser._id
+		}, [tripId, currentUser?._id, token])
 	);
 
 	const isOwner = isAuthenticated && trip && trip.user?._id === currentUser?._id;
@@ -251,24 +266,35 @@ export default function TripDetailScreen() {
 
 	// fetchCommentsData can be used if you need to explicitly refresh comments
 	// or if they are not initially embedded in trip details.
-	const fetchCommentsData = async () => {
-		if (!tripId || commentsLoading) return;
+	const fetchCommentsData = (context = renderContext) => {
+		if (!context.tripId || !isCurrentContext(context)) return Promise.resolve();
+		if (commentsRequest.current?.context === context) return commentsRequest.current.promise;
+		const operation = { context };
+		commentsRequest.current = operation;
 		setCommentsLoading(true);
 		setCommentsError("");
-		try {
-			const populatedComments = await getTripComments(tripId); // API call for full comments
-			setComments(populatedComments || []);
-			// Update trip's comment count if it differs, ensuring UI consistency
-			if (trip && trip.commentsCount !== (populatedComments?.length || 0)) {
-				setTrip((prevTrip) => ({ ...prevTrip, commentsCount: populatedComments?.length || 0 }));
+		operation.promise = (async () => {
+			try {
+				const populatedComments = await getTripComments(context.tripId);
+				if (!isCurrentContext(context)) return;
+				setComments(populatedComments || []);
+				if (trip && trip.commentsCount !== (populatedComments?.length || 0)) {
+					setTrip((prevTrip) => isCurrentContext(context) && prevTrip?._id === context.tripId
+						? { ...prevTrip, commentsCount: populatedComments?.length || 0 } : prevTrip);
+				}
+			} catch (err) {
+				if (isCurrentContext(context)) {
+					setCommentsError(err?.message || "Could not load comments.");
+					setComments([]);
+				}
+			} finally {
+				if (commentsRequest.current === operation) {
+					commentsRequest.current = null;
+					if (isCurrentContext(context)) setCommentsLoading(false);
+				}
 			}
-		} catch (err) {
-			console.error("Failed to fetch comments:", err);
-			setCommentsError(err.message || "Could not load comments.");
-			setComments([]); // Clear comments on error
-		} finally {
-			setCommentsLoading(false);
-		}
+		})();
+		return operation.promise;
 	};
 
 	const handleToggleCommentsSection = () => {
@@ -296,11 +322,8 @@ export default function TripDetailScreen() {
 	};
 
 	const handleAddCommentSubmit = async (text) => {
-		const context = commentContext.current;
-		const isCurrent = () => {
-			const session = useAuthStore.getState();
-			return commentMounted.current && context === commentContext.current && session.token === context.token && session.user?._id === context.userId;
-		};
+		const context = renderContext;
+		const isCurrent = () => isCurrentContext(context);
 		if (!tripId || !isAuthenticated || !isCurrent()) {
 			Alert.alert("Error", "You must be logged in to comment.");
 			throw new Error("Not authenticated");
@@ -401,34 +424,30 @@ export default function TripDetailScreen() {
 		isEditMode = false,
 		shouldRefreshImmediately = true
 	) => {
+		const context = renderContext;
+		const isCurrent = () => isCurrentContext(context);
+		if (!context.tripId || !isAuthenticated || !isCurrent()) {
+			throw new Error("The trip or account changed. Reopen the recommendation form.");
+		}
+		// Refresh in the background: a full loading screen would unmount the
+		// submitting modal before its photo uploads can finish.
+		const refreshCallback = () => {
+			if (isCurrent()) return fetchTripDetails(true, context);
+		};
 		try {
 			if (isEditMode) {
 				const updatedRecommendation = await updateRecommendation(recommendationData._id, recommendationData);
-				fetchTripDetails(); // Refresh trip data to show updated recommendation
-				// return updatedRecommendation;
-				return {
-					...updatedRecommendation,
-					refreshCallback: () => fetchTripDetails(), // Callback for modal to trigger refresh after uploads
-				};
-			} else {
-				const newRecommendation = await addRecommendation({ ...recommendationData, tripId });
-
-				// Only refresh immediately if no photos are being uploaded
-				if (shouldRefreshImmediately) {
-					fetchTripDetails(); // Refresh trip data to show new recommendation
-				}
-
-				setRecCount(tripId, (prev) => (trip?.recommendations?.length || 0) + 1);
-
-				// Return recommendation with refresh callback for delayed refresh
-				return {
-					...newRecommendation,
-					refreshCallback: () => fetchTripDetails(), // Callback for modal to trigger refresh after uploads
-				};
+				if (!isCurrent()) return;
+				if (shouldRefreshImmediately) void refreshCallback();
+				return { ...updatedRecommendation, refreshCallback };
 			}
+			const newRecommendation = await addRecommendation({ ...recommendationData, tripId: context.tripId });
+			if (!isCurrent()) return;
+			if (shouldRefreshImmediately) void refreshCallback();
+			setRecCount(context.tripId, (trip?.recommendations?.length || 0) + 1);
+			return { ...newRecommendation, refreshCallback };
 		} catch (error) {
-			console.error("Failed to save recommendation:", error);
-			Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
+			if (isCurrent()) Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
 			throw error;
 		}
 	};
@@ -596,6 +615,14 @@ export default function TripDetailScreen() {
 
 	return (
 		<ScrollView style={styles.container} nestedScrollEnabled={true}>
+			{refreshError?.context === renderContext && (
+				<View testID="trip-refresh-error">
+					<Text accessibilityRole="alert" style={styles.errorTextSmall}>{refreshError.message}</Text>
+					<Pressable testID="trip-refresh-retry" onPress={() => fetchTripDetails(true, renderContext)} style={styles.button}>
+						<Text style={styles.buttonText}>Retry refresh</Text>
+					</Pressable>
+				</View>
+			)}
 			<View style={styles.header}>
 				<Pressable onPress={() => router.push(`/user/${tripUser._id}`)} style={styles.userInfo}>
 					<Avatar
@@ -768,7 +795,7 @@ export default function TripDetailScreen() {
 				onDelete={handleDelete}
 				onAddRecommendation={handleAddRecommendation}
 			/>
-			<AddRecommendationModal ref={addRecommendationModalRef} onSubmit={handleRecommendationSubmit} />
+			<AddRecommendationModal key={screenContext.current.key} ref={addRecommendationModalRef} onSubmit={handleRecommendationSubmit} />
 			<RecommendationDetailModal
 				isVisible={isRecDetailModalVisible}
 				onClose={() => setIsRecDetailModalVisible(false)}
@@ -787,7 +814,7 @@ export default function TripDetailScreen() {
 				error={likersError}
 			/>
 			<AddCommentModal
-				key={commentContext.current.key}
+				key={screenContext.current.key}
 				isVisible={isAddCommentModalVisible}
 				onClose={() => setIsAddCommentModalVisible(false)}
 				onSubmit={handleAddCommentSubmit}
