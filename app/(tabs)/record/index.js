@@ -72,6 +72,7 @@ export default function RecordScreen() {
 	const pendingPoiRepair = useRef(null);
 	const recoveryRequest = useRef(null);
 	const [recoveryError, setRecoveryError] = useState(null);
+	const recordingLifetime = useRef(null);
 
 	const user = useAuthStore((s) => s.user);
 	const token = useAuthStore((s) => s.token);
@@ -82,6 +83,8 @@ export default function RecordScreen() {
 	useEffect(() => {
 		let cancelled = false;
 		let busy = false;
+		const lifetime = {};
+		recordingLifetime.current = lifetime;
 		const isCurrent = () => !cancelled && useAuthStore.getState().user?._id === user?._id
 			&& useAuthStore.getState().token === token && useAuthStore.getState().sessionEpoch === sessionEpoch
 			&& !useAuthStore.getState().isSessionChanging;
@@ -173,6 +176,7 @@ export default function RecordScreen() {
 		recover();
 		return () => {
 			cancelled = true;
+			if (recordingLifetime.current === lifetime) recordingLifetime.current = null;
 			if (recoveryRequest.current === recover) recoveryRequest.current = null;
 			stopRequest.current = null;
 			watcherRequest.current++;
@@ -228,14 +232,10 @@ export default function RecordScreen() {
 	};
 
 	// ─────── actions ─────────────────────────────────────────────────────────
-	const requestRecordingAccess = async () => {
-		if (permissionPending.current) return false;
-		const { user: currentUser, token } = useAuthStore.getState();
-		if (!currentUser?._id || currentUser._id !== user?._id || !token) return false;
-		const isCurrentSession = () => {
-			const current = useAuthStore.getState();
-			return current.user?._id === currentUser._id && current.token === token;
-		};
+	const requestRecordingAccess = async (isCurrentSession) => {
+		// Retain the caller's pre-await login and mounted-operation identity.
+		// Reading credentials here again would let a delayed prompt adopt a login.
+		if (permissionPending.current || !isCurrentSession()) return false;
 		permissionPending.current = true;
 		try {
 			return await ensureRecordingPermissions({
@@ -268,17 +268,20 @@ export default function RecordScreen() {
 
 	const handleStart = async () => {
 		if (isRestoring || lifecycleRequest.current || uploadRequest.current || status !== "idle") return;
+		// Capture before the first permission/native await, including same-token
+		// relogins and unmounts that do not change the authenticated account.
+		const session = { ...useAuthStore.getState() };
+		const uid = session.user?._id;
+		const lifetime = recordingLifetime.current;
+		const isCurrent = () => !!lifetime && recordingLifetime.current === lifetime
+			&& useAuthStore.getState().user?._id === uid && useAuthStore.getState().token === session.token
+			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
+		if (!uid || uid !== user?._id || !session.token || session.token !== token || session.sessionEpoch !== sessionEpoch || !isCurrent()) return;
 		lifecycleRequest.current = true;
 		let attempt;
-		let isCurrent = () => false;
 		try {
 			// No trip or marker is created before both permissions are granted.
-			if (!(await requestRecordingAccess())) return;
-			const session = { ...useAuthStore.getState() };
-			const uid = session.user?._id;
-			if (!uid || uid !== user?._id || !session.token) return;
-			isCurrent = () => useAuthStore.getState().user?._id === uid && useAuthStore.getState().token === session.token
-			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
+			if (!(await requestRecordingAccess(isCurrent)) || !isCurrent()) return;
 			const existing = await getActiveTrip();
 			if (!isCurrent()) return;
 			if (existing.cleanupId || existing.tripId) {
@@ -340,10 +343,12 @@ export default function RecordScreen() {
 	const handlePauseResume = async () => {
 		if (lifecycleRequest.current || stopRequest.current || isRestoring || status === "cleanup_required") return;
 		const session = { ...useAuthStore.getState() };
-		if (!tripId || !session.token || session.user?._id !== user?._id) return;
-		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
+		const lifetime = recordingLifetime.current;
+		const isCurrent = () => !!lifetime && recordingLifetime.current === lifetime
+			&& useAuthStore.getState().user?._id === session.user?._id
 			&& useAuthStore.getState().token === session.token
 			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
+		if (!tripId || !session.token || session.user?._id !== user?._id || session.token !== token || session.sessionEpoch !== sessionEpoch || !isCurrent()) return;
 		lifecycleRequest.current = true;
 		let attempt;
 		try {
@@ -357,7 +362,7 @@ export default function RecordScreen() {
 				setStatus("paused");
 				toast({ type: "info", title: "Paused" });
 			} else if (status === "paused") {
-				if (!(await requestRecordingAccess()) || !isCurrent()) return;
+				if (!(await requestRecordingAccess(isCurrent)) || !isCurrent()) return;
 				await setTripRecordingStatus(tripId, "recording", session.user._id);
 				if (!isCurrent()) return;
 				const seg = startSegment();

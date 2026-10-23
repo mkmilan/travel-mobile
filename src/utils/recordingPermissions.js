@@ -1,5 +1,7 @@
 /** Check both permissions before creating/resuming a track. Dependencies are
- * injected so tests never trigger native permission prompts or collect location. */
+ * injected so tests never trigger native permission prompts or collect location.
+ * isCurrentSession must retain the caller's original login epoch and mounted
+ * operation from before its first await, not recapture credentials on completion. */
 export async function ensureRecordingPermissions({ location, isCurrentSession, confirmBackground, onBlocked }) {
   if (!isCurrentSession()) return false;
   let foreground = await location.getForegroundPermissionsAsync();

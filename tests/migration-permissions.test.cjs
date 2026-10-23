@@ -59,8 +59,9 @@ test('session change during permission response rejects access', async () => {
 test('start and resume gate permissions before creating active recording state', () => {
   const screen = fs.readFileSync(path.join(__dirname, '../app/(tabs)/record/index.js'), 'utf8');
   const start = screen.slice(screen.indexOf('const handleStart ='), screen.indexOf('const handlePauseResume ='));
-  assert.ok(start.indexOf('await requestRecordingAccess()') < start.indexOf('await startTrip(uid,'));
+  assert.ok(start.indexOf('await requestRecordingAccess(isCurrent)') < start.indexOf('await startTrip(uid,'));
   const resume = screen.slice(screen.indexOf('const handlePauseResume ='), screen.indexOf('const handleStop ='));
-  assert.ok(resume.indexOf('await requestRecordingAccess()') < resume.indexOf('await setActiveTrip('));
-  assert.match(screen, /current\.token === token/);
+  assert.ok(resume.indexOf('await requestRecordingAccess(isCurrent)') < resume.indexOf('await setActiveTrip('));
+  assert.match(start, /session\.sessionEpoch !== sessionEpoch/);
+  assert.match(start, /recordingLifetime\.current === lifetime/);
 });
