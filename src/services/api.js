@@ -27,10 +27,47 @@ if (!API_URL) {
 	console.error("[api] API_URL is not defined in app.config.js › extra. " + "Feed calls will fail.");
 }
 
+// Capture auth synchronously, before CSRF/file/storage awaits. A session epoch
+// also rejects logout/login cycles that happen to reuse the same token/user.
+let observedAuthStore;
+let stopObservingAuth;
+let requestSessionGeneration = 0;
+const captureRequestSession = (expectedUserId) => {
+	const store = require("@/src/stores/auth").useAuthStore;
+	if (observedAuthStore !== store) {
+		stopObservingAuth?.();
+		observedAuthStore = store;
+		requestSessionGeneration++;
+		stopObservingAuth = store.subscribe?.((next, previous) => {
+			if (next.token !== previous.token || next.user?._id !== previous.user?._id) requestSessionGeneration++;
+		});
+	}
+	const state = store.getState();
+	const session = { store, token: state.token ?? null, userId: state.user?._id, generation: requestSessionGeneration };
+	if (expectedUserId && session.userId !== expectedUserId) throw new Error("Account changed; request cancelled");
+	return session;
+};
+const isRequestSessionCurrent = (session) => {
+	const state = session.store.getState();
+	return session.generation === requestSessionGeneration && (state.token ?? null) === session.token && state.user?._id === session.userId;
+};
+const assertRequestSession = async (session, expectedUserId) => {
+	const [token, rawUser] = await Promise.all([
+		SecureStore.getItemAsync("auth-token"), SecureStore.getItemAsync("user-data"),
+	]);
+	let user;
+	try { user = JSON.parse(rawUser || "null"); } catch { throw new Error("Account changed; request cancelled"); }
+	if (!isRequestSessionCurrent(session) || (token ?? null) !== session.token || user?._id !== session.userId
+		|| (expectedUserId && (user?._id !== expectedUserId || user?.token !== session.token))) {
+		throw new Error("Account changed; request cancelled");
+	}
+};
+
 /* ------------------------------------------------------------------ *
  * core fetch wrapper
  * ------------------------------------------------------------------ */
 export async function apiFetch(path, { method = "GET", auth = true, csrf = false, expectedUserId, ...options } = {}) {
+	const requestSession = auth ? captureRequestSession(expectedUserId) : null;
 	const headers = {
 		"Content-Type": "application/json",
 		...(options.headers || {}),
@@ -42,19 +79,8 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 		options.credentials = "include"; // ADDED
 	}
 
-	/* Capture the request session so a late 401 cannot sign out a newer login. */
-	let requestToken = null;
-	if (auth) {
-		const token = await SecureStore.getItemAsync("auth-token");
-		requestToken = token;
-		if (expectedUserId) {
-			const storedUser = JSON.parse((await SecureStore.getItemAsync("user-data")) || "null");
-			if (storedUser?._id !== expectedUserId || storedUser?.token !== token) {
-				throw new Error("Account changed; upload cancelled");
-			}
-		}
-		if (token) headers["Authorization"] = `Bearer ${token}`;
-	}
+	const requestToken = requestSession?.token;
+	if (requestToken) headers["Authorization"] = `Bearer ${requestToken}`;
 
 	/* ──────────────────────────────────────────────────────────────── *
 	 *  ABSOLUTE SAFETY VALVE
@@ -67,7 +93,8 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 		return null; // swallow the call gracefully
 	}
 
-	const res = await fetch(`${API_URL}${path}`, { method, headers, ...options });
+	if (requestSession) await assertRequestSession(requestSession, expectedUserId);
+	const res = await fetch(`${API_URL}${path}`, { ...options, method, headers });
 
 	/* ─── automatic logout on 401 ─── */
 	if (res.status === 401 && requestToken) {
@@ -75,7 +102,7 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 			const store = require("@/src/stores/auth").useAuthStore;
 			const currentToken = await SecureStore.getItemAsync("auth-token");
 			const state = store.getState();
-			if (currentToken === requestToken && state.token === requestToken) {
+			if (currentToken === requestToken && state.token === requestToken && isRequestSessionCurrent(requestSession)) {
 				await state.logout();
 			}
 		} catch {
@@ -350,18 +377,19 @@ export const unlikeTrip = async (tripId) => {
  *   authStore.setState({ user: res.user }); // or however you refresh user data
  */
 export const uploadProfilePhoto = async (localUri) => {
-	// 1. Resolve tokens
+	const requestSession = captureRequestSession();
 	const csrfToken = await getCsrfToken();
-	const authToken = await SecureStore.getItemAsync("auth-token");
 
+	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	const form = await createPhotoFormData("photo", localUri);
+	await assertRequestSession(requestSession);
 
 	// 3. Direct fetch (we **don’t** use apiFetch so we avoid the JSON header)
 	const res = await fetch(`${API_URL}/users/me`, {
 		method: "PUT",
 		headers: {
 			"X-CSRF-Token": csrfToken,
-			Authorization: `Bearer ${authToken}`,
+			Authorization: `Bearer ${requestSession.token}`,
 			// 👇 Don’t set Content-Type – fetch will add the right multipart boundary
 		},
 		body: form,
@@ -384,14 +412,16 @@ export const uploadProfilePhoto = async (localUri) => {
  * Returns  { photoIds: [ ... ] }
  */
 export const uploadTripPhoto = async (tripId, localUri) => {
+	const requestSession = captureRequestSession();
 	const csrfToken = await getCsrfToken();
-	const authToken = await SecureStore.getItemAsync("auth-token");
 
+	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	const form = await createPhotoFormData("photos", localUri);
+	await assertRequestSession(requestSession);
 
 	const res = await fetch(`${API_URL}/trips/${tripId}/photos`, {
 		method: "POST",
-		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${authToken}` },
+		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${requestSession.token}` },
 		body: form,
 	});
 
@@ -411,14 +441,16 @@ export const deleteTripPhoto = async (tripId, photoId) =>
  * Returns { photoIds:[ ... ] }
  */
 export const uploadRecommendationPhoto = async (recId, localUri) => {
+	const requestSession = captureRequestSession();
 	const csrfToken = await getCsrfToken();
-	const authToken = await SecureStore.getItemAsync("auth-token");
 
+	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	const form = await createPhotoFormData("photos", localUri);
+	await assertRequestSession(requestSession);
 
 	const res = await fetch(`${API_URL}/v2/recommendations/${recId}/photos`, {
 		method: "POST",
-		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${authToken}` },
+		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${requestSession.token}` },
 		body: form,
 	});
 

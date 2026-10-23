@@ -84,6 +84,7 @@ test('upload rejects account switch without making an API request', async()=> {
   const {apiFetch}=load('src/services/api.js',['apiFetch'],{
     Constants:{expoConfig:{extra:{API_URL:'http://fixture.invalid/api',APP_ENV:'test'}}}, Updates:{},
     SecureStore:{getItemAsync:async key=>key==='auth-token'?'bob-token':JSON.stringify({_id:'bob',token:'bob-token'})},
+    require:()=>({useAuthStore:{getState:()=>({user:{_id:'bob'},token:'bob-token'})}}),
     fetch:async()=>{fetched=true;},getCsrfToken:async()=> 'fixture'
   });
   await assert.rejects(apiFetch('/v2/trips/json',{expectedUserId:'alice'}),/Account changed/);
@@ -122,8 +123,8 @@ test('late 401 from an old token cannot log out a newer account',async()=> {
   let token='alice-token'; let loggedOut=false;
   const {apiFetch}=load('src/services/api.js',['apiFetch'],{
     Constants:{expoConfig:{extra:{API_URL:'http://fixture.invalid/api',APP_ENV:'test'}}}, Updates:{},
-    SecureStore:{getItemAsync:async()=>token},
-    require:()=>({useAuthStore:{getState:()=>({token,logout:async()=>{loggedOut=true;}})}}),
+    SecureStore:{getItemAsync:async key=>key==='auth-token'?token:JSON.stringify({_id:token.split('-')[0],token})},
+    require:()=>({useAuthStore:{getState:()=>({user:{_id:token.split('-')[0]},token,logout:async()=>{loggedOut=true;}})}}),
     fetch:async()=>{token='bob-token';return {status:401,ok:false,headers:{get:()=> 'application/json'},json:async()=>({message:'Expired'})};}
   });
   await assert.rejects(apiFetch('/trips'),/Expired/); assert.equal(loggedOut,false);
@@ -132,8 +133,8 @@ test('401 for the current authenticated session still logs out',async()=> {
   let loggedOut=false;
   const {apiFetch}=load('src/services/api.js',['apiFetch'],{
     Constants:{expoConfig:{extra:{API_URL:'http://fixture.invalid/api',APP_ENV:'test'}}}, Updates:{},
-    SecureStore:{getItemAsync:async()=> 'alice-token'},
-    require:()=>({useAuthStore:{getState:()=>({token:'alice-token',logout:async()=>{loggedOut=true;}})}}),
+    SecureStore:{getItemAsync:async key=>key==='auth-token'?'alice-token':JSON.stringify({_id:'alice',token:'alice-token'})},
+    require:()=>({useAuthStore:{getState:()=>({user:{_id:'alice'},token:'alice-token',logout:async()=>{loggedOut=true;}})}}),
     fetch:async()=>({status:401,ok:false,headers:{get:()=> 'application/json'},json:async()=>({message:'Expired'})})
   });
   await assert.rejects(apiFetch('/trips'),/Expired/); assert.equal(loggedOut,true);
