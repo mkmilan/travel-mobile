@@ -5,49 +5,90 @@ import { theme } from "@/src/theme";
 import { isoToDate } from "@/src/utils/format"; // same util TripDetail uses
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
-	KeyboardAvoidingView,
-	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
 	TextInput,
 	View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Avatar from "../ui/Avatar";
 import BaseSheet from "./BaseSheet";
 
 export default function CommentsSheet({ trip, visible, onClose }) {
-	const { user } = useAuthStore(); // current logged-in user
-	const insets = useSafeAreaInsets();
+	const { user, token } = useAuthStore(); // current logged-in user
 	const router = useRouter();
 	/* ---- social slice ---- */
 	const { comments, loadComments, addComment } = useTripSocial(trip || {});
 
 	/* ---- local state ---- */
-	const [text, setText] = React.useState("");
-	const [busy, setBusy] = React.useState(false);
+	const [text, setText] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState("");
+	const [refreshError, setRefreshError] = useState("");
+	const request = useRef(null);
+	const context = useRef({});
+	if (context.current.tripId !== trip?._id || context.current.userId !== user?._id || context.current.token !== token || context.current.visible !== visible) {
+		context.current = { tripId: trip?._id, userId: user?._id, token, visible };
+		request.current = null;
+	}
+	useEffect(() => {
+		setText("");
+		setError("");
+		setRefreshError("");
+		setBusy(false);
+	}, [trip?._id, user?._id, token, visible]);
+	useEffect(() => () => { request.current = null; }, []);
 
 	/* ---- fetch when sheet becomes visible ---- */
-	React.useEffect(() => {
+	useEffect(() => {
 		if (visible && trip?._id) loadComments();
 	}, [visible, trip?._id]);
 
 	/* ------------------------------------------------------------------ */
 	/* handlers                                                            */
 	/* ------------------------------------------------------------------ */
+	const close = () => { if (!request.current) onClose(); };
 	const onSend = async () => {
-		console.log("AM I HERE");
-
-		if (!text.trim() || !trip?._id || busy) return;
+		if (!text.trim() || !trip?._id || request.current || !context.current.visible) return;
+		const operation = {};
+		request.current = operation;
 		setBusy(true);
-		await addComment(text.trim()); // store does POST + refresh
-		setText("");
-		setBusy(false);
+		setError("");
+		setRefreshError("");
+		try {
+			const result = await addComment(text.trim());
+			if (request.current !== operation) return;
+			setText("");
+			if (result?.refreshError) setRefreshError("Comment posted, but the list could not refresh.");
+		} catch (error) {
+			if (request.current === operation) setError(error?.message || "Could not post comment. Please retry.");
+		} finally {
+			if (request.current === operation) {
+				request.current = null;
+				setBusy(false);
+			}
+		}
+	};
+	const retryPostedRefresh = async () => {
+		if (request.current) return;
+		const operation = {};
+		request.current = operation;
+		setBusy(true);
+		try {
+			await loadComments();
+			if (request.current === operation) setRefreshError("");
+		} catch (_) {
+			// Keep the successful-send message and retry only the list GET.
+		} finally {
+			if (request.current === operation) {
+				request.current = null;
+				setBusy(false);
+			}
+		}
 	};
 
 	const onDelete = async (commentId) => {
@@ -96,7 +137,14 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 	/* Sheet layout                                                        */
 	/* ------------------------------------------------------------------ */
 	return (
-		<BaseSheet title="Comments" visible={visible} onClose={onClose}>
+		<BaseSheet title="Comments" visible={visible} onClose={close}>
+			{error ? <Text accessibilityRole="alert" style={styles.center}>{error}</Text> : null}
+			{refreshError ? <View>
+				<Text accessibilityRole="alert" style={styles.center}>{refreshError}</Text>
+				<Pressable testID="comments-refresh-posted" onPress={retryPostedRefresh} disabled={busy}>
+					<Text style={styles.sendTxt}>Retry list refresh</Text>
+				</Pressable>
+			</View> : null}
 			{comments === undefined ? (
 				<ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
 			) : (
@@ -112,12 +160,8 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 						/>
 					)}
 
-					{/* ----- input bar (Keyboard-aware) ----- */}
-					<KeyboardAvoidingView
-						behavior={Platform.OS === "ios" ? "padding" : "height"}
-						keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-					>
-						<View style={[styles.inputBar, { paddingBottom: insets.bottom || 8 }]}>
+					{/* BottomModal owns safe-area and keyboard avoidance. */}
+						<View style={styles.inputBar}>
 							<TextInput
 								style={styles.input}
 								placeholder="Add a comment…"
@@ -125,11 +169,10 @@ export default function CommentsSheet({ trip, visible, onClose }) {
 								onChangeText={setText}
 								editable={!busy}
 							/>
-							<Pressable onPress={onSend} disabled={busy || !text.trim()}>
+							<Pressable testID="comments-send" onPress={onSend} disabled={busy || !text.trim()}>
 								<Text style={styles.sendTxt}>Send</Text>
 							</Pressable>
 						</View>
-					</KeyboardAvoidingView>
 				</>
 			)}
 		</BaseSheet>

@@ -1,6 +1,6 @@
 // filepath: /home/mkmilan/Documents/my/travel-2/mobile/src/components/AddCommentModal.js
 import { theme } from "@/src/theme";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
@@ -13,6 +13,13 @@ export default function AddCommentModal({
 	const [text, setText] = useState("");
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState("");
+	const request = useRef(null);
+	const visibility = useRef(isVisible);
+	if (visibility.current !== isVisible) {
+		visibility.current = isVisible;
+		request.current = null;
+	}
+	useEffect(() => () => { request.current = null; }, []);
 
 	useEffect(() => {
 		if (isVisible) {
@@ -23,36 +30,35 @@ export default function AddCommentModal({
 	}, [isVisible]);
 
 	const handleSubmit = async () => {
+		if (request.current || !visibility.current) return;
 		if (!text.trim()) {
 			setError("Comment cannot be empty.");
 			return;
 		}
+		const operation = {};
+		request.current = operation;
 		setError("");
 		setIsSubmitting(true);
 		try {
 			await onSubmit(text.trim());
-			// setText(""); // Clear text on success
-			onClose(); // Close modal on success
+			if (request.current === operation) onClose();
 		} catch (err) {
-			setError(err.message || "Failed to post comment.");
+			if (request.current === operation) setError(err?.message || "Failed to post comment.");
 		} finally {
-			setIsSubmitting(false);
+			if (request.current === operation) {
+				request.current = null;
+				setIsSubmitting(false);
+			}
 		}
 	};
 
 	const handleClose = () => {
-		// setText("");
-		// setError("");
-		// setIsSubmitting(false);
-		onClose();
+		if (!request.current) onClose();
 	};
 
 	return (
 		<BottomModal visible={isVisible} onClose={handleClose}>
 			<ModalHeader title="Add Comment" onClose={handleClose} />
-			{/* KeyboardAvoidingView might be needed here if BottomModal doesn't handle it well enough */}
-			{/* For BottomModal, often the content itself scrolls, and KAV is tricky.
-                The current BottomModal has KAV. Let's see if it's sufficient. */}
 			<View style={styles.contentView}>
 				<TextInput
 					style={styles.textInput}
@@ -60,14 +66,16 @@ export default function AddCommentModal({
 					placeholderTextColor={theme.colors.textMuted}
 					value={text}
 					onChangeText={setText}
+					editable={!isSubmitting}
 					multiline
 					maxLength={500}
 					autoFocus={true}
 				/>
 
-				{error ? <Text style={styles.errorText}>{error}</Text> : null}
+				{error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 
 				<TouchableOpacity
+					testID="comment-submit"
 					style={[styles.submitButton, (isSubmitting || !text.trim()) && styles.submitButtonDisabled]}
 					onPress={handleSubmit}
 					disabled={isSubmitting || !text.trim()}

@@ -73,8 +73,15 @@ export const useTripSocialStore = create((set, get) => ({
 		}));
 	},
 	addComment: async (tripId, text) => {
-		await addTripComment(tripId, text);
-		await get().loadComments(tripId); // refresh
+		const comment = await addTripComment(tripId, text);
+		// A committed POST must not look like a failed send if the following GET
+		// fails: retrying the mutation would create the comment twice.
+		try {
+			await get().loadComments(tripId);
+			return { comment, refreshError: null };
+		} catch (error) {
+			return { comment, refreshError: error?.message || "Could not refresh comments." };
+		}
 	},
 
 	/* -------- recommendations -------- */
