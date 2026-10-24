@@ -238,14 +238,14 @@ test('actual persistent cleanup banner requires confirmation, preserves pending,
  await tick();pending=false;nodes(render(),'Pressable')[0].props.onPress();await alerts.at(-1)[2].find(b=>b.style==='destructive').onPress();assert.equal(render(),null);
 });
 
-test('actual cleanup banner drops late UI and reconciliation after blur',async()=>{
+test('actual cleanup banner keeps same-session reconciliation after blur but drops late UI',async()=>{
  const host=hooksFixture(),auth=authFixture(),alerts=[],pending=deferred();let reconciles=0,settles=0;
  const screen=fixture('src/components/PendingTripDeletions.js','PendingTripDeletions',{}, {
   ...native,...host.hooks,ENABLE_SAFE_TRIP_DELETE:true,useAuthStore:auth.store,getPendingTripDeletionsApi:async()=>[],rememberPendingTripDeletion:async()=>{},Alert:{alert:(...args)=>alerts.push(args)},getPendingTripDeletions:async()=>[{trip_id:serverId}],
   deleteServerTrip:()=>pending.promise,settlePendingTripDeletion:async()=>{settles++;},reconcileDeletedServerTrip:async()=>{reconciles++;},useTripSocialStore:{getState:()=>({invalidateDeletedTrip(){}})},
  });
  const render=()=>host.render(()=>screen.render());render();await tick();nodes(render(),'Pressable')[0].props.onPress();const work=alerts[0][2].find(b=>b.style==='destructive').onPress();await tick();host.blur();pending.resolve(receipt);await work;
- assert.equal(reconciles,0);assert.equal(settles,0);assert.equal(render(),null);
+ assert.equal(reconciles,1);assert.equal(settles,1);assert.equal(render(),null);
 });
 
 test('pending cleanup identity survives process-like SQLite reopen without recording content',async()=>{
