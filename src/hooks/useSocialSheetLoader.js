@@ -18,14 +18,14 @@ export default function useSocialSheetLoader({ tripId, visible, load }) {
 	const retry = () => {
 		if (!visible || !tripId || current.current !== identity) return Promise.resolve();
 		if (pending.current?.identity === identity) return pending.current.promise;
-		setState({ identity, loading: true, error: null });
+		setState(previous => ({ identity, loading: true, error: null, refreshIdentity: previous?.identity === identity ? previous.refreshIdentity : null }));
 		const loader = latestLoad.current;
 		const promise = Promise.resolve().then(() => {
 			if (current.current === identity) return loader();
 		}).then(() => {
-			if (current.current === identity) setState({ identity, loading: false, error: null });
+			if (current.current === identity) setState({ identity, loading: false, error: null, refreshIdentity: {} });
 		}, error => {
-			if (current.current === identity) setState({ identity, loading: false, error: error?.message || "Could not load this list." });
+			if (current.current === identity) setState(previous => ({ ...previous, identity, loading: false, error: error?.message || "Could not load this list." }));
 		}).finally(() => {
 			if (pending.current?.promise === promise) pending.current = null;
 		});
@@ -43,5 +43,5 @@ export default function useSocialSheetLoader({ tripId, visible, load }) {
 	}, [identity]);
 
 	const snapshot = state?.identity === identity ? state : { loading: Boolean(visible && tripId), error: null };
-	return { identity, loading: snapshot.loading, error: snapshot.error, retry };
+	return { identity, refreshIdentity: snapshot.refreshIdentity, loading: snapshot.loading, error: snapshot.error, retry };
 }

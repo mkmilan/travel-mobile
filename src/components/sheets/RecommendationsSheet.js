@@ -37,7 +37,7 @@ export default function RecommendationsSheet({ trip, visible, onClose, userId })
 					<FlatList
 						data={list}
 						keyExtractor={(r) => r._id}
-						renderItem={({ item }) => <RecommendationCard rec={item} onPress={() => openDetail(item)} />}
+						renderItem={({ item }) => <RecommendationCard rec={item} photoRefreshIdentity={loader.refreshIdentity} onPress={() => openDetail(item)} />}
 						contentContainerStyle={{ paddingBottom: 16 }}
 					/>
 				)}

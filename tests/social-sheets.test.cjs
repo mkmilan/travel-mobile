@@ -373,3 +373,42 @@ test('retained initial focus callback keeps loaded trip and shows retry banner o
   const tree=render();assert.ok(nodes(tree,'AddRecommendationModal').length);assert.match(alertText(tree),/Focus offline/);
   assert.ok(button(tree,'trip-refresh-retry'));
 });
+
+
+test('sheet thumbnail retry identity advances only on current successful loads',async()=>{
+  let result=Promise.resolve();const props={tripId:'trip',visible:true,load:()=>result};
+  const loader=lifecycle('src/hooks/useSocialSheetLoader.js','useSocialSheetLoader',props);
+  loader.render();loader.effects();await tick();const accepted=loader.render().refreshIdentity;assert.ok(accepted);
+  const pending=deferred();result=pending.promise;const retry=loader.render().retry();assert.equal(loader.render().refreshIdentity,accepted);
+  pending.reject(Error('offline'));await retry;assert.equal(loader.render().refreshIdentity,accepted);
+  result=Promise.resolve();await loader.render().retry();const next=loader.render().refreshIdentity;assert.notEqual(next,accepted);
+  const old=deferred();result=old.promise;const stale=loader.render().retry();await tick();props.tripId='new';loader.render();loader.effects();
+  old.resolve();await stale;await tick();assert.notEqual(loader.render().refreshIdentity,next);
+});
+test('sheet passes accepted photo retry identity to shared cards and stays read-only with list/detail navigation',()=>{
+  const refreshIdentity={},rec={_id:'rec',photos:['a'.repeat(24)]};let closes=0;
+  const sheet=lifecycle('src/components/sheets/RecommendationsSheet.js','RecommendationsSheet',{visible:true,trip:{_id:'trip'},onClose:()=>closes++},
+    {useTripSocial:()=>({recommendations:[rec],loadRecommendations:async()=>{}}),useSocialSheetLoader:()=>({...initialLoader,refreshIdentity}),RecommendationDetailModal:'RecommendationDetailModal',RecommendationCard:'RecommendationCard',lineStringToCoords:()=>[]});
+  sheet.render();sheet.effects();let tree=sheet.render();const row=nodes(tree,'FlatList')[0].props.renderItem({item:rec});
+  assert.equal(row.type,'RecommendationCard');assert.equal(row.props.photoRefreshIdentity,refreshIdentity);assert.equal(row.props.onLongPress,undefined);
+  row.props.onPress();tree=sheet.render();const detail=nodes(tree,'RecommendationDetailModal')[0];assert.equal(detail.props.readOnly,true);assert.equal(detail.props.recommendation,rec);
+  detail.props.onClose();assert.equal(closes,0);row.props.onPress();nodes(sheet.render(),'RecommendationDetailModal')[0].props.onNavigateClose();assert.equal(closes,1);
+});
+
+test('trip detail keeps shared-card tap, owner deletion, optional-photo updates and non-owner read actions',async()=>{
+  const alerts=[];let deletes=0;
+  const screen=tripDetailScreen({TripRecommendationCard:'TripRecommendationCard',Alert:{alert:(...args)=>alerts.push(args)},deleteRecommendation:async()=>deletes++});
+  await screen.prime();
+  const base={_id:'trip-a',user:{_id:'owner'},commentsCount:0};
+  const rec={_id:'rec',name:'Place',photos:[]};
+  screen.setState(0,{...base,recommendations:[rec]});let tree=screen.render();let row=nodes(tree,'TripRecommendationCard')[0];
+  assert.equal(row.props.rec,rec);assert.ok(row.props.photoRefreshIdentity);
+  row.props.onPress();assert.equal(nodes(screen.render(),'RecommendationDetailModal')[0].props.recommendation,rec);
+  for(const photos of [['a'.repeat(24)],[]]) {
+    screen.setState(0,{...base,recommendations:[{...rec,photos}]});row=nodes(screen.render(),'TripRecommendationCard')[0];assert.deepEqual(row.props.rec.photos,photos);
+  }
+  row.props.onLongPress();await alerts.at(-1)[2].find(item=>item.text==='Delete').onPress();
+  assert.equal(deletes,1);assert.equal(nodes(screen.render(),'TripRecommendationCard').length,0);
+  screen.setState(0,{...base,user:{_id:'other'},recommendations:[rec]});row=nodes(screen.render(),'TripRecommendationCard')[0];
+  assert.equal(row.props.onLongPress,undefined);assert.equal(typeof row.props.onPress,'function');
+});

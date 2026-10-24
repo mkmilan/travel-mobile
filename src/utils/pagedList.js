@@ -1,7 +1,7 @@
 // One request lifetime per profile/session. Empty and failed first pages are
 // completed attempts, not a reason for a focus effect to request forever.
 export function createPagedList(loadPage, enabled = true, discardSuperseded = false) {
-	let state = { items: [], nextPage: 1, hasNext: true, loaded: !enabled, loading: false, refreshing: false, error: null };
+	let state = { items: [], nextPage: 1, hasNext: true, loaded: !enabled, loading: false, refreshing: false, error: null, refreshIdentity: null };
 	let inFlight = null;
 	let generation = 0;
 	let queuedRefresh = null;
@@ -35,6 +35,8 @@ export function createPagedList(loadPage, enabled = true, discardSuperseded = fa
 				if (!Array.isArray(result?.data)) throw new Error("Invalid list response");
 				update({
 					items: uniqueItems(replace ? result.data : [...state.items, ...result.data]),
+					// Only an accepted replacement grants failed thumbnails another attempt.
+					refreshIdentity: replace ? {} : state.refreshIdentity,
 					nextPage: page + 1,
 					hasNext: result.hasNext ?? page < result.totalPages,
 					loaded: true,
@@ -71,6 +73,10 @@ export function createPagedList(loadPage, enabled = true, discardSuperseded = fa
 		ensureLoaded: () => state.loaded ? Promise.resolve() : request(1, true),
 		loadMore: () => !state.loaded || !state.hasNext || state.error ? Promise.resolve() : request(state.nextPage, false),
 		refresh,
-		setItems: (value) => update({ items: typeof value === "function" ? value(state.items) : value }),
+		setItems: (value) => {
+			// Confirmed local removal wins over any request started before it.
+			if (discardSuperseded && inFlight) generation++;
+			update({ items: typeof value === "function" ? value(state.items) : value });
+		},
 	};
 }

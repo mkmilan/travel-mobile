@@ -25,7 +25,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	const navigation = useNavigation();
 	const route = useRoute();
 	/* ---------------- state ---------------- */
-	const { identity, items, setItems, loading, initialLoading, refreshing, error, ensureLoaded, refresh: onRefresh, loadMore } = useProfileList(userId, getRecommendationsByUser);
+	const { identity, refreshIdentity, items, setItems, loading, initialLoading, refreshing, error, ensureLoaded, refresh: onRefresh, loadMore } = useProfileList(userId, getRecommendationsByUser, 10, "", false, true);
 	const [pendingRequest, setPendingRequest] = useState(null);
 	const pendingRecId = pendingRequest && pendingRequest.identity === identity
 		&& pendingRequest.id === route.params?.openRecId && pendingRequest.intentKey === route.params?.ts
@@ -214,6 +214,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 				renderItem={({ item }) => (
 					<RecommendationCard
 						rec={item}
+						photoRefreshIdentity={refreshIdentity}
 						onPress={() => openDetailModal(item)}
 						onLongPress={isSelf ? () => handleRecommendationLongPress(item) : undefined}
 					/>

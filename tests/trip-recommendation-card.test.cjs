@@ -8,7 +8,7 @@ function card(rec) {
   const host = hooksFixture();
   const props = {rec, onPress(){presses++;}, onLongPress(){holds++;}};
   let session = {key:'one',token:'private-token'}, presses=0,holds=0;
-  const component = load('src/components/trip/TripRecommendationCard.js','TripRecommendationCard',{
+  const component = load('src/components/RecommendationCard.js','RecommendationCard',{
     ...native, ...host.hooks, theme, StyleSheet:{create:x=>x}, Ionicons:'Ionicons',UserHeader:'UserHeader',
     h:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)}),
     usePhotoSource:()=>({mediaKey:session.key,getPhotoSource:id=>createPhotoSource(id,'https://fixture.invalid/api',session.token,session.key)}),
@@ -58,11 +58,12 @@ test('image error reclaims text width; photo, record and session changes reset e
   screen.props.rec={_id:'other',photos:[]};assert.equal(nodes(screen.render(),'Image').length,0);
   screen.props.rec={_id:'other',photos:[second]};assert.equal(nodes(screen.render(),'Image').length,1);
 });
-test('anonymous image source has no credentials; shared recommendation component is unchanged and never imports trip variant',()=>{
+test('anonymous image source has no credentials; trip variant delegates to the shared presentation',()=>{
   const screen=card({_id:'rec',photos:[first]});screen.session({key:'public',token:null});
   assert.equal(nodes(screen.render(),'Image')[0].props.source.headers,undefined);
   assert.ok(!read('src/components/RecommendationCard.js').includes('TripRecommendationCard'));
-  assert.ok(!read('src/components/trip/TripRecommendationCard.js').includes('getRecommendationById'));
+  assert.match(read('src/components/trip/TripRecommendationCard.js'), /export \{ default \} from "\.\.\/RecommendationCard"/);
+  assert.ok(!read('src/components/RecommendationCard.js').includes('getRecommendationById'));
 });
 
 test('A to B to A reuse rejects the first A callback even when URL and record match again',()=>{

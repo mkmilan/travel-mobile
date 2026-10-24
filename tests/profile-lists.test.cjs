@@ -82,7 +82,7 @@ test('Trips sheets are hidden immediately when profile/session identity changes'
 });
 
 function recommendationsFixture(loader,routeParams={},dependencies={}) {
-  let list=createPagedList(loader);const route={params:routeParams};const effects=[];let effectIndex=0;const queued=[];const alerts=[];
+  let list=createPagedList(loader,true,true);const route={params:routeParams};const effects=[];let effectIndex=0;const queued=[];const alerts=[];
   const nativeDeps={...native,theme,RecommendationSourceLoader:'RecommendationSourceLoader',RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',RecommendationCard:'RecommendationCard',RecommendationDetailModal:'RecommendationDetailModal',AddRecommendationModal:'AddRecommendationModal',getRecommendationsByUser:()=>{},lineStringToCoords:coords=>coords,
     getTripJsonById:async()=>({}),deleteRecommendation:async()=>{},updateRecommendation:async()=>{},Alert:{alert:(...args)=>alerts.push(args)},
     useNavigation:()=>({setParams:params=>Object.assign(route.params,params)}),useRoute:()=>route,
@@ -144,7 +144,7 @@ test('recommendation deletion queues a replacement after an older refresh respon
   const tree=screen.render();nodes(tree,'FlatList')[0].props.renderItem({item:rec}).props.onLongPress();
   const deleting=screen.alerts.at(-1)[2].find(button=>button.text==='Delete').onPress();await tick();
   assert.equal(screen.list.getSnapshot().items.length,0);
-  requests[1].resolve({data:[rec],totalPages:1});await oldRefresh;await tick();assert.equal(requests.length,3);
+  requests[1].resolve({data:[rec],totalPages:1});await oldRefresh;await tick();assert.equal(requests.length,3);assert.equal(screen.list.getSnapshot().items.length,0);
   requests[2].resolve({data:[],totalPages:0});await deleting;assert.equal(screen.list.getSnapshot().items.length,0);
 });
 
@@ -259,4 +259,24 @@ test('Gallery accepted removal closes selected photo and cannot reopen it on a l
   nodes(screen.render(),'FlatList')[0].props.renderItem({item:photo}).props.onPress();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,true);
   server=[];await screen.list.refresh();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,false);
   server=[photo];await screen.list.refresh();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,false);
+});
+
+
+test('profile recommendation thumbnails receive only accepted refresh identities, not pagination/failure/local removal',async()=>{
+  const rec={_id:'rec',photos:['a'.repeat(24)]};let fail=false;
+  const screen=recommendationsFixture(async(_page)=>{if(fail)throw Error('offline');return {data:[rec],totalPages:2};});
+  const row=()=>{const list=nodes(screen.render(),'FlatList')[0];return list.props.renderItem({item:list.props.data[0]});};
+  await screen.list.ensureLoaded();const initial=row().props.photoRefreshIdentity;assert.ok(initial);
+  await screen.list.loadMore();assert.equal(row().props.photoRefreshIdentity,initial);
+  screen.list.setItems(items=>items.map(item=>({...item,photos:[]})));assert.equal(row().props.photoRefreshIdentity,initial);
+  fail=true;await screen.list.refresh();assert.equal(row().props.photoRefreshIdentity,initial);
+  fail=false;await screen.list.refresh();assert.notEqual(row().props.photoRefreshIdentity,initial);
+});
+test('confirmed profile photo deletion beats a slow old GET without dropping the recommendation',async()=>{
+  const photo='a'.repeat(24),rec={_id:'rec',photos:[photo]};const pending=deferred();let calls=0;
+  const screen=recommendationsFixture(()=>++calls===1?Promise.resolve({data:[rec],totalPages:1}):pending.promise);
+  await screen.list.ensureLoaded();let tree=screen.render();await nodes(tree,'FlatList')[0].props.renderItem({item:rec}).props.onPress();
+  const refresh=screen.list.refresh();await tick();nodes(screen.render(),'RecommendationDetailModal')[0].props.onPhotoDeleted('rec',photo);
+  pending.resolve({data:[rec],totalPages:1});await refresh;
+  assert.equal(screen.list.getSnapshot().items.length,1);assert.equal(screen.list.getSnapshot().items[0].photos.length,0);
 });
