@@ -20,6 +20,7 @@ import {
 	tripMetadataDefaults,
 	markTripUploaded,
 	releaseRejectedTripUpload,
+	markDeletedTripUpload,
 	ownsLocalTrip,
 	startSegment,
 	startTrip,
@@ -575,7 +576,16 @@ export default function RecordScreen() {
 			if (tid === tripId) resetState();
 		} catch (err) {
 			if (!isCurrent()) return;
-			if (err.data?.uploadRejected === true && payload) {
+			if (err.status === 410 && err.data?.code === "TRIP_DELETED" && payload) {
+				let verifiedDeleted = false;
+				try { verifiedDeleted = await markDeletedTripUpload(tid, session.user._id, payload, err.data); } catch (_) { /* Preserve all local recording data if storage is unavailable. */ }
+				if (!isCurrent()) return;
+				if (verifiedDeleted) {
+					toast({ type: "warning", title: "Online trip was deleted", msg: "This recording is still on this phone. Its deleted online trip will not be recreated." });
+					return;
+				}
+			}
+			if (err.data?.uploadRejected === true && err.data?.code !== "TRIP_DELETED" && payload) {
 				try { await releaseRejectedTripUpload(tid, session.user._id, payload, err.data); } catch (_) { /* Keep the original draft if local storage fails. */ }
 				if (!isCurrent()) return;
 			}

@@ -49,6 +49,10 @@ export const runMigrations = async () => {
     );
   `);
 
+	await db.execAsync(`CREATE TABLE IF NOT EXISTS pending_trip_deletions (
+		user_id TEXT NOT NULL, trip_id TEXT NOT NULL, PRIMARY KEY (user_id, trip_id)
+	);`);
+
 	// ─────── additive columns (ignore “duplicate column” errors) ────────────
 	const alters = [
 		// Trip table additions
@@ -64,6 +68,7 @@ export const runMigrations = async () => {
 		`ALTER TABLE trips ADD COLUMN upload_payload TEXT;`,
 		`ALTER TABLE trips ADD COLUMN upload_server_id TEXT;`,
 		`ALTER TABLE trips ADD COLUMN upload_result TEXT;`,
+		`ALTER TABLE trips ADD COLUMN upload_deleted INTEGER DEFAULT 0;`,
 
 		// Recommendations table additions - add name and description columns
 		`ALTER TABLE recommendations ADD COLUMN name TEXT;`,

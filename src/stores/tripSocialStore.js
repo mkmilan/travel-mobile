@@ -56,10 +56,18 @@ const beginLoad = (kind, tripId) => {
 };
 
 export const useTripSocialStore = create((set, get) => ({
+	deletionRevision: 0,
+	deletedTripIds: {},
+	invalidateDeletedTrip: (tripId) => {
+		cacheGeneration++; // Also reject in-flight social responses for the deleted trip.
+		loadVersions.clear();
+		set(s => { const trips = { ...s.trips }; delete trips[tripId]; return { trips, deletedTripIds: { ...s.deletedTripIds, [tripId]: true }, deletionRevision: s.deletionRevision + 1 }; });
+	},
 	trips: {}, // { [tripId]: {likesCount, isLikedByCurrentUser, ...} }
 
 	/* -------- likes -------- */
 	toggleLike: async (tripId) => {
+		if (get().deletedTripIds[tripId]) return;
 		const isCurrentSession = captureSession();
 		const trip = scopedTrip(get(), tripId);
 		const liked = !trip.isLikedByCurrentUser;
@@ -84,6 +92,7 @@ export const useTripSocialStore = create((set, get) => ({
 	},
 
 	loadLikers: async (tripId) => {
+		if (get().deletedTripIds[tripId]) return;
 		const isCurrent = beginLoad("likers", tripId);
 		const data = await getTripLikers(tripId);
 		if (!isCurrent()) return;
@@ -94,6 +103,7 @@ export const useTripSocialStore = create((set, get) => ({
 
 	/* -------- comments -------- */
 	loadComments: async (tripId, page = 1) => {
+		if (get().deletedTripIds[tripId]) return;
 		const isCurrent = beginLoad("comments", tripId);
 		const data = await getTripComments(tripId, page);
 		if (!isCurrent()) return;
@@ -109,6 +119,7 @@ export const useTripSocialStore = create((set, get) => ({
 		}));
 	},
 	addComment: async (tripId, text) => {
+		if (get().deletedTripIds[tripId]) throw new Error("This trip was deleted.");
 		const isCurrentSession = captureSession();
 		const comment = await addTripComment(tripId, text);
 		if (!isCurrentSession()) return { comment, refreshError: "Session changed; list was not refreshed." };
@@ -124,6 +135,7 @@ export const useTripSocialStore = create((set, get) => ({
 
 	/* -------- recommendations -------- */
 	loadRecommendations: async (tripId) => {
+		if (get().deletedTripIds[tripId]) return;
 		const isCurrent = beginLoad("recommendations", tripId);
 		// call the new endpoint that returns the full trip JSON
 		const trip = await getTripJsonById(tripId);
@@ -147,7 +159,7 @@ export const useTripSocialStore = create((set, get) => ({
 
 	/* -------- external setters so detail screens can sync counts ------- */
 	setLikeState: (tripId, { isLiked, count }) =>
-		set((s) => ({
+		set((s) => s.deletedTripIds[tripId] ? {} : ({
 			trips: {
 				...s.trips,
 				[tripId]: {
@@ -159,18 +171,18 @@ export const useTripSocialStore = create((set, get) => ({
 		})),
 
 	setCommentCount: (tripId, count) =>
-		set((s) => ({
+		set((s) => s.deletedTripIds[tripId] ? {} : ({
 			trips: { ...s.trips, [tripId]: { ...scopedTrip(s, tripId), commentsCount: count } },
 		})),
 
 	setRecCount: (tripId, count) =>
-		set((s) => ({
+		set((s) => s.deletedTripIds[tripId] ? {} : ({
 			trips: { ...s.trips, [tripId]: { ...scopedTrip(s, tripId), recommendationCount: count } },
 		})),
 
 	/* -------- helper to prime cache from list endpoints -------- */
 	primeCounts: (trip) =>
-		set((s) => ({
+		set((s) => s.deletedTripIds[trip._id] ? {} : ({
 			trips: {
 				...s.trips,
 				[trip._id]: {
@@ -187,6 +199,6 @@ export const useTripSocialStore = create((set, get) => ({
 	reset: () => {
 		cacheGeneration++;
 		loadVersions.clear();
-		set({ trips: {} });
+		set({ trips: {}, deletedTripIds: {} });
 	},
 }));

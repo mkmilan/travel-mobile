@@ -1,6 +1,9 @@
+import PendingTripDeletions from "@/src/components/PendingTripDeletions";
+import useProfileList from "@/src/hooks/useProfileList";
+import ProfileListStatus from "@/src/components/ProfileListStatus";
 import { recordAuthDiagnostic } from "@/src/utils/authDiagnostics";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
 import TripCardContainer from "@/src/components/TripCardContainer";
@@ -13,73 +16,25 @@ import { useAuthStore } from "@/src/stores/auth";
 import { useTripSocialStore } from "@/src/stores/tripSocialStore";
 import { theme } from "@/src/theme";
 
-/* ------------------------------------------------------------------ */
-/* screen component                                                   */
-/* ------------------------------------------------------------------ */
+const loadMyTrips = async (_userId, page, limit) => {
+	const { items } = await getMyJsonTrips(page, limit);
+	return { data: items, hasNext: items.length > 0 };
+};
+
 export default function MyTrips() {
-	/* ---------- local state ---------- */
-	const [items, setItems] = useState([]);
-	const [page, setPage] = useState(1);
-	const [loading, setLoading] = useState(false);
-	const [refreshing, setRefreshing] = useState(false);
-	const [hasMore, setHasMore] = useState(true);
-
-	/* ---------- sheet state ---------- */
-	const [sheetType, setSheetType] = useState(null); // 'likers' | 'comments' | 'recs'
-	const [selectedTrip, setSelected] = useState(null);
-
-	/* ---------- helpers ---------- */
 	const user = useAuthStore((s) => s.user);
 	const username = user?.username || "Unknown User";
 	const router = useRouter();
 	const { primeCounts } = useTripSocialStore();
-
-	/* ---------------- fetch one page ---------------- */
-	const loadPage = useCallback(
-		async (pageToLoad = page) => {
-			if (loading || (!hasMore && pageToLoad !== 1)) return;
-			pageToLoad === 1 ? setRefreshing(true) : setLoading(true);
-
-			try {
-				// the endpoint supports ?page & ?limit – if it didn't, you'd set hasMore=false below
-				const { items: fetched = [] } = await getMyJsonTrips(pageToLoad, 10);
-
-				fetched.forEach(primeCounts); // cache counts for optimistic sync
-				setItems((prev) => (pageToLoad === 1 ? fetched : [...prev, ...fetched]));
-				setHasMore(fetched.length > 0);
-				setPage(pageToLoad + 1);
-			} catch (err) {
-				console.error("MyTrips fetch error", err);
-				setHasMore(false); // stop infinite retry on hard error
-			} finally {
-				setLoading(false);
-				setRefreshing(false);
-			}
-		},
-		[loading, hasMore, page]
-	);
-
-	/* first time the tab comes into focus */
-	useFocusEffect(
-		useCallback(() => {
-			loadPage(1);
-		}, [])
-	);
-
-	/* pull-to-refresh */
-	const onRefresh = () => loadPage(1);
-
-	/* infinite scroll */
-	const loadMore = () => loadPage(page);
-
-	/* bottom-sheet helpers */
-	const openSheet = (type, trip) => {
-		setSelected(trip);
-		setSheetType(type);
-	};
-	const closeSheet = () => setSheetType(null);
-	// console.log("selected trip in MY TRIP PAGE", selectedTrip);
-	// console.log(`MyTrips render: ${items.length} trips loaded, page ${page}, hasMore=${hasMore}`);
+	// Share the same session-scoped invalidation as feed/profile lists. A late
+	// pre-deletion page cannot repopulate this replacement list or its sheets.
+	const { identity, items, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore, refreshOnNextFocus } = useProfileList(user?._id, loadMyTrips);
+	useEffect(() => { items.forEach(primeCounts); }, [items, primeCounts]);
+	const [sheet, setSheet] = useState(null);
+	const selectedTrip = sheet?.identity === identity ? sheet.trip : null;
+	const sheetType = selectedTrip ? sheet.type : null;
+	const openSheet = (type, trip) => setSheet({ identity, type, trip });
+	const closeSheet = () => setSheet(null);
 
 	/* ---------------------------------------------------------------- */
 	/* render                                                           */
@@ -87,13 +42,14 @@ export default function MyTrips() {
 	return (
 		<View onLayout={() => recordAuthDiagnostic("trips:layout")} style={{ flex: 1, backgroundColor: theme.colors.background }}>
 			<FlatList
+				ListHeaderComponent={<PendingTripDeletions />}
 				data={items}
 				keyExtractor={(t) => t._id}
 				renderItem={({ item }) => (
 					<TripCardContainer
 						trip={item}
 						onOpenSheet={openSheet}
-						onPress={() => router.push(`/trip/${item._id}`)}
+						onPress={() => { refreshOnNextFocus(); router.push(`/trip/${item._id}`); }}
 						/* TripCard needs userName explicitly */
 						userNameOverride={username}
 						user={user}
@@ -106,7 +62,8 @@ export default function MyTrips() {
 				}}
 				onEndReached={loadMore}
 				onEndReachedThreshold={0.3}
-				ListFooterComponent={loading && items.length > 0 ? <ActivityIndicator style={{ margin: 16 }} /> : null}
+				ListFooterComponent={items.length > 0 ? loading ? <ActivityIndicator style={{ margin: 16 }} /> : error ? <ProfileListStatus error={error} onRetry={onRefresh} /> : null : null}
+				ListEmptyComponent={<ProfileListStatus loading={initialLoading || loading} error={error} onRetry={onRefresh} emptyMessage="No trips yet." />}
 				refreshControl={
 					<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
 				}

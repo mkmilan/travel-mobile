@@ -49,7 +49,7 @@ test('malformed/synchronous failures release locks, pagination errors retain dat
 });
 test('list hook ties focus to stable profile/session store, not loading/items identities',async()=>{
   let userId='a',token='one';let memo,dependencies,focus;let calls=0;const sourceReturn={current:null};let contextKey,context;
-  const hook=load('src/hooks/useProfileList.js','useProfileList',{
+  const hook=load('src/hooks/useProfileList.js','useProfileList',{useTripSocialStore:selector=>selector({deletionRevision:0}),
     createPagedList,useRef:()=>sourceReturn,useProfileContext:()=>{const key=userId+token;if(contextKey!==key){contextKey=key;context={isCurrent:()=>true};}return context;},
     useMemo:(create,next)=>{if(!dependencies||next.some((value,i)=>value!==dependencies[i])){memo=create();dependencies=next;}return memo;},
     useSyncExternalStore:(_subscribe,get)=>get(),useCallback:fn=>fn,useFocusEffect:fn=>{focus=fn;},

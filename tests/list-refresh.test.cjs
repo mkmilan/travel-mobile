@@ -9,7 +9,7 @@ const ids=list=>Array.from(list.props.data,item=>item._id);
 function tripsScreen(loader){
   const host=hooksFixture(),auth=authFixture(),routes=[],props={userId:'actor'};
   const useProfileContext=load('src/hooks/useProfileContext.js','useProfileContext',{...host.hooks,useAuthStore:auth.store});
-  const useProfileList=load('src/hooks/useProfileList.js','useProfileList',{...host.hooks,useProfileContext,createPagedList});
+  const useProfileList=load('src/hooks/useProfileList.js','useProfileList',{useTripSocialStore:selector=>selector({deletionRevision:0}),...host.hooks,useProfileContext,createPagedList});
   const screen=fixture('src/screens/profile/tabs/TripsTab.js','TripsTab',props,{...native,theme,...host.hooks,useProfileList,getTripsByUser:loader,useRouter:()=>({push:path=>routes.push(path)}),RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',TripCardContainer:'TripCardContainer',CommentsSheet:'CommentsSheet',LikersSheet:'LikersSheet',RecommendationsSheet:'RecommendationsSheet'});
   const render=()=>host.render(()=>screen.render());
   return {host,auth,routes,props,render,list:()=>nodes(render(),'FlatList')[0]};

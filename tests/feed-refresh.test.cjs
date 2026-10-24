@@ -10,7 +10,7 @@ function feedScreen(loader){
   const host=hooksFixture(),auth=authFixture(),routes=[],primed=[];
   const follow=load('src/utils/followActions.js','({createFollowActions,getFollowRevision,subscribeFollowChanges})');
   const useProfileContext=load('src/hooks/useProfileContext.js','useProfileContext',{...host.hooks,useAuthStore:auth.store});
-  const useProfileList=load('src/hooks/useProfileList.js','useProfileList',{...host.hooks,useProfileContext,createPagedList});
+  const useProfileList=load('src/hooks/useProfileList.js','useProfileList',{useTripSocialStore:selector=>selector({deletionRevision:0}),...host.hooks,useProfileContext,createPagedList});
   const primeCounts=item=>primed.push(item._id);
   const screen=fixture('app/(tabs)/feed/index.js','FeedScreen',{}, {...native,theme,...host.hooks,...follow,StyleSheet:{create:x=>x},useAuthStore:auth.store,useProfileList,getFeedTripJson:loader,useTripSocialStore:()=>({primeCounts}),useRouter:()=>({push:path=>routes.push(path)}),RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',TripCardContainer:'TripCardContainer',CommentsSheet:'CommentsSheet',LikersSheet:'LikersSheet',RecommendationsSheet:'RecommendationsSheet'});
   const render=()=>host.render(()=>screen.render());

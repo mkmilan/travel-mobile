@@ -76,6 +76,7 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId, 
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
 	await requireStoppedTrip(trip);
+	if (trip.upload_deleted === 1) throw Object.assign(new Error("This recording’s online trip was permanently deleted. The recording remains on this phone, but cannot be uploaded again with the same identity."), { code: "TRIP_DELETED" });
 	if (!hasConfirmedTripMetadata(trip)) throw metadataRequired();
 	// Freeze the first request before network dispatch. Retries across restarts
 	// must use the same identity AND contents, even after ambiguous responses.
@@ -332,4 +333,59 @@ export const releaseRejectedTripUpload = async (tripId, userId, payload, rejecti
 	if (trip.upload_server_id || trip.status !== "stopped" || trip.upload_payload !== JSON.stringify(payload)) return false;
 	await db.runAsync(`UPDATE trips SET upload_payload = NULL WHERE id = ? AND user_id = ? AND upload_server_id IS NULL AND upload_payload = ?`, [tripId, userId, trip.upload_payload]);
 	return true;
+};
+
+// An online deletion is not permission to erase an unsynced or active recording.
+// The server ID was verified when markTripUploaded stored the upload receipt.
+export const reconcileDeletedServerTrip = async (serverTripId, userId) => {
+	requireUserId(userId);
+	if (typeof serverTripId !== "string" || !/^[a-f0-9]{24}$/i.test(serverTripId)) throw new Error("Invalid server trip ID");
+	const db = await openDatabase();
+	const work = async tx => {
+		// Read after acquiring the transaction, not before an awaited lock.
+		const active = await getActiveTrip();
+		const rows = await tx.getAllAsync("SELECT id FROM trips WHERE user_id = ? AND upload_server_id = ? AND status = 'uploaded' AND id != ?", [userId, serverTripId, active?.tripId || ""]);
+		for (const { id } of rows) {
+			for (const table of ["track_points", "pois", "recommendations"]) {
+				await tx.runAsync(`DELETE FROM ${table} WHERE trip_id = ? AND EXISTS (SELECT 1 FROM trips WHERE id = ? AND user_id = ? AND upload_server_id = ? AND status = 'uploaded')`, [id, id, userId, serverTripId]);
+			}
+			await tx.runAsync("DELETE FROM trips WHERE id = ? AND user_id = ? AND upload_server_id = ? AND status = 'uploaded'", [id, userId, serverTripId]);
+		}
+	};
+	await db.withExclusiveTransactionAsync(work);
+};
+
+// An authenticated terminal upload response may stop retries, never erase the
+// recording. Require the exact frozen request identity; ambiguous errors do not.
+export const markDeletedTripUpload = async (tripId, userId, payload, rejection) => {
+	requireUserId(userId);
+	if (payload?.uploadProtocol !== 1 || typeof payload.uploadId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(payload.uploadId)
+		|| rejection?.code !== "TRIP_DELETED" || rejection.uploadId !== payload.uploadId
+		|| typeof rejection.tripId !== "string" || !/^[a-f0-9]{24}$/i.test(rejection.tripId)) return false;
+	const db = await openDatabase();
+	const trip = await getOwnedTrip(db, tripId, userId);
+	await requireInactiveTrip(trip);
+	if (trip.status !== "stopped" || trip.upload_payload !== JSON.stringify(payload)
+		|| (trip.upload_server_id && trip.upload_server_id !== rejection.tripId)) return false;
+	await db.runAsync("UPDATE trips SET upload_deleted = 1 WHERE id = ? AND user_id = ? AND status = 'stopped' AND upload_payload = ?", [tripId, userId, trip.upload_payload]);
+	return true;
+};
+
+// Persist before dispatch: a lost response must still have an owner retry path.
+export const rememberPendingTripDeletion = async (tripId, userId) => {
+	requireUserId(userId);
+	if (typeof tripId !== "string" || !/^[a-f0-9]{24}$/i.test(tripId)) throw new Error("Invalid server trip ID");
+	const db = await openDatabase();
+	await db.runAsync("INSERT OR IGNORE INTO pending_trip_deletions (user_id, trip_id) VALUES (?, ?)", [userId, tripId]);
+};
+export const settlePendingTripDeletion = async (tripId, userId, receipt) => {
+	requireUserId(userId);
+	if (receipt?.tripId !== tripId || receipt.deleted !== true || receipt.cleanupPending !== false) return;
+	const db = await openDatabase();
+	await db.runAsync("DELETE FROM pending_trip_deletions WHERE user_id = ? AND trip_id = ?", [userId, tripId]);
+};
+export const getPendingTripDeletions = async userId => {
+	requireUserId(userId);
+	const db = await openDatabase();
+	return db.getAllAsync("SELECT trip_id FROM pending_trip_deletions WHERE user_id = ?", [userId]);
 };

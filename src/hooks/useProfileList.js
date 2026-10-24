@@ -1,3 +1,4 @@
+import { useTripSocialStore } from "@/src/stores/tripSocialStore";
 import { createPagedList } from "@/src/utils/pagedList";
 import useProfileContext from "@/src/hooks/useProfileContext";
 import { useFocusEffect } from "expo-router/react-navigation";
@@ -5,6 +6,7 @@ import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 
 export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey = "") {
 	const context = useProfileContext(userId);
+	const deletionRevision = useTripSocialStore(state => state.deletionRevision);
 	const sourceReturn = useRef(null);
 	// A new profile/account gets its own store immediately; a late response can
 	// only update the old store, never expose old profile/private data here.
@@ -13,7 +15,7 @@ export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey
 			if (!context.isCurrent()) throw new Error("Profile changed; request cancelled");
 			return loadPage(userId, page, pageSize);
 		}, Boolean(userId)
-	), [userId, loadPage, pageSize, context, cacheKey]);
+	), [userId, loadPage, pageSize, context, cacheKey, deletionRevision]);
 	const state = useSyncExternalStore(list.subscribe, list.getSnapshot, list.getSnapshot);
 	useFocusEffect(useCallback(() => {
 		if (sourceReturn.current === list) {

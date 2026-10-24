@@ -1,3 +1,4 @@
+import { ENABLE_SAFE_TRIP_DELETE } from "../constants/featureFlags";
 import Constants from "expo-constants";
 import { createPhotoFormData } from "../utils/photoFormData";
 import { createPhotoSource } from "../utils/photoSource";
@@ -53,20 +54,22 @@ const assertRequestSession = async (session, expectedUserId) => {
 		throw new Error("Account changed; request cancelled");
 	}
 };
-const fetchForRequestSession = async (session, url, options, expectedUserId) => {
+const fetchForRequestSession = async (session, url, options, expectedUserId, requestGuard) => {
 	if (session) {
 		await assertRequestSession(session, expectedUserId);
 		// Recheck synchronously at dispatch, after the async storage assertion has
 		// returned control; a transition can also start in that promise boundary.
 		if (!isRequestSessionCurrent(session)) throw new Error("Account changed; request cancelled");
 	}
+	if (requestGuard && !requestGuard()) throw new Error("Screen changed; request cancelled");
 	return fetch(url, options);
 };
 
 /* ------------------------------------------------------------------ *
  * core fetch wrapper
  * ------------------------------------------------------------------ */
-export async function apiFetch(path, { method = "GET", auth = true, csrf = false, expectedUserId, ...options } = {}) {
+export async function apiFetch(path, { method = "GET", auth = true, csrf = false, expectedUserId, requiredStatus, requestGuard, ...options } = {}) {
+	if (requestGuard && !requestGuard()) throw new Error("Screen changed; request cancelled");
 	const requestSession = auth ? captureRequestSession(expectedUserId) : null;
 	const headers = {
 		"Content-Type": "application/json",
@@ -93,7 +96,7 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 		return null; // swallow the call gracefully
 	}
 
-	const res = await fetchForRequestSession(requestSession, `${API_URL}${path}`, { ...options, method, headers }, expectedUserId);
+	const res = await fetchForRequestSession(requestSession, `${API_URL}${path}`, { ...options, method, headers }, expectedUserId, requestGuard);
 
 	/* ─── automatic logout on 401 ─── */
 	if (res.status === 401 && requestToken) {
@@ -112,7 +115,7 @@ export async function apiFetch(path, { method = "GET", auth = true, csrf = false
 	const isJson = res.headers.get("content-type")?.includes("application/json");
 	const data = isJson ? await res.json() : await res.text();
 
-	if (!res.ok) {
+	if (!res.ok || (requiredStatus && !(Array.isArray(requiredStatus) ? requiredStatus : [requiredStatus]).includes(res.status))) {
 		const msg = isJson ? data.message || JSON.stringify(data) : data;
 		throw Object.assign(new Error(msg || `Request failed (${res.status})`), { status: res.status, data: isJson ? data : null });
 	}
@@ -566,3 +569,12 @@ export const fetchUserPhotosApi = async (userId, page = 1, limit = 20) => {
 // Existing visibility-filtered POI endpoint; coordinates are not needed for the list.
 export const getUserPois = async (userId, page = 1, limit = 15) =>
 	apiFetch(`/users/${userId}/pois?${new URLSearchParams({ page, limit })}`, { method: "GET" });
+
+// This separate mobile endpoint never falls back to the unsafe legacy DELETE.
+export const deleteServerTrip = async (tripId, expectedUserId, { isCurrent } = {}) => {
+	if (!ENABLE_SAFE_TRIP_DELETE) throw new Error("Safe trip deletion is not available yet. No deletion request was sent.");
+	if (typeof tripId !== "string" || !/^[a-f0-9]{24}$/i.test(tripId) || !expectedUserId) throw new Error("A verified trip and owner are required.");
+	const receipt = await apiFetch(`/mobile/trips/${tripId}/permanent`, { method: "DELETE", csrf: true, expectedUserId, requiredStatus: [200, 202], requestGuard: isCurrent });
+	if (receipt?.deleted !== true || receipt.tripId !== tripId || typeof receipt.cleanupPending !== "boolean") throw new Error("Deletion is not confirmed yet. Please retry.");
+	return receipt;
+};

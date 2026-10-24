@@ -1,4 +1,6 @@
-import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
+import { createTripDeletion } from "@/src/utils/tripDeletion";
+import { reconcileDeletedServerTrip, rememberPendingTripDeletion, settlePendingTripDeletion } from "@/src/db/tripDao";
+import { ENABLE_POI_UI, ENABLE_SAFE_TRIP_DELETE } from "@/src/constants/featureFlags";
 // ...existing imports...
 import CommentList from "@/src/components/CommentList";
 import TripRecommendationCard from "@/src/components/trip/TripRecommendationCard";
@@ -19,6 +21,7 @@ import {
 	addRecommendation,
 	addTripComment,
 	deleteRecommendation,
+	deleteServerTrip,
 	deleteTripComment,
 	deleteTripPhoto,
 	getTripComments,
@@ -213,10 +216,16 @@ export default function TripDetailScreen() {
 		fetchTripDetails();
 	}, [tripId, currentUser?._id, token, sessionEpoch, isSessionChanging]); // Reload when the screen or auth session changes.
 
+	const deletionActive = useRef(true);
+	const deletionController = useRef(null);
+	const [deletionState, setDeletionState] = useState(null);
+
 	useFocusEffect(
 		useCallback(() => {
 			// Refetch trip details when the screen comes into focus to sync server state
+			deletionActive.current = true;
 			fetchTripDetails(true);
+			return () => { deletionActive.current = false; deletionController.current = null; };
 		}, [tripId, currentUser?._id, token, sessionEpoch, isSessionChanging])
 	);
 
@@ -392,17 +401,41 @@ export default function TripDetailScreen() {
 		router.push(`/trip/${tripId}/edit`);
 	};
 
+	// Confirmation callbacks belong to this screen, route and login epoch.
+	const getDeletionController = () => {
+		const context = renderContext;
+		if (deletionController.current?.context === context) return deletionController.current.action;
+		const entry = { context };
+		const isSessionCurrent = () => {
+			const session = useAuthStore.getState();
+			return !!context.userId && !!context.token && session.user?._id === context.userId && session.token === context.token && session.sessionEpoch === context.sessionEpoch && !session.isSessionChanging;
+		};
+		entry.action = createTripDeletion({
+			context: { ...context, isSessionCurrent, isCurrent: () => isCurrentContext(context) && deletionActive.current && deletionController.current === entry },
+			remove: deleteServerTrip,
+			prepare: rememberPendingTripDeletion,
+			settle: settlePendingTripDeletion,
+			reconcile: reconcileDeletedServerTrip,
+			invalidate: id => useTripSocialStore.getState().invalidateDeletedTrip(id),
+			onChange: state => setDeletionState({ ...state, context, identity: entry }),
+			onComplete: (localError, receipt) => {
+				if (receipt.cleanupPending || localError) Alert.alert(receipt.cleanupPending ? "Trip removed; cleanup pending" : "Trip deleted online", [receipt.cleanupPending ? "Some associated content still needs cleanup. Use Retry cleanup in My Trips; no automatic cleanup worker is running." : null, localError].filter(Boolean).join("\n\n"));
+				router.replace("/(tabs)/trips/");
+			},
+		});
+		deletionController.current = entry;
+		return entry.action;
+	};
+	const currentDeletion = deletionState?.context === renderContext && deletionState.identity === deletionController.current ? deletionState : null;
 	const handleDelete = () => {
 		setIsDropdownVisible(false);
-		Alert.alert("Delete Trip", "Are you sure you want to delete this trip? This action cannot be undone.", [
+		if (!isCurrentContext(renderContext) || !deletionActive.current || trip?._id !== tripId || String(trip?.user?._id || trip?.user) !== String(currentUser?._id)) return;
+		if (!ENABLE_SAFE_TRIP_DELETE) { Alert.alert("Deletion unavailable", "Safe trip deletion is not available yet. Your trip has not been changed."); return; }
+		const action = getDeletionController();
+		if (action.getState().pending || action.getState().completed) return;
+		Alert.alert("Permanently delete trip?", "This permanently deletes this trip, its route, your associated recommendations, comments and likes, and your photos that are not used elsewhere. This cannot be undone. Unsynced and active recordings on this phone are kept.", [
 			{ text: "Cancel", style: "cancel" },
-			{
-				text: "Delete",
-				style: "destructive",
-				onPress: () => {
-					Alert.alert("Delete", "Delete functionality to be implemented.");
-				},
-			},
+			{ text: "Delete permanently", style: "destructive", onPress: () => action.run() },
 		]);
 	};
 
@@ -631,6 +664,11 @@ export default function TripDetailScreen() {
 
 	return (
 		<ScrollView style={styles.container} nestedScrollEnabled={true}>
+			{currentDeletion?.pending && <Text accessibilityRole="alert" testID="trip-delete-pending">Deleting trip and associated content… Please wait for confirmation.</Text>}
+			{currentDeletion?.error && <View testID="trip-delete-error">
+				<Text accessibilityRole="alert" style={styles.errorTextSmall}>{currentDeletion.error}</Text>
+				<Pressable testID="trip-delete-retry" disabled={currentDeletion.pending} onPress={currentDeletion.completed ? () => { if (isCurrentContext(renderContext) && deletionActive.current) router.replace("/(tabs)/trips/"); } : handleDelete} style={styles.button}><Text style={styles.buttonText}>{currentDeletion.completed ? "Back to trips" : "Retry deletion"}</Text></Pressable>
+			</View>}
 			{refreshError?.context === renderContext && (
 				<View testID="trip-refresh-error">
 					<Text accessibilityRole="alert" style={styles.errorTextSmall}>{refreshError.message}</Text>
@@ -650,7 +688,7 @@ export default function TripDetailScreen() {
 					<Text style={styles.userName}>{tripUser.username || "Unknown User"}</Text>
 				</Pressable>
 				{isOwner && (
-					<Pressable onPress={() => setIsDropdownVisible(true)} style={styles.menuButton}>
+					<Pressable disabled={currentDeletion?.pending} onPress={() => setIsDropdownVisible(true)} style={styles.menuButton}>
 						<Feather name="more-vertical" size={24} color={theme.colors.text} />
 					</Pressable>
 				)}

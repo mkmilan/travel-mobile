@@ -10,7 +10,7 @@ function connectedScreens(){
   const auth=authFixture(),feedHost=hooksFixture(),peopleHost=hooksFixture(),pending=deferred();
   const follow=load('src/utils/followActions.js','({createFollowActions,followsUser,getFollowRevision,subscribeFollowChanges})');
   const profileContext=host=>load('src/hooks/useProfileContext.js','useProfileContext',{...host.hooks,useAuthStore:auth.store});
-  const useProfileList=load('src/hooks/useProfileList.js','useProfileList',{...feedHost.hooks,useProfileContext:profileContext(feedHost),createPagedList});
+  const useProfileList=load('src/hooks/useProfileList.js','useProfileList',{useTripSocialStore:selector=>selector({deletionRevision:0}),...feedHost.hooks,useProfileContext:profileContext(feedHost),createPagedList});
   let following=true,feedReads=0,peopleReads=0,statsUpdates=0,writes=0;
   const feed=fixture('app/(tabs)/feed/index.js','FeedScreen',{}, {...native,theme,...feedHost.hooks,...follow,StyleSheet:{create:x=>x},useAuthStore:auth.store,useProfileList,getFeedTripJson:async()=>{feedReads++;return {items:following?[{_id:'followers-only-trip'}]:[]};},useTripSocialStore:()=>({primeCounts(){}}),useRouter:()=>({}),RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',TripCardContainer:'TripCardContainer',CommentsSheet:'CommentsSheet',LikersSheet:'LikersSheet',RecommendationsSheet:'RecommendationsSheet'});
   const props={stat:'Following',userId:'actor',onClose(){},onStatsUpdate:()=>{statsUpdates++;}};
