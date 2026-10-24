@@ -51,7 +51,8 @@
       "env": {
         "APP_VARIANT": "test",
         "APP_ENV": "production",
-        "API_URL": "https://travel-server-test.onrender.com/api"
+        "API_URL": "https://travel-server-test.onrender.com/api",
+        "EXPO_PUBLIC_ENABLE_SAFE_TRIP_DELETE": "true"
       }
     }
   }
