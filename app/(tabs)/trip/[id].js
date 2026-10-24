@@ -1,3 +1,4 @@
+import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 // ...existing imports...
 import CommentList from "@/src/components/CommentList";
 import RecommendationCard from "@/src/components/RecommendationCard";
@@ -743,7 +744,7 @@ export default function TripDetailScreen() {
 					}
 				</Section>
 			)}
-			<Section
+			{ENABLE_POI_UI && <Section
 				title="Points of Interest"
 				onSeeAll={pois.length > 3 ? () => setShowAllPois(!showAllPois) : undefined}
 				isExpanded={showAllPois}
@@ -762,7 +763,7 @@ export default function TripDetailScreen() {
 				) : (
 					<Text style={styles.emptySectionText}>No points of interest added.</Text>
 				)}
-			</Section>
+			</Section>}
 
 			<Section
 				title="Recommendations"

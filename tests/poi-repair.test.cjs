@@ -29,7 +29,7 @@ test('actual SQLite validates POI 500/501 before insert and keeps oversized lega
  } finally {f.close();}
 });
 
-test('upload opens exact legacy note for repair without API calls; cancel preserves all data and retry uploads unchanged route once repaired',async()=>{
+test('with POI UI hidden, upload opens exact legacy note for repair without API calls; cancel preserves all data and retry uploads unchanged route once repaired',async()=>{
  const f=await recording();try {
   const long='Legacy exact note '+ 'x'.repeat(501);await f.db.runAsync('INSERT INTO pois(trip_id,lat,lon,timestamp,note) VALUES(?,?,?,?,?)',[f.id,3,4,metadata.endTime,long]);
   const session={user:{_id:'owner'},token:'token'},pendingPoiRepair={current:null};let requests=0,marks=0;const notices=[];

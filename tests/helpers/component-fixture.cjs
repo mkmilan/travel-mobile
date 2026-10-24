@@ -8,7 +8,7 @@ function load(file, expression, dependencies = {}) {
     .replace(/export default function/g, 'function').replace(/export default \w+;/g, '').replace(/export /g, '');
   const code = babel.transformSync(source, {configFile:false, babelrc:false,
     plugins:[['@babel/plugin-transform-react-jsx', {pragma:'h'}]]}).code;
-  return vm.runInNewContext(code + `\n;(${expression});`, {console, ...dependencies});
+  return vm.runInNewContext(code + `\n;(${expression});`, {console, ...require('../../src/constants/featureFlags'), ...dependencies});
 }
 function fixture(file, name, props = {}, dependencies = {}) {
   const cells = []; let index = 0;

@@ -1,3 +1,4 @@
+import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 import ProfileStatModal from "@/src/components/modals/ProfileStatModal";
 import UserListModal from "@/src/components/modals/UserListModal";
 import ProfileGallery from "@/src/components/ProfileGallery";
@@ -26,6 +27,7 @@ export default function ProfileTabsLayout({
 
 
 	const handleStatPress = (label, navigation) => {
+		if (label === "POIs" && !ENABLE_POI_UI) return;
 		if (label === "Trips" || label === "Recs") navigation.navigate(label);
 		else setModal({ open: true, stat: label });
 	};
@@ -81,7 +83,7 @@ export default function ProfileTabsLayout({
 				onClose={() => setModal({ open: false, stat: null })}
 				onStatsUpdate={onProfileStatsChange}
 			/>}
-			{modal.open && ["Distance", "POIs"].includes(modal.stat) && <ProfileStatModal
+			{modal.open && (modal.stat === "Distance" || (ENABLE_POI_UI && modal.stat === "POIs")) && <ProfileStatModal
 				stat={modal.stat} userId={userId} stats={summaryData.stats} onClose={() => setModal({ open: false, stat: null })} />}
 		</>
 	);

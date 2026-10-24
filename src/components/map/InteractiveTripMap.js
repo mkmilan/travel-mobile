@@ -1,3 +1,4 @@
+import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 import { theme } from "@/src/theme";
 import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
@@ -69,11 +70,13 @@ function getFitRegion(points, pad = 1.35) {
  * Props
  *  • routeCoords      [{ lat, lon } | { latitude, longitude }]
  *  • pois             [{ lat, lon, note, _id }]
+ *  • recommendationMarkers  [{ lat, lon, _id }] (independent of POI visibility)
  *  • style            ViewStyle (optional)
  */
-export default function InteractiveTripMap({ routeCoords = [], pois = [], style }) {
+export default function InteractiveTripMap({ routeCoords = [], pois = [], recommendationMarkers = [], style }) {
 	const cleanRoute = useMemo(() => sanitize(routeCoords), [routeCoords]);
-	const cleanPois = useMemo(() => sanitize(pois), [pois]);
+	const cleanPois = useMemo(() => sanitize(ENABLE_POI_UI ? pois : []), [pois]);
+	const cleanRecommendations = useMemo(() => sanitize(recommendationMarkers), [recommendationMarkers]);
 
 	const initialRegion = useMemo(() => getFitRegion(cleanRoute), [cleanRoute]);
 
@@ -99,8 +102,8 @@ export default function InteractiveTripMap({ routeCoords = [], pois = [], style 
 					/>
 				)}
 
-				{/* Markers for POIs */}
-				{cleanPois.map((p) => (
+				{/* POIs are gated independently of recommendation locations. */}
+				{[...cleanPois, ...cleanRecommendations].map((p) => (
 					<Marker
 						key={p._id ?? `${p.lat}-${p.lon}`}
 						coordinate={{ latitude: p.lat, longitude: p.lon }}

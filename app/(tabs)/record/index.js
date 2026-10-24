@@ -1,3 +1,4 @@
+import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 import { TASK_NAME } from "@/src/background/TripLocationTask";
 import CircleButton from "@/src/components/CircleButton";
 import AddPoiModal from "@/src/components/modals/AddPoiModal";
@@ -614,6 +615,7 @@ export default function RecordScreen() {
 
 	// secondary buttons
 	const handleAddPoi = () => {
+		if (!ENABLE_POI_UI) return;
 		const session = { ...useAuthStore.getState() };
 		if (!tripId || !["recording", "paused"].includes(status) || !user?._id || session.user?._id !== user._id || !session.token) {
 			toast({ type: "warning", title: "Start or resume a trip before adding a POI" });
@@ -756,12 +758,12 @@ export default function RecordScreen() {
 					</View>
 					{/* ── NEW secondary buttons ───────────────── */}
 					<View style={styles.row}>
-						<CircleButton
+						{ENABLE_POI_UI && <CircleButton
 							icon="location-sharp"
 							color={theme.colors.info}
 							onPress={handleAddPoi}
 							// style={{ marginLeft: theme.space.md }}
-						/>
+						/>}
 						{/* <Text style={styles.actionButtonText}>Add POI</Text> */}
 						<CircleButton icon="star" color={theme.colors.warning} onPress={handleOpenRecommendationModal} />
 						{/* <Text style={styles.actionButtonText}>Add Recommendation</Text> */}
@@ -807,7 +809,8 @@ export default function RecordScreen() {
 			)}
 
 			<TripSaveModal key={user?._id || "signed-out"} ref={sheetRef} onConfirm={handleSaveMeta} />
-			<AddPoiModal key={`add-poi-${user?._id || "signed-out"}`} ref={poiModalRef} onSubmit={handlePoiSubmit} />
+			{ENABLE_POI_UI && <AddPoiModal key={`add-poi-${user?._id || "signed-out"}`} ref={poiModalRef} onSubmit={handlePoiSubmit} />}
+			{/* Existing invalid notes must remain repairable before upload. */}
 			<AddPoiModal key={`repair-poi-${user?._id || "signed-out"}`} ref={poiRepairModalRef} onSubmit={handlePoiRepairSubmit} />
 			<AddRecommendationModal
 				ref={addRecommendationModalRef}

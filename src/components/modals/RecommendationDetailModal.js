@@ -228,7 +228,7 @@ const RecommendationDetailModal = forwardRef(
 							{/* <Text style={styles.sectionTitle}>Location on Route</Text> */}
 							<InteractiveTripMap
 								routeCoords={tripRouteCoordinates}
-								pois={recPoi}
+								recommendationMarkers={recPoi}
 								style={{ height: 220, marginBottom: theme.space.md }}
 							/>
 						</View>

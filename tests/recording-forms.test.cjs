@@ -94,7 +94,7 @@ function poiHandlers({status='recording',tripId='fixture-trip',point={lat:0,lon:
   const session={user:{_id:'fixture-owner'},token:'fixture-session'};
   const saved=[];const notices=[];let opened=0;const pendingPoi={current:null};const lastPoint={current:point};
   const handlers=require('node:vm').runInNewContext(source.slice(start,end)+';({handleAddPoi,handlePoiSubmit})',{
-    user:session.user,useAuthStore:{getState:()=>session},tripId,status,lastPoint,pendingPoi,
+    ENABLE_POI_UI:true,user:session.user,useAuthStore:{getState:()=>session},tripId,status,lastPoint,pendingPoi,
     poiModalRef:{current:{open:()=>opened++}},toast:notice=>notices.push(notice),ownsLocalTrip:owns,
     addPoi:async(id,data)=>saved.push({id,...data}),
   });

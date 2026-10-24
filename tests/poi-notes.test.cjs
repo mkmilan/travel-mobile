@@ -63,6 +63,7 @@ test('actual trip detail renders and opens POI text for both API description and
   const session={user:{_id:'owner'},token:'session',isAuthenticated:true};const notices=[];
   const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(name=>[name,name]));
   const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
+    ENABLE_POI_UI:true,
     ...native,...components,theme,...noteTools,StyleSheet:{create:value=>value},
     useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({push(){}}),useLocalSearchParams:()=>({id:'trip-a'}),
     useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),useCallback:fn=>fn,useFocusEffect(){},

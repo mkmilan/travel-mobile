@@ -132,7 +132,7 @@ test('profile name, bio and stat labels keep dark text on light surfaces even wi
     assert.equal(style(nodes(tree,'Text').find(node=>node.children.join('') === label)).color, theme.colors.text);
   }
   const cards = nodes(tree,'TouchableOpacity').filter(node => node.props.accessibilityLabel?.includes(': '));
-  assert.equal(cards.length, 6);
+  assert.equal(cards.length, 5);
   for(const card of cards) {
     assert.equal(style(card).backgroundColor, '#fff');
     assert.deepEqual(nodes(card,'Text').map(node=>style(node).color), ['#333','#555']);

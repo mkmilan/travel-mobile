@@ -1,3 +1,4 @@
+import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 import { profileDistance } from "@/src/utils/profileData";
 import Avatar from "@/src/components/ui/Avatar";
 import { theme as baseTheme } from "@/src/theme";
@@ -49,7 +50,7 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 					["Followers", stats.followers],
 					["Following", stats.following],
 					["Recs", stats.recommendationCount],
-					["POIs", stats.poi],
+					ENABLE_POI_UI && ["POIs", stats.poi],
 				]
 					.filter(Boolean)
 					.map(([label, val]) => {

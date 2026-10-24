@@ -1,3 +1,4 @@
+import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
@@ -15,10 +16,11 @@ export default function ProfileStatModal({ stat, userId, stats, onClose }) {
 	const list = useMemo(() => createPagedList((page) => {
 		if (!context.isCurrent()) throw new Error("Profile changed; request cancelled");
 		return getUserPois(userId, page, 15);
-	}, stat === "POIs"), [context, stat, userId]);
+	}, ENABLE_POI_UI && stat === "POIs"), [context, stat, userId]);
 	const state = useSyncExternalStore(list.subscribe, list.getSnapshot, list.getSnapshot);
 	const router = useRouter();
 	useEffect(() => { void list.ensureLoaded(); }, [list]);
+	if (stat === "POIs" && !ENABLE_POI_UI) return null;
 	return <BottomModal visible onClose={onClose}>
 		<ModalHeader title={stat} onClose={onClose} />
 		{stat === "Distance" ? <View style={{ padding: 24 }}>
