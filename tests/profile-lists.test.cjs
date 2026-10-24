@@ -149,27 +149,27 @@ test('recommendation deletion queues a replacement after an older refresh respon
 });
 
 function galleryFixture(loader) {
-  const props={userId:'profile-a'};let mediaKey='session-a',focused=false,list,storeKey,effectIndex=0;const effects=[],queued=[],navigation=[];
+  const {hooksFixture,authFixture}=require('./helpers/hooks-fixture.cjs');
+  const host=hooksFixture(),auth=authFixture();host.blur();
+  const props={userId:'profile-a'};let mediaKey='session-a',list;const navigation=[];
+  const useProfileContext=load('src/hooks/useProfileContext.js','useProfileContext',{...host.hooks,useAuthStore:auth.store});
+  const realUseProfileList=load('src/hooks/useProfileList.js','useProfileList',{...host.hooks,useProfileContext,createPagedList,useTripSocialStore:select=>select({deletionRevision:0})});
   const screen=fixture('src/components/ProfileGallery.js','ProfileGallery',props,{
-    ...native,theme,Image:'Image',ImageViewing:'ImageViewing',BlurView:'BlurView',RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',fetchUserPhotosApi:loader,
+    ...native,theme,...host.hooks,Image:'Image',ImageViewing:'ImageViewing',BlurView:'BlurView',RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',fetchUserPhotosApi:loader,
     useWindowDimensions:()=>({width:400}),usePhotoSource:()=>({mediaKey,getPhotoSource:photoId=>({uri:'https://fixture.invalid/'+photoId,headers:{Authorization:'Bearer fixture'}})}),
-    useRouter:()=>({push:route=>navigation.push({route})}),useNavigation:()=>({navigate:(route,params)=>navigation.push({route,params})}),useIsFocused:()=>focused,
-    useProfileList:(userId,fetchPage,size,key)=>{
-      const next=userId+'/'+key;if(next!==storeKey){list=createPagedList(page=>fetchPage(userId,page,size));storeKey=next;}
-      return {...list.getSnapshot(),identity:list,initialLoading:!list.getSnapshot().loaded,refresh:list.refresh,loadMore:list.loadMore};
-    },
-    useEffect:(callback,deps)=>{const index=effectIndex++;if(!effects[index]||deps.some((value,i)=>value!==effects[index][i])){effects[index]=deps;queued.push(callback);}},
+    useRouter:()=>({push:route=>navigation.push({route})}),useNavigation:()=>({navigate:(route,params)=>navigation.push({route,params})}),
+    useProfileList:(...args)=>{const state=realUseProfileList(...args);list=state.identity;return state;},
   });
-  return {navigation,get list(){return list;},render(){effectIndex=0;return screen.render();},effects(){while(queued.length)queued.shift()();},focus(value){focused=value;if(value&&list)void list.ensureLoaded();},profile(userId){props.userId=userId;},session(key){mediaKey=key;}};
+  return {navigation,get list(){return list;},render(){return host.render(()=>screen.render());},effects(){},focus(value){value?host.focus():host.blur();},profile(userId){props.userId=userId;},session(key){mediaKey=key;}};
 }
-test('Gallery shares bounded pagination, keeps focus cache, and offers explicit refresh/retry/empty states',async()=>{
+test('Gallery shares bounded pagination and offers explicit refresh/retry/empty states',async()=>{
   const requests=[];const screen=galleryFixture((userId,page,limit)=>{const pending=deferred();requests.push({userId,page,limit,...pending});return pending.promise;});
   let tree=screen.render();assert.equal(nodes(tree,'FlatList')[0].props.ListEmptyComponent.props.loading,true);
   screen.focus(true);screen.effects();screen.focus(true);await tick();assert.equal(requests.length,1);assert.equal(requests[0].limit,20);
   requests[0].resolve(Array.from({length:20},(_,i)=>({photoId:'photo-'+i})));await tick();tree=screen.render();screen.effects();
   const more=nodes(tree,'FlatList')[0].props.onEndReached();nodes(tree,'FlatList')[0].props.onEndReached();await tick();assert.equal(requests.length,2);assert.equal(requests[1].page,2);
   requests[1].resolve([]);await more;
-  for(let i=0;i<3;i++){screen.focus(false);screen.render();screen.effects();screen.focus(true);screen.render();screen.effects();}await tick();assert.equal(requests.length,2);
+  for(let i=0;i<3;i++){screen.render();screen.effects();}await tick();assert.equal(requests.length,2);
   tree=screen.render();const refresh=nodes(tree,'FlatList')[0].props.refreshControl.props.onRefresh();await tick();requests[2].reject(Error('fixture'));await refresh;
   tree=screen.render();assert.ok(nodes(tree,'FlatList')[0].props.ListFooterComponent.props.error);
   const retry=nodes(tree,'FlatList')[0].props.ListFooterComponent.props.onRetry();await tick();requests[3].resolve([]);await retry;tree=screen.render();
@@ -227,4 +227,36 @@ test('pending gallery source cannot replace newer manual detail or changed route
   tree=screen.render();const details=nodes(tree,'RecommendationDetailModal');
   if(change==='manual')assert.equal(details[0].props.recommendation._id,'manual');else assert.equal(details.length,0);
  }
+});
+
+
+test('Gallery external add/delete returns revalidate once without a manual refresh or source link',async()=>{
+  let server=[],calls=0;const screen=galleryFixture(async()=>{calls++;return server.slice();});
+  screen.render();screen.focus(true);await tick();assert.equal(calls,1);
+  for(const next of [[{photoId:'external-added'}],[]]) {
+    screen.focus(false);server=next;screen.focus(true);await tick();
+    assert.deepEqual(Array.from(nodes(screen.render(),'FlatList')[0].props.data,p=>p.photoId),next.map(p=>p.photoId));
+    for(let i=0;i<5;i++)screen.render();
+  }
+  assert.equal(calls,3);
+});
+test('Gallery return rejects old page payload before replacement, including failed replacement',async()=>{
+  for(const fail of [false,true]) {
+    const pending=deferred(),fresh=deferred();let calls=0;
+    const screen=galleryFixture(()=>{calls++;return calls===1?Promise.resolve(Array.from({length:20},(_,i)=>({photoId:'kept-'+i}))):calls===2?pending.promise:fresh.promise;});
+    screen.render();screen.focus(true);await tick();
+    const more=nodes(screen.render(),'FlatList')[0].props.onEndReached();await tick();
+    screen.focus(false);screen.focus(true);pending.resolve([{photoId:'deleted-elsewhere'}]);await more;await tick();
+    assert.equal(calls,3);assert.ok(!nodes(screen.render(),'FlatList')[0].props.data.some(p=>p.photoId==='deleted-elsewhere'));
+    if(fail)fresh.reject(Error('offline'));else fresh.resolve([{photoId:'current'}]);await tick();
+    const list=nodes(screen.render(),'FlatList')[0];assert.ok(!list.props.data.some(p=>p.photoId==='deleted-elsewhere'));
+    if(fail)assert.match(list.props.ListFooterComponent.props.error,/offline/);else assert.equal(list.props.data[0].photoId,'current');
+  }
+});
+test('Gallery accepted removal closes selected photo and cannot reopen it on a later add',async()=>{
+  const photo={photoId:'photo',sourceType:'trip',sourceId:'source'};let server=[photo];
+  const screen=galleryFixture(async()=>server);screen.render();screen.focus(true);await tick();
+  nodes(screen.render(),'FlatList')[0].props.renderItem({item:photo}).props.onPress();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,true);
+  server=[];await screen.list.refresh();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,false);
+  server=[photo];await screen.list.refresh();assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,false);
 });

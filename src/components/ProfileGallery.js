@@ -2,7 +2,7 @@ import useProfileList from "@/src/hooks/useProfileList";
 import ProfileListStatus from "@/src/components/ProfileListStatus";
 import { fetchUserPhotosApi } from "@/src/services/api";
 import { usePhotoSource } from "@/src/hooks/usePhotoSource";
-import { useIsFocused, useNavigation } from "expo-router/react-navigation";
+import { useNavigation } from "expo-router/react-navigation";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -17,28 +17,26 @@ const loadGalleryPage = async (userId, page, limit) => {
 
 export default function ProfileGallery({ userId }) {
 	const { getPhotoSource, mediaKey } = usePhotoSource();
-	const { identity, items: photos, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore } = useProfileList(userId, loadGalleryPage, PAGE_SIZE, mediaKey);
+	// One focus-return path covers external uploads/deletions and source links.
+	const { identity, items: photos, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore } = useProfileList(userId, loadGalleryPage, PAGE_SIZE, mediaKey, true, true);
 	const [viewerOpen, setViewerOpen] = useState(false);
 	const [selection, setSelection] = useState(null);
-	const chosen = selection && selection.identity === identity ? selection.photo : null;
-	const sourceReturn = useRef(null);
+	const chosen = selection && selection.identity === identity ? photos.find(photo => photo.photoId === selection.photo.photoId) || null : null;
 	const sourceNavigationPending = useRef(false);
 	const currentSelection = useRef(selection);
 	currentSelection.current = chosen ? selection : null;
 	const router = useRouter();
 	const nav = useNavigation();
-	const isFocused = useIsFocused();
 	const thumb = (useWindowDimensions().width - 3 * 4) / 2;
 
-	// Ordinary tab switches reuse the loaded gallery. Returning from a photo's
-	// source can follow an edit/delete, so revalidate once; pull-to-refresh is
-	// always available for other changes.
+	// A refresh may remove the viewed photo. Forget the selection, rather than
+	// keeping a deleted photo open or reopening it if stale data later returns.
 	useEffect(() => {
-		if (isFocused && sourceReturn.current === identity) {
-			sourceReturn.current = null;
-			void onRefresh();
+		if (selection && !chosen) {
+			setSelection(null);
+			setViewerOpen(false);
 		}
-	}, [isFocused, identity, onRefresh]);
+	}, [chosen, selection]);
 
 	/* ---------- link from viewer footer ---------- */
 	const openSource = () => {
@@ -46,12 +44,10 @@ export default function ProfileGallery({ userId }) {
 		if (!["trip", "recommendation"].includes(chosen.sourceType) || !chosen.sourceId) return;
 		sourceNavigationPending.current = true;
 		if (chosen.sourceType === "trip") {
-			sourceReturn.current = identity;
 			setViewerOpen(false);
 			router.push(`(tabs)/trip/${chosen.sourceId}`);
 			return;
 		} else if (chosen.sourceType === "recommendation") {
-			sourceReturn.current = identity;
 			setViewerOpen(false); // close the gallery first
 
 			nav.navigate("Recs", { openRecId: chosen.sourceId, ts: Date.now() });

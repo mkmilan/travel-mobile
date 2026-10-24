@@ -4,7 +4,7 @@ import useProfileContext from "@/src/hooks/useProfileContext";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 
-export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey = "", refreshOnFocus = false) {
+export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey = "", refreshOnFocus = false, discardSuperseded = false) {
 	const context = useProfileContext(userId);
 	const deletionRevision = useTripSocialStore(state => state.deletionRevision);
 	const sourceReturn = useRef(null);
@@ -14,8 +14,8 @@ export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey
 		(page) => {
 			if (!context.isCurrent()) throw new Error("Profile changed; request cancelled");
 			return loadPage(userId, page, pageSize);
-		}, Boolean(userId)
-	), [userId, loadPage, pageSize, context, cacheKey, deletionRevision]);
+		}, Boolean(userId), discardSuperseded
+	), [userId, loadPage, pageSize, context, cacheKey, deletionRevision, discardSuperseded]);
 	const state = useSyncExternalStore(list.subscribe, list.getSnapshot, list.getSnapshot);
 	useFocusEffect(useCallback(() => {
 		if (sourceReturn.current === list) {
@@ -26,8 +26,8 @@ export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey
 		}
 		return () => { if (refreshOnFocus) sourceReturn.current = list; };
 	}, [list, refreshOnFocus]));
-	// Profile tabs mark source navigation; My Trips also opts into tab-return
-	// refresh to pick up Record uploads. Ordinary profile focus keeps
+	// Profile tabs mark source navigation; My Trips and Gallery also opt into
+	// tab-return refresh to pick up external mutations. Other profile focus keeps
 	// loaded pages and scroll position; an edit with unchanged totals still reloads.
 	const refreshOnNextFocus = () => { sourceReturn.current = list; };
 	return { ...state, refreshOnNextFocus, identity: list, initialLoading: !state.loaded, ensureLoaded: list.ensureLoaded, loadMore: list.loadMore, refresh: list.refresh, setItems: list.setItems };
