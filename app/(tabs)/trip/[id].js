@@ -419,7 +419,7 @@ export default function TripDetailScreen() {
 			invalidate: id => useTripSocialStore.getState().invalidateDeletedTrip(id),
 			onChange: state => setDeletionState({ ...state, context, identity: entry }),
 			onComplete: (localError, receipt) => {
-				if (receipt.cleanupPending || localError) Alert.alert(receipt.cleanupPending ? "Trip removed; cleanup pending" : "Trip deleted online", [receipt.cleanupPending ? "Some associated content still needs cleanup. Use Retry cleanup in My Trips; no automatic cleanup worker is running." : null, localError].filter(Boolean).join("\n\n"));
+				if (receipt.cleanupPending || localError) Alert.alert(receipt.cleanupPending ? "Trip removed; cleanup pending" : "Trip deleted online", [receipt.cleanupPending ? "Some associated content still needs cleanup. Use Retry cleanup in My Trips; no automatic cleanup worker is running. If cleanup stays pending, storage may need review." : null, localError].filter(Boolean).join("\n\n"));
 				router.replace("/(tabs)/trips/");
 			},
 		});

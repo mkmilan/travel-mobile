@@ -60,7 +60,7 @@ export default function PendingTripDeletions() {
 				} catch (_) { failures++; }
 			}
 			const rows = await getPendingTripDeletions(context.userId);
-			if (current(context)) setResult({ context, rows, error: failures ? `${failures} deletion or cleanup request(s) could not be confirmed. Saved retries are kept.` : rows.length ? "Cleanup is still pending. You can retry later." : null });
+			if (current(context)) setResult({ context, rows, error: failures ? `${failures} deletion or cleanup request(s) could not be confirmed. Saved retries are kept.` : rows.length ? "Cleanup is still pending. You can retry later. If cleanup stays pending, storage may need review." : null });
 		} catch (error) {
 			if (current(context)) setResult({ ...result, error: `Deletion or cleanup was not completed: ${error.message}` });
 		} finally {
@@ -69,7 +69,7 @@ export default function PendingTripDeletions() {
 		}
 	};
 	return <View testID="pending-trip-deletions" accessibilityRole="summary">
-		<Text>Previously requested trip deletions need confirmation or cleanup. No automatic retry is running.</Text>
+		<Text>Previously requested trip deletions need confirmation or cleanup. No automatic retry is running. If cleanup stays pending, storage may need review.</Text>
 		{result.error && <Text accessibilityRole="alert">{result.error}</Text>}
 		{!!result.rows.length && <Pressable disabled={result.busy} onPress={() => Alert.alert("Retry requested deletions?", "This retries permanently deleting the trips you previously selected and cleaning up their associated content.", [
 			{ text: "Cancel", style: "cancel" }, { text: "Retry cleanup", style: "destructive", onPress: retry },
