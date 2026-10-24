@@ -115,5 +115,5 @@ test('profile/settings/edit-profile keep hooks unconditional across sign-out and
     assert.ok(guardIndex>Math.max(...hookIndices),`${file}: all hooks precede auth guard`);
   }
   assert.match(read('app/(tabs)/me/settings.js'),/useState\(\{ \.\.\.user\?\.settings \}\)/);
-  assert.match(read('src/screens/profile/ProfileScreen.js'),/if \(ready\) void profile\.refresh\(\)/);
+  assert.match(read('src/screens/profile/ProfileScreen.js'),/if \(!ready\) return/);
 });

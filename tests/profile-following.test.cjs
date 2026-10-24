@@ -98,7 +98,7 @@ test('profile follow control refreshes actual counts and replaces privacy-depend
   const {profileStats}=load('src/utils/profileData.js','({profileStats})');
   let focus,memoIndex=0,following=false;const memos=[];let writes=0;let pending=deferred();const context={userId:'actor',isCurrent:()=>true};
   const screen=fixture('src/screens/profile/ProfileScreen.js','ProfileScreen',{}, {
-    ...native,StyleSheet:{create:x=>x},useRequireAuth:()=>true,useResolvedTheme:()=> 'light',lightTheme:theme,darkTheme:theme,
+    useTripSocialStore:select=>select({deletionRevision:0}),...native,StyleSheet:{create:x=>x},useRequireAuth:()=>true,useResolvedTheme:()=> 'light',lightTheme:theme,darkTheme:theme,
     useLocalSearchParams:()=>({userId:'target'}),useAuthStore:select=>select({user:{_id:'actor'},logout(){}}),useProfileContext:()=>context,
     createProfileData,profileStats,createFollowActions,followUser:async()=>{writes++;await pending.promise;following=true;},unfollowUser:async()=>{writes++;following=false;},
     getPublicUserById:async()=>({_id:'target',isFollowing:following,followersCount:following?1:0,totalTrips:following?3:1}),getUserById:()=>{throw Error('wrong route');},ProfileTabsLayout:'ProfileTabsLayout',

@@ -42,7 +42,7 @@ test('ProfileScreen focus reloads instead of auth snapshot zeros; error offers r
   const contexts=[{isCurrent:()=>true}];let context=contexts[0],focus,calls=0,memoIndex=0;const memos=[];
   let request=async()=>{calls++;return {_id:'self',totalTrips:calls};};
   const screen=fixture('src/screens/profile/ProfileScreen.js','ProfileScreen',{}, {
-    ...native,StyleSheet:{create:x=>x},useRequireAuth:()=>true,useResolvedTheme:()=> 'light',lightTheme:theme,darkTheme:theme,
+    useTripSocialStore:select=>select({deletionRevision:0}),...native,StyleSheet:{create:x=>x},useRequireAuth:()=>true,useResolvedTheme:()=> 'light',lightTheme:theme,darkTheme:theme,
     useLocalSearchParams:()=>({}),useAuthStore:select=>select({user:{_id:'self',totalTrips:0},logout(){}}),useProfileContext:()=>context,
     createProfileData,profileStats,createFollowActions,followUser:()=>{},unfollowUser:()=>{},getUserById:()=>request(),getPublicUserById:()=>{throw Error('wrong route');},ProfileTabsLayout:'ProfileTabsLayout',
     useMemo:(create,next)=>{const index=memoIndex++;const previous=memos[index];if(!previous||next.some((value,i)=>value!==previous.deps[i]))memos[index]={value:create(),deps:next};return memos[index].value;},
@@ -96,4 +96,34 @@ test('profile context rejects closed, switched and same-token logout/login compl
   const before=state;state={token:null,user:null};subscriber(state,before);state=before;subscriber(state,{token:null,user:null});
   assert.equal(context.isCurrent(),false);const next=screen.render();assert.notEqual(next,context);assert.equal(next.isCurrent(),true);
   cleanup();assert.equal(next.isCurrent(),false);
+});
+
+test('ProfileScreen deletion while a pre-delete focus GET is pending queues one safe totals read',async()=>{
+  const {hooksFixture}=require('./helpers/hooks-fixture.cjs');const host=hooksFixture();
+  let revision=0;const requests=[];const context={isCurrent:()=>true};
+  const screen=fixture('src/screens/profile/ProfileScreen.js','ProfileScreen',{}, {
+    ...native,...host.hooks,StyleSheet:{create:x=>x},useRequireAuth:()=>true,useResolvedTheme:()=> 'light',lightTheme:theme,darkTheme:theme,
+    useLocalSearchParams:()=>({}),useAuthStore:select=>select({user:{_id:'self'},logout(){}}),useProfileContext:()=>context,useTripSocialStore:select=>select({deletionRevision:revision}),
+    createProfileData,profileStats,createFollowActions,followUser:()=>{},unfollowUser:()=>{},getUserById:()=>{const request=deferred();requests.push(request);return request.promise;},ProfileTabsLayout:'ProfileTabsLayout',
+  });
+  const render=()=>host.render(()=>screen.render());
+  render();await tick();assert.equal(requests.length,1);
+  requests[0].resolve({_id:'self',totalTrips:2});await tick();
+  host.blur();host.focus();await tick();assert.equal(requests.length,2);
+  host.blur();revision++;render();host.focus();render();await tick();assert.equal(requests.length,2);
+  requests[1].resolve({_id:'self',totalTrips:99});await tick();assert.equal(requests.length,3);
+  assert.equal(nodes(render(),'ProfileTabsLayout')[0].props.summaryData.stats.totalTrips,2);
+  requests[2].resolve({_id:'self',totalTrips:1});await tick();
+  for(let i=0;i<5;i++)render();await tick();assert.equal(requests.length,3);
+  assert.equal(nodes(render(),'ProfileTabsLayout')[0].props.summaryData.stats.totalTrips,1);
+});
+
+test('post-change reconciliation suppresses old failure, coalesces mutations, and cancels queued read on lost context',async()=>{
+  for(const currentAfter of [true,false]) {
+    let current=true;const requests=[];const profile=createProfileData(()=>{const p=deferred();requests.push(p);return p.promise;},()=>current);
+    const first=profile.refresh();await tick();const fresh=profile.refreshAfterChange();assert.equal(profile.refreshAfterChange(),fresh);
+    current=currentAfter;requests[0].reject(Error('old failure'));await first;await tick();assert.equal(profile.getSnapshot().error,null);
+    assert.equal(requests.length,currentAfter?2:1);
+    if(currentAfter)requests[1].resolve({_id:'self',totalTrips:1});await fresh;
+  }
 });

@@ -2,13 +2,14 @@ import useRequireAuth from "@/src/hooks/useRequireAuth";
 import { useResolvedTheme } from "@/src/hooks/useResolvedTheme";
 import useProfileContext from "@/src/hooks/useProfileContext";
 import { followUser, unfollowUser, getPublicUserById, getUserById } from "@/src/services/api";
+import { useTripSocialStore } from "@/src/stores/tripSocialStore";
 import { useAuthStore } from "@/src/stores/auth";
 import { darkTheme, theme as lightTheme } from "@/src/theme";
 import { createFollowActions } from "@/src/utils/followActions";
 import { createProfileData, profileStats } from "@/src/utils/profileData";
 import { useLocalSearchParams } from "expo-router";
 import { useFocusEffect } from "expo-router/react-navigation";
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import ProfileTabsLayout from "./ProfileTabsLayout";
 
@@ -36,8 +37,16 @@ export default function ProfileScreen() {
 		},
 		reconcile: profile.refreshAfterChange,
 	}), [context, profile]);
+	const deletionRevision = useTripSocialStore(state => state.deletionRevision);
+	const lastDeletion = useRef({ profile, revision: deletionRevision });
 	const actionState = useSyncExternalStore(actions.subscribe, actions.getSnapshot, actions.getSnapshot);
-	useFocusEffect(useCallback(() => { if (ready) void profile.refresh(); }, [ready, profile]));
+	useFocusEffect(useCallback(() => {
+		if (!ready) return;
+		const changed = lastDeletion.current.profile === profile && lastDeletion.current.revision !== deletionRevision;
+		lastDeletion.current = { profile, revision: deletionRevision };
+		// A focus read begun before deletion cannot satisfy its reconciliation.
+		void (changed ? profile.refreshAfterChange() : profile.refresh());
+	}, [ready, profile, deletionRevision]));
 
 	if (!ready || !authUser) return <View style={styles.centered} />;
 	if (!displayedUser) return (

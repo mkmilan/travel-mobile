@@ -42,6 +42,8 @@ export function createProfileData(load, isCurrent) {
 		return pending;
 	};
 	const refreshAfterChange = () => {
+		// Do not publish a response captured before the mutation.
+		version++;
 		if (!pending) return refresh();
 		if (!queuedRefresh) queuedRefresh = pending.then(() => { queuedRefresh = null; return refresh(); });
 		return queuedRefresh;
