@@ -50,7 +50,7 @@ function apiFixture({enabled=true,status=200,data=receipt,csrf,capability={safeT
 }
 test('trip DELETE uses CSRF and bound owner, rejects legacy receipts, and false feature gate sends no request',async()=>{
   const disabled=apiFixture({enabled:false});await assert.rejects(disabled.deleteServerTrip(serverId,'owner'),/not available/);assert.equal(disabled.calls.length,0);
-  
+
   const f=apiFixture();await f.deleteServerTrip(serverId,'owner');assert.equal(f.calls[0].options.method,'DELETE');assert.match(f.calls[0].url,/\/permanent$/);assert.equal(f.calls[0].options.headers['X-CSRF-Token'],'csrf');assert.equal(f.calls[0].options.headers.Authorization,'Bearer secret');assert.equal(f.calls[0].options.credentials,'include');
   for(const options of [{status:201},{status:204,data:null},{data:{message:'deleted'}},{data:{...receipt,tripId:'other'}},{status:403,data:{message:'Forbidden'}}])await assert.rejects(apiFixture(options).deleteServerTrip(serverId,'owner'));
   await assert.rejects(f.deleteServerTrip(serverId,'other'),/Account changed/);await assert.rejects(f.deleteServerTrip('bad','owner'),/verified trip/);
