@@ -19,26 +19,31 @@ export default function PendingTripDeletions() {
 	};
 	const focusedCurrent = context => active.current === context && sessionCurrent(context);
 	useFocusEffect(useCallback(() => {
-		const context = { userId: user?._id, token, epoch: sessionEpoch };
+		const context = { userId: user?._id, token, epoch: sessionEpoch, rowsRevision: 0 };
 		active.current = context;
 		if (ENABLE_SAFE_TRIP_DELETE && context.userId && token && !isSessionChanging) {
 			(async () => {
 				let rows = [];
 				try {
+					const initialRevision = ++context.rowsRevision;
 					rows = await getPendingTripDeletions(context.userId);
 					if (!focusedCurrent(context)) return;
-					setResult({ context, rows });
+					if (initialRevision === context.rowsRevision) setResult({ context, rows });
 					const pending = await getPendingTripDeletionsApi(context.userId, { isCurrent: () => focusedCurrent(context) });
 					for (const { tripId } of pending) {
 						if (!focusedCurrent(context)) return;
 						await rememberPendingTripDeletion(tripId, context.userId);
 					}
+					const finalRevision = ++context.rowsRevision;
 					rows = await getPendingTripDeletions(context.userId);
-					if (focusedCurrent(context)) setResult({ context, rows });
+					if (focusedCurrent(context) && finalRevision === context.rowsRevision) setResult({ context, rows });
 				} catch (_) {
-					if (focusedCurrent(context)) setResult({ context, rows, error: rows.length
-						? "Could not check all pending deletions. Saved retries are kept; reopen My Trips to check again."
-						: "Could not check deletion status. Reopen My Trips to check again." });
+					if (focusedCurrent(context)) setResult(previous => {
+						const savedRows = previous?.context === context ? previous.rows : rows;
+						return { context, rows: savedRows, error: savedRows.length
+							? "Could not check all pending deletions. Saved retries are kept; reopen My Trips to check again."
+							: "Could not check deletion status. Reopen My Trips to check again." };
+					});
 				}
 			})();
 		}
@@ -63,6 +68,24 @@ export default function PendingTripDeletions() {
 					await reconcileDeletedServerTrip(tripId, context.userId);
 					if (!sessionCurrent(context)) return;
 					await settlePendingTripDeletion(tripId, context.userId, receipt);
+					// A refocus has its own UI identity. Refresh only that active identity,
+					// without letting the abandoned retry continue deleting its other rows.
+					const current = active.current;
+					if (current && current !== context && sessionCurrent(context) && focusedCurrent(current)) {
+						const refreshRevision = ++current.rowsRevision;
+						try {
+							const rows = await getPendingTripDeletions(current.userId);
+							if (sessionCurrent(context) && focusedCurrent(current) && refreshRevision === current.rowsRevision) setResult(previous => ({
+								context: current, rows, error: previous?.context === current && previous.error
+									? rows.length ? previous.error : "Could not check deletion status. Reopen My Trips to check again." : null,
+							}));
+						} catch (_) {
+							if (sessionCurrent(context) && focusedCurrent(current) && refreshRevision === current.rowsRevision) setResult(previous => ({
+								context: current, rows: previous?.context === current ? previous.rows : [],
+								error: "Could not check deletion status. Reopen My Trips to check again.",
+							}));
+						}
+					}
 				} catch (_) { failures++; }
 			}
 			if (!focusedCurrent(context)) return;
