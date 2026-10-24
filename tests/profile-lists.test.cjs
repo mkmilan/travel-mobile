@@ -99,10 +99,14 @@ test('Recommendations focus plus gallery intent share one slow request and repea
   let tree=screen.render();assert.equal(nodes(tree,'FlatList')[0].props.ListEmptyComponent.props.loading,true);
   const focus=screen.list.ensureLoaded();screen.effects();screen.render();screen.effects();await tick();assert.equal(calls,1);
   pending.resolve({data:[{_id:'target',name:'Fixture'}],totalPages:1});await focus;
-  screen.render();screen.effects();tree=screen.render();assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.isVisible,true);assert.equal(screen.route.params.openRecId,undefined);
+  screen.render();screen.effects();tree=screen.render();assert.equal(nodes(tree,'RecommendationDetailModal').length,0);
+  nodes(tree,'RecommendationSourceLoader')[0].props.onFound({_id:'target',name:'Fresh fixture'});
+  tree=screen.render();assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.isVisible,true);assert.equal(screen.route.params.openRecId,undefined);
   nodes(tree,'RecommendationDetailModal')[0].props.onClose();screen.render();
   screen.route.params={openRecId:'target',ts:2};screen.render();screen.effects();screen.render();screen.effects();tree=screen.render();
-  assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.isVisible,true);assert.equal(calls,1);
+  assert.equal(nodes(tree,'RecommendationDetailModal').length,0);
+  nodes(tree,'RecommendationSourceLoader')[0].props.onFound({_id:'target',name:'Fresh fixture again'});
+  tree=screen.render();assert.equal(nodes(tree,'RecommendationDetailModal')[0].props.isVisible,true);assert.equal(calls,1);
 });
 test('Recommendations empty/error gallery intent does not refetch on renders or focus',async()=>{
   for(const failure of [false,true]) {

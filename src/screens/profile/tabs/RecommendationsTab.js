@@ -25,7 +25,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	const navigation = useNavigation();
 	const route = useRoute();
 	/* ---------------- state ---------------- */
-	const { identity, refreshIdentity, items, setItems, loading, initialLoading, refreshing, error, ensureLoaded, refresh: onRefresh, loadMore } = useProfileList(userId, getRecommendationsByUser, 10, "", false, true);
+	const { identity, refreshIdentity, items, setItems, loading, initialLoading, refreshing, error, ensureLoaded, refresh: onRefresh, loadMore } = useProfileList(userId, getRecommendationsByUser, 10, "", true, true);
 	const [pendingRequest, setPendingRequest] = useState(null);
 	const pendingRecId = pendingRequest && pendingRequest.identity === identity
 		&& pendingRequest.id === route.params?.openRecId && pendingRequest.intentKey === route.params?.ts
@@ -51,18 +51,14 @@ export default function RecommendationsTab({ userId, isSelf }) {
 		const recId = route.params?.openRecId;
 		if (!recId) return;
 		setPendingRequest({ identity, id: recId, intentKey: route.params?.ts });
+		setSelection(null);
+		setDetailModalOpen(false);
+		detailRequest.current = null;
 		void ensureLoaded();
 	}, [route.params?.openRecId, route.params?.ts]);
 
-	useEffect(() => {
-		if (!pendingRecId) return;
-		const found = items.find((rec) => rec._id === pendingRecId);
-		if (!found) return;
-		currentPending.current = null;
-		void openDetailModal(found);
-		setPendingRequest(null);
-		navigation.setParams({ openRecId: undefined });
-	}, [items, pendingRecId]);
+	// A Gallery source must resolve fresh even when its ID is on a cached page.
+	// Return refresh may still be in flight (or fail); never open that stale row.
 
 	/* ---------------- modal helpers ---------------- */
 	const openDetailModal = async (rec) => {
@@ -193,7 +189,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 	return (
 		<>
 			<FlatList
-				ListHeaderComponent={pendingRecId && !initialLoading && !loading && !items.some((rec) => rec._id === pendingRecId) ? (
+				ListHeaderComponent={pendingRecId ? (
 					<RecommendationSourceLoader key={`${pendingRecId}-${route.params?.ts || ""}`} recommendationId={pendingRecId} userId={userId}
 						onFound={(rec) => {
 							if (currentIdentity.current !== identity || currentPending.current !== pendingRequest) return;
