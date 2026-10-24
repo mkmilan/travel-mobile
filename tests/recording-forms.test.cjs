@@ -143,18 +143,18 @@ test('Cancel returns to a stopped-screen action that reopens the same trip draft
   await saveButton(tree).props.onPress();assert.equal(saved.mode,'bicycle');assert.equal(saved.visibility,'private');assert.equal(saved.description,'Edited description');
 });
 
-function stopHandlers({running=true,names=async()=>({startName:null,endName:null}),stopBackground=async()=>{}}={}) {
+function stopHandlers({running=true,names=async()=>({startName:null,endName:null}),stopBackground=async()=>{},endpoints=async()=>({start:null,end:null})}={}) {
   const source=read('app/(tabs)/record/index.js');const start=source.indexOf('const handleStop = '),end=source.indexOf('\n\tconst handleSaveMeta',start);
   const session={user:{_id:'fixture-owner'},token:'fixture-token'};const events=[],opened=[],notices=[];let button;
-  const stopRequest={current:null},tripEndTime={current:null},pendingNames={current:null};
+  const stopRequest={current:null},tripEndTime={current:null},pendingNames={current:null},metadataDraft={current:null};
   const handler=require('node:vm').runInNewContext(source.slice(start,end)+';handleStop',{
     lifecycleRequest:{current:false},isRestoring:false,tripId:'fixture-trip',user:{...session.user,settings:{defaultTravelMode:'walking'}},useAuthStore:{getState:()=>session},stopRequest,tripEndTime,pendingNames,firstPoint:{current:null},lastPoint:{current:null},TASK_NAME:'fixture-task',
     Alert:{alert:(_,__,buttons)=>{button=buttons.find(b=>b.text==='Stop');}},stopLocationWatcher:async()=>events.push('foreground-stop'),
     Location:{hasStartedLocationUpdatesAsync:async()=>running,stopLocationUpdatesAsync:async()=>{events.push('background-stop');await stopBackground();}},
-    clearActiveTrip:async()=>events.push('clear-active'),stopTrip:async()=>events.push('persist-stop'),refreshPending:async()=>{},getLocalTrip:async()=>({status:'stopped',metadata_confirmed:0,default_transport_mode:'walking',default_trip_visibility:'private'}),metadataDraft:{current:null},...tripTools,getTripLocationNames:names,setStatus:status=>events.push(status),setIsResolvingLocation:busy=>events.push(busy),
+    clearActiveTrip:async()=>events.push('clear-active'),stopTrip:async()=>events.push('persist-stop'),refreshPending:async()=>{},getLocalTrip:async()=>({status:'stopped',metadata_confirmed:0,default_transport_mode:'walking',default_trip_visibility:'private'}),metadataDraft,getTripEndpoints:endpoints,...tripTools,getTripLocationNames:names,setStatus:status=>events.push(status),setIsResolvingLocation:busy=>events.push(busy),
     sheetRef:{current:{open:(...args)=>opened.push(args)}},toast:notice=>notices.push(notice),
   });
-  return {handler,confirm:()=>button.onPress(),session,events,opened,notices,tripEndTime,pendingNames,stopRequest};
+  return {handler,confirm:()=>button.onPress(),session,events,opened,notices,tripEndTime,pendingNames,stopRequest,metadataDraft};
 }
 
 test('Stop without GPS or with failed names still reaches stopped Save form and clears loading',async()=>{
@@ -193,4 +193,31 @@ test('location naming accepts zero coordinates, skips missing GPS and bounds hun
   });
   const pending=hanging({start:{lat:1,lon:2},end:{lat:3,lon:4}});timeout();const fallback=await pending;
   assert.equal(fallback.startName,null);assert.equal(fallback.endName,null);assert.equal(cleared,3);
+});
+
+
+test('recovered Stop resolves owner-scoped persisted endpoints rather than empty refs',async()=>{
+  let received,owner;
+  const points={start:{lat:1,lon:2},end:{lat:3,lon:4}};
+  const screen=stopHandlers({endpoints:async(...args)=>{owner=args;return points;},names:async value=>{received=value;return {startName:'Start',endName:'End'};}});
+  await screen.handler();await screen.confirm();
+  assert.deepEqual(owner,['fixture-trip','fixture-owner']);assert.equal(JSON.stringify(received),JSON.stringify(points));
+  assert.equal(screen.opened[0][0],'From Start to End');
+});
+
+test('slow Stop names cannot reopen and overwrite an independently opened manual draft',async()=>{
+  const pending=deferred(),screen=stopHandlers({names:()=>pending.promise});
+  await screen.handler();const work=screen.confirm();await new Promise(setImmediate);
+  const edited={tripId:'fixture-trip',title:'My manual title',description:'My notes',startName:'Manual start'};
+  screen.metadataDraft.current=edited;
+  pending.resolve({startName:'Lookup start',endName:'Lookup end'});await work;
+  assert.equal(screen.metadataDraft.current,edited);assert.equal(screen.opened.length,0);
+});
+
+test('slow Stop names ignore same-token session epoch changes and abandoned trip operations',async()=>{
+  for(const change of [screen=>{screen.session.sessionEpoch=1;},screen=>{screen.session.isSessionChanging=true;},screen=>{screen.stopRequest.current=null;}]) {
+    const pending=deferred(),screen=stopHandlers({names:()=>pending.promise});
+    await screen.handler();const work=screen.confirm();await new Promise(setImmediate);change(screen);
+    pending.resolve({startName:'Old',endName:'Session'});await work;assert.equal(screen.opened.length,0);
+  }
 });

@@ -15,6 +15,7 @@ import {
 	finishTrip,
 	getPendingTrips,
 	getLocalTrip,
+	getTripEndpoints,
 	getPoiForEdit,
 	updatePoiNote,
 	tripMetadataDefaults,
@@ -480,11 +481,14 @@ export default function RecordScreen() {
 					if (stopRequest.current) return;
 					const session = { ...useAuthStore.getState() };
 					if (!tripId || !user?._id || session.user?._id !== user._id) return;
-					const operation = { token: session.token, userId: user._id };
+					const operation = { token: session.token, userId: user._id, sessionEpoch: session.sessionEpoch };
+					const previousDraft = metadataDraft.current;
 					stopRequest.current = operation;
 					const isCurrent = () => stopRequest.current === operation
 						&& useAuthStore.getState().token === operation.token
-						&& useAuthStore.getState().user?._id === operation.userId;
+						&& useAuthStore.getState().user?._id === operation.userId
+						&& useAuthStore.getState().sessionEpoch === operation.sessionEpoch
+						&& !useAuthStore.getState().isSessionChanging;
 					setIsResolvingLocation(true);
 					try {
 						await stopLocationWatcher();
@@ -504,17 +508,26 @@ export default function RecordScreen() {
 
 						let names = {};
 						try {
-							names = await getTripLocationNames({ start: firstPoint.current, end: lastPoint.current });
+							let endpoints = { start: firstPoint.current, end: lastPoint.current };
+							try {
+								const persisted = await getTripEndpoints(tripId, operation.userId);
+								endpoints = { start: persisted.start || endpoints.start, end: persisted.end || endpoints.end };
+							} catch { /* Optional metadata: retain live GPS fallback. */ }
+							if (!isCurrent()) return;
+							names = await getTripLocationNames(endpoints);
 						} catch {
 							// Missing/failed optional names must not strand a stopped recording.
 						}
 						if (!isCurrent()) return;
+						// An edit opened while naming was pending owns its manual fields.
+						if (metadataDraft.current !== previousDraft) return;
 						const startName = names?.startName || "Unknown";
 						const endName = names?.endName || "Unknown";
 						pendingNames.current = { startName, endName };
 						const title = names?.startName && names?.endName ? `From ${startName} to ${endName}` : "Recorded trip";
 						const trip = await getLocalTrip(tripId, operation.userId);
 						if (!isCurrent()) return;
+						if (metadataDraft.current !== previousDraft) return;
 						metadataDraft.current = { tripId, userId: operation.userId, token: operation.token,
 							endTime: trip.end_time, startName: trip.start_name || startName, endName: trip.end_name || endName };
 						const defaults = tripMetadataDefaults(trip, useAuthStore.getState().user?.settings || {});
@@ -615,6 +628,8 @@ export default function RecordScreen() {
 	};
 
 	const resetState = () => {
+		stopRequest.current = null;
+		setIsResolvingLocation(false);
 		setStatus("idle");
 		setTripId(null);
 		setSegment(null);

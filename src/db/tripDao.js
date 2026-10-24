@@ -152,6 +152,18 @@ export const ownsLocalTrip = async (tripId, userId) => {
 // ─────── lifecycle helpers ────────────────────────────────────────────────
 export const getLocalTrip = async (tripId, userId) => getOwnedTrip(await openDatabase(), tripId, userId);
 
+// Read only the persisted endpoints, including points recorded before recovery.
+export const getTripEndpoints = async (tripId, userId) => {
+	const db = await openDatabase();
+	await getOwnedTrip(db, tripId, userId);
+	const query = (order) => db.getAllAsync(`SELECT p.lat, p.lon FROM track_points p
+		JOIN trips t ON t.id = p.trip_id WHERE p.trip_id = ? AND t.user_id = ?
+		ORDER BY p.timestamp ${order}, p.id ${order} LIMIT 1`, [tripId, userId]);
+	const [start] = await query("ASC");
+	const [end] = await query("DESC");
+	return { start: start || null, end: end || null };
+};
+
 export const startTrip = async (userId, settings = {}) => {
 	requireUserId(userId);
 	try {
