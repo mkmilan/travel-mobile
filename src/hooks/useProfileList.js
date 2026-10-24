@@ -4,7 +4,7 @@ import useProfileContext from "@/src/hooks/useProfileContext";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 
-export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey = "") {
+export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey = "", refreshOnFocus = false) {
 	const context = useProfileContext(userId);
 	const deletionRevision = useTripSocialStore(state => state.deletionRevision);
 	const sourceReturn = useRef(null);
@@ -24,8 +24,10 @@ export default function useProfileList(userId, loadPage, pageSize = 10, cacheKey
 		} else {
 			void list.ensureLoaded();
 		}
-	}, [list]));
-	// Mark actual source navigation, not every tab switch. Ordinary focus keeps
+		return () => { if (refreshOnFocus) sourceReturn.current = list; };
+	}, [list, refreshOnFocus]));
+	// Profile tabs mark source navigation; My Trips also opts into tab-return
+	// refresh to pick up Record uploads. Ordinary profile focus keeps
 	// loaded pages and scroll position; an edit with unchanged totals still reloads.
 	const refreshOnNextFocus = () => { sourceReturn.current = list; };
 	return { ...state, refreshOnNextFocus, identity: list, initialLoading: !state.loaded, ensureLoaded: list.ensureLoaded, loadMore: list.loadMore, refresh: list.refresh, setItems: list.setItems };

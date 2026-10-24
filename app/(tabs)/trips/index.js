@@ -28,7 +28,7 @@ export default function MyTrips() {
 	const { primeCounts } = useTripSocialStore();
 	// Share the same session-scoped invalidation as feed/profile lists. A late
 	// pre-deletion page cannot repopulate this replacement list or its sheets.
-	const { identity, items, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore, refreshOnNextFocus } = useProfileList(user?._id, loadMyTrips);
+	const { identity, items, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore, refreshOnNextFocus } = useProfileList(user?._id, loadMyTrips, 10, "", true);
 	useEffect(() => { items.forEach(primeCounts); }, [items, primeCounts]);
 	const [sheet, setSheet] = useState(null);
 	const selectedTrip = sheet?.identity === identity ? sheet.trip : null;
