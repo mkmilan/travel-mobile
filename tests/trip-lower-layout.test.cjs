@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {fixture,nodes,native,theme} = require('./helpers/component-fixture.cjs');
 const tick = () => new Promise(setImmediate);
 const components = Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(name=>[name,name]));
-function screenFor(overrides={}, actor='owner') {
+function screenFor(overrides={}, actor='owner', loadTrip=async()=>{throw Error('Refresh permission denied');}) {
   let session={user:{_id:actor},token:'fixture-session',sessionEpoch:1,isAuthenticated:true};
   const calls={alerts:[],likers:[],comments:[],likes:[],photos:[],deletes:[],navigation:[]};
   const recommendations=Array.from({length:4},(_,i)=>({_id:`rec-${i}`,name:`Place ${i}`,user:{_id:'owner'},photos:[]}));
@@ -15,7 +15,7 @@ function screenFor(overrides={}, actor='owner') {
     useRouter:()=>({push:path=>calls.navigation.push(path)}),useLocalSearchParams:()=>({id:'trip'}),
     useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),useCallback:f=>f,useFocusEffect(){},
     calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
-    getTripJsonById:async()=>{throw Error('Refresh permission denied');},
+    getTripJsonById:loadTrip,
     getTripLikers:async id=>{calls.likers.push(id);return [{_id:'liker'}];},
     getTripComments:async id=>{calls.comments.push(id);return [{_id:'comment-a'},{_id:'comment-b'}];},
     likeTrip:async id=>calls.likes.push(id),unlikeTrip:async()=>{},
@@ -106,4 +106,59 @@ test('empty gallery does not conceal a known refresh failure or discard loaded p
   assert.ok(nodes(refreshed,'Text').some(node=>node.props.accessibilityRole==='alert' && node.children.includes('Refresh permission denied')));
   assert.equal(nodes(refreshed,'PhotoGallery').length,0);assert.ok(section(refreshed,'Places from this trip'));
   assert.ok(nodes(refreshed,'Pressable').some(node=>node.props.testID==='trip-refresh-retry'));
+});
+
+const photoIdentity = screen => nodes(screen.render(),'TripRecommendationCard')[0].props.photoRefreshIdentity;
+const refreshTrip = screen => nodes(screen.render(),'RecommendationDetailModal')[0].props.onRefresh();
+const deferred = () => {let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
+
+test('thumbnail retry signal advances once per successful load, not rerenders, local edits or failed refreshes',async()=>{
+  const pending=[];
+  const screen=screenFor({},'owner',()=>{const task=deferred();pending.push(task);return task.promise;});
+  const initial=photoIdentity(screen);
+  assert.equal(photoIdentity(screen),initial);
+  const failed=refreshTrip(screen);assert.equal(photoIdentity(screen),initial);
+  pending[0].reject(Error('offline'));await failed;assert.equal(photoIdentity(screen),initial);
+  const success=refreshTrip(screen);pending[1].resolve(screen.trip);await success;
+  const accepted=photoIdentity(screen);assert.notEqual(accepted,initial);assert.equal(photoIdentity(screen),accepted);
+  await nodes(screen.render(),'PhotoGallery')[0].props.onDelete('photo-a');
+  assert.equal(photoIdentity(screen),accepted);
+  const next=refreshTrip(screen);pending[2].resolve(screen.trip);await next;
+  assert.notEqual(photoIdentity(screen),accepted);
+});
+
+test('older successful response cannot grant a thumbnail retry after a newer failure or success',async()=>{
+  for(const newerFails of [true,false]) {
+    const pending=[];
+    const screen=screenFor({},'owner',()=>{const task=deferred();pending.push(task);return task.promise;});
+    const older=refreshTrip(screen),newer=refreshTrip(screen);
+    if(newerFails) pending[1].reject(Error('newer failed'));else pending[1].resolve(screen.trip);
+    await newer;const accepted=photoIdentity(screen);
+    pending[0].resolve(screen.trip);await older;
+    assert.equal(photoIdentity(screen),accepted);
+    if(newerFails) assert.ok(nodes(screen.render(),'Text').some(n=>n.children.includes('newer failed')));
+  }
+});
+
+test('old-session response and rejection cannot advance the current thumbnail retry signal',async()=>{
+  for(const fails of [true,false]) {
+    const pending=[];
+    const screen=screenFor({},'owner',()=>{const task=deferred();pending.push(task);return task.promise;});
+    const old=refreshTrip(screen);screen.switchSession();
+    const current=refreshTrip(screen);pending[1].resolve(screen.trip);await current;
+    const accepted=photoIdentity(screen);
+    if(fails) pending[0].reject(Error('old-session error'));else pending[0].resolve(screen.trip);
+    await old;assert.equal(photoIdentity(screen),accepted);
+    assert.ok(!nodes(screen.render(),'Text').some(n=>n.children.includes('old-session error')));
+  }
+});
+
+test('late same-session rejection leaves the accepted thumbnail retry identity unchanged',async()=>{
+  const pending=[];
+  const screen=screenFor({},'owner',()=>{const task=deferred();pending.push(task);return task.promise;});
+  const older=refreshTrip(screen),newer=refreshTrip(screen);
+  pending[1].resolve(screen.trip);await newer;const accepted=photoIdentity(screen);
+  pending[0].reject(Error('older failed'));await older;
+  assert.equal(photoIdentity(screen),accepted);
+  assert.equal(nodes(screen.render(),'ActivityIndicator').length,0);
 });

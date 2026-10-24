@@ -144,6 +144,11 @@ export default function TripDetailScreen() {
 		return () => backHandler.remove();
 	}, []);
 
+	// Retry thumbnails only after a successful current load, not local trip edits
+	// or failed refreshes. Older overlapping requests cannot grant a new attempt.
+	const latestTripPhotoRequest = useRef(null);
+	const tripPhotoRefreshIdentity = useRef(null);
+
 	const fetchTripDetails = async (isRefetch = false, context = renderContext) => {
 		if (!isCurrentContext(context)) return;
 		if (!context.tripId) {
@@ -151,6 +156,8 @@ export default function TripDetailScreen() {
 			setLoading(false);
 			return;
 		}
+		const photoRequest = {};
+		latestTripPhotoRequest.current = photoRequest;
 		if (!isRefetch) {
 			// Only show main loading indicator on initial load
 			setLoading(true);
@@ -165,6 +172,9 @@ export default function TripDetailScreen() {
 			// Get comment COUNT from initial trip load, but not the comment objects themselves for display
 			const initialCommentsArray = data.comments || [];
 
+			if (latestTripPhotoRequest.current === photoRequest) {
+				tripPhotoRefreshIdentity.current = photoRequest;
+			}
 			setTrip({
 				...data,
 				likesCount: likesArray.length,
@@ -781,6 +791,7 @@ export default function TripDetailScreen() {
 						<TripRecommendationCard
 							key={rec._id}
 							rec={rec}
+							photoRefreshIdentity={tripPhotoRefreshIdentity.current}
 							onPress={() => handleViewRecommendationDetail(rec)}
 							onLongPress={isOwner ? () => handleRecommendationLongPress(rec) : undefined}
 						/>

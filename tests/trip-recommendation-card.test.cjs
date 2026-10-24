@@ -74,3 +74,29 @@ test('A to B to A reuse rejects the first A callback even when URL and record ma
   screen.props.rec={_id:'rec',photos:[]};screen.render();screen.props.rec={_id:'rec',photos:[first]};screen.render();
   current.props.onError();assert.equal(nodes(screen.render(),'Image').length,1);
 });
+
+
+test('successful refresh grants one image attempt; rerenders and repeated failures stay latched',()=>{
+  const screen=card({_id:'rec',photos:[first]});screen.props.photoRefreshIdentity={};
+  const original=nodes(screen.render(),'Image')[0];original.props.onError();
+  assert.equal(nodes(screen.render(),'Image').length,0);
+  // New record objects alone (local edits or rerenders) do not grant retries.
+  screen.props.rec={_id:'rec',photos:[first]};assert.equal(nodes(screen.render(),'Image').length,0);
+  screen.props.photoRefreshIdentity={};const retry=nodes(screen.render(),'Image')[0];
+  assert.ok(retry);assert.notEqual(retry.props.key,original.props.key);
+  original.props.onError();assert.equal(nodes(screen.render(),'Image').length,1);
+  retry.props.onError();assert.equal(nodes(screen.render(),'Image').length,0);
+  original.props.onError();assert.equal(nodes(screen.render(),'Image').length,0);
+  retry.props.onError();assert.equal(nodes(screen.render(),'Image').length,0);
+  screen.props.photoRefreshIdentity={};const next=nodes(screen.render(),'Image')[0];assert.ok(next);
+  retry.props.onError();assert.equal(nodes(screen.render(),'Image').length,1);
+  nodes(screen.render(),'Pressable')[0].props.onPress();nodes(screen.render(),'Pressable')[0].props.onLongPress();
+  assert.deepEqual(screen.counts(),{presses:1,holds:1});
+});
+
+test('refresh remounts a still-loading native image and never invents an absent photo',()=>{
+  const screen=card({_id:'rec',photos:[first]});const old=nodes(screen.render(),'Image')[0];
+  screen.props.photoRefreshIdentity={};const next=nodes(screen.render(),'Image')[0];assert.notEqual(next.props.key,old.props.key);
+  old.props.onError();assert.equal(nodes(screen.render(),'Image').length,1);
+  screen.props.rec={_id:'rec',photos:[]};screen.props.photoRefreshIdentity={};assert.equal(nodes(screen.render(),'Image').length,0);
+});

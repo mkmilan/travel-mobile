@@ -6,7 +6,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import UserHeader from "../ui/UserHeader";
 
 /** Single-trip presentation; navigation and owner actions stay with the screen. */
-export default function TripRecommendationCard({ rec, onPress, onLongPress }) {
+export default function TripRecommendationCard({ rec, photoRefreshIdentity, onPress, onLongPress }) {
 	const { getPhotoSource, mediaKey } = usePhotoSource();
 	// Trip JSON supplies GridFS IDs, not public URLs. Reuse authenticated image
 	// requests; never fetch recommendation details just to render this card.
@@ -17,7 +17,13 @@ export default function TripRecommendationCard({ rec, onPress, onLongPress }) {
 	const imageKey = JSON.stringify([rec._id, mediaKey, source?.uri]);
 	const currentImage = useRef(null);
 	// A fresh identity also rejects late callbacks after A → B → A reuse.
-	if (currentImage.current?.key !== imageKey) currentImage.current = { key: imageKey };
+	if (currentImage.current?.key !== imageKey || currentImage.current?.refreshIdentity !== photoRefreshIdentity) {
+		currentImage.current = {
+			key: imageKey,
+			refreshIdentity: photoRefreshIdentity,
+			generation: (currentImage.current?.generation || 0) + 1,
+		};
+	}
 	const imageIdentity = currentImage.current;
 	const [failedImage, setFailedImage] = useState(null);
 	const showImage = source && failedImage !== imageIdentity;
@@ -41,7 +47,7 @@ export default function TripRecommendationCard({ rec, onPress, onLongPress }) {
 					</View>
 					{rec.description ? <Text numberOfLines={2} style={styles.description}>{rec.description}</Text> : null}
 				</View>
-				{showImage && <Image key={imageKey} source={source} style={styles.thumbnail}
+				{showImage && <Image key={JSON.stringify([imageKey, imageIdentity.generation])} source={source} style={styles.thumbnail}
 					resizeMode="cover" pointerEvents="none" accessible={false}
 					onError={() => {
 						if (currentImage.current === imageIdentity) setFailedImage(imageIdentity);
