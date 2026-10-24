@@ -21,7 +21,10 @@ function cleanupFixture({ reconcileWait, read, discover, initialRows } = {}) {
     useState(initial) { const [state, set] = host.hooks.useState(initial); return [state, value => { writes.push(value); set(value); }]; },
     Alert: { alert: (...args) => alerts.push(args) },
     getPendingTripDeletions: async owner => { assert.equal(owner, 'actor'); return read ? read(++reads, rows) : rows; },
-    getPendingTripDeletionsApi: async () => discover ? discover(++discoveries) : [], rememberPendingTripDeletion: async () => {},
+    getPendingTripDeletionsApi: async () => discover ? discover(++discoveries) : [], rememberPendingTripDeletion: async (id, owner) => {
+      assert.equal(owner, 'actor');
+      if (!rows.some(row => row.trip_id === id)) rows = [...rows, { trip_id: id }];
+    },
     deleteServerTrip: (id, owner, options) => { assert.equal(options.isCurrent(), true); deletes.push([id, owner, options]); return pending.promise; },
     reconcileDeletedServerTrip: async (id, owner) => { reconciles.push([id, owner]); if (reconcileWait) await reconcileWait.promise; },
     settlePendingTripDeletion: async (id, owner, value) => { settles.push([id, owner, value]); if (!value.cleanupPending) rows = rows.filter(row => row.trip_id !== id); },
@@ -181,5 +184,53 @@ test('newer discovery read wins over an older late-receipt refresh snapshot', as
   assert.equal(nodes(f.render(), 'Pressable').length, 1);
   const count = f.writes.length; refresh.resolve([]); await work;
   assert.equal(f.writes.length, count);
+  assert.equal(nodes(f.render(), 'Pressable').length, 1); assert.equal(f.deletes.length, 1);
+});
+
+
+test('stale refocused discovery cannot reinsert a settled trip but retains other pending trips and future discovery', async () => {
+  const discovery = deferred();
+  const f = cleanupFixture({ initialRows: [{ trip_id: tripId }],
+    discover: n => n === 2 ? discovery.promise : n === 3 ? [{ tripId }] : [] });
+  const { work } = await f.start(); f.host.blur(); f.host.focus(); await tick();
+  f.pending.resolve(receipt); await work;
+  assert.deepEqual(f.rows(), []); assert.equal(f.render(), null);
+  discovery.resolve([{ tripId }, { tripId: laterId }]); await tick();
+  assert.deepEqual(f.rows(), [{ trip_id: laterId }]);
+  assert.equal(nodes(f.render(), 'Pressable').length, 1); assert.equal(f.deletes.length, 1);
+  f.host.blur(); f.host.focus(); await tick();
+  assert.deepEqual(f.rows(), [{ trip_id: laterId }, { trip_id: tripId }]);
+  assert.equal(f.deletes.length, 1, 'future discovery never dispatches a deletion');
+});
+
+test('stale refocused discovery after final settlement leaves the banner cleared', async () => {
+  const discovery = deferred();
+  const f = cleanupFixture({ initialRows: [{ trip_id: tripId }], discover: n => n === 2 ? discovery.promise : [] });
+  const { work } = await f.start(); f.host.blur(); f.host.focus(); await tick();
+  f.pending.resolve(receipt); await work;
+  discovery.resolve([{ tripId }]); await tick();
+  assert.deepEqual(f.rows(), []); assert.equal(f.render(), null); assert.equal(f.deletes.length, 1);
+});
+
+test('cleanup-pending receipt does not suppress its still-legitimate discovered retry', async () => {
+  const discovery = deferred();
+  const f = cleanupFixture({ initialRows: [{ trip_id: tripId }], discover: n => n === 2 ? discovery.promise : [] });
+  const { work } = await f.start(); f.host.blur(); f.host.focus(); await tick();
+  f.pending.resolve({ ...receipt, cleanupPending: true }); await work;
+  discovery.resolve([{ tripId }]); await tick();
+  assert.deepEqual(f.rows(), [{ trip_id: tripId }]);
+  assert.equal(nodes(f.render(), 'Pressable').length, 1); assert.equal(f.deletes.length, 1);
+});
+
+test('discovery requested after settlement can record newly reported cleanup on the same focus', async () => {
+  const initialRead = deferred();
+  const f = cleanupFixture({ initialRows: [{ trip_id: tripId }],
+    read: (n, rows) => n === 3 ? initialRead.promise : rows,
+    discover: n => n === 2 ? [{ tripId }] : [] });
+  const { work } = await f.start(); f.host.blur(); f.host.focus(); await tick();
+  f.pending.resolve(receipt); await work;
+  assert.deepEqual(f.rows(), []); assert.equal(f.render(), null);
+  initialRead.resolve([{ trip_id: tripId }]); await tick();
+  assert.deepEqual(f.rows(), [{ trip_id: tripId }]);
   assert.equal(nodes(f.render(), 'Pressable').length, 1); assert.equal(f.deletes.length, 1);
 });

@@ -19,7 +19,7 @@ export default function PendingTripDeletions() {
 	};
 	const focusedCurrent = context => active.current === context && sessionCurrent(context);
 	useFocusEffect(useCallback(() => {
-		const context = { userId: user?._id, token, epoch: sessionEpoch, rowsRevision: 0 };
+		const context = { userId: user?._id, token, epoch: sessionEpoch, rowsRevision: 0, settledDuringDiscovery: new Set() };
 		active.current = context;
 		if (ENABLE_SAFE_TRIP_DELETE && context.userId && token && !isSessionChanging) {
 			(async () => {
@@ -29,9 +29,11 @@ export default function PendingTripDeletions() {
 					rows = await getPendingTripDeletions(context.userId);
 					if (!focusedCurrent(context)) return;
 					if (initialRevision === context.rowsRevision) setResult({ context, rows });
+					context.discoveryPending = true;
 					const pending = await getPendingTripDeletionsApi(context.userId, { isCurrent: () => focusedCurrent(context) });
 					for (const { tripId } of pending) {
 						if (!focusedCurrent(context)) return;
+						if (context.settledDuringDiscovery.has(tripId)) continue;
 						await rememberPendingTripDeletion(tripId, context.userId);
 					}
 					const finalRevision = ++context.rowsRevision;
@@ -44,6 +46,8 @@ export default function PendingTripDeletions() {
 							? "Could not check all pending deletions. Saved retries are kept; reopen My Trips to check again."
 							: "Could not check deletion status. Reopen My Trips to check again." };
 					});
+				} finally {
+					context.discoveryPending = false;
 				}
 			})();
 		}
@@ -71,6 +75,12 @@ export default function PendingTripDeletions() {
 					// A refocus has its own UI identity. Refresh only that active identity,
 					// without letting the abandoned retry continue deleting its other rows.
 					const current = active.current;
+					// Discovery started on this focus before the receipt may still name
+					// a now-settled trip. Only suppress that exact ID for this focus;
+					// reopening must discover any genuinely new cleanup manifest.
+					if (current && sessionCurrent(context) && focusedCurrent(current) && current.discoveryPending && receipt.cleanupPending === false) {
+						current.settledDuringDiscovery.add(tripId);
+					}
 					if (current && current !== context && sessionCurrent(context) && focusedCurrent(current)) {
 						const refreshRevision = ++current.rowsRevision;
 						try {
