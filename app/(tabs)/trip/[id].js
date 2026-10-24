@@ -1,7 +1,7 @@
 import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 // ...existing imports...
 import CommentList from "@/src/components/CommentList";
-import RecommendationCard from "@/src/components/RecommendationCard";
+import TripRecommendationCard from "@/src/components/trip/TripRecommendationCard";
 import TransportIcon from "@/src/components/TransportIcon";
 // import InteractiveTripMap from "@/src/components/map/InteractiveTripMap";
 import TripMapThumbnail from "@/src/components/TripMapThumbnail";
@@ -765,14 +765,20 @@ export default function TripDetailScreen() {
 				)}
 			</Section>}
 
+			{trip.photos?.length > 0 && (
+				<View style={styles.gallery}>
+					<PhotoGallery photoIds={trip.photos} canDelete={isOwner} onDelete={handleRemovePhoto} />
+				</View>
+			)}
+
 			<Section
-				title="Recommendations"
+				title="Places from this trip"
 				onSeeAll={recommendations.length > 3 ? () => setShowAllRecommendations(!showAllRecommendations) : undefined}
 				isExpanded={showAllRecommendations}
 			>
 				{recommendations.length > 0 ? (
 					(showAllRecommendations ? recommendations : recommendations.slice(0, 3)).map((rec) => (
-						<RecommendationCard
+						<TripRecommendationCard
 							key={rec._id}
 							rec={rec}
 							onPress={() => handleViewRecommendationDetail(rec)}
@@ -781,14 +787,6 @@ export default function TripDetailScreen() {
 					))
 				) : (
 					<Text style={styles.emptySectionText}>No recommendations added.</Text>
-				)}
-			</Section>
-
-			<Section title="Photo Gallery">
-				{trip.photos?.length ? (
-					<PhotoGallery photoIds={trip.photos} canDelete={isOwner} onDelete={handleRemovePhoto} />
-				) : (
-					<Text style={styles.emptySectionText}>No photos yet.</Text>
 				)}
 			</Section>
 
@@ -929,15 +927,15 @@ const styles = StyleSheet.create({
 		paddingVertical: theme.space.sm,
 		borderRadius: theme.radius.md,
 	},
+	gallery: { marginBottom: theme.space.lg },
 	socialBar: {
 		flexDirection: "row",
 		justifyContent: "space-around",
 		alignItems: "center",
-		paddingVertical: theme.space.md,
-		marginBottom: theme.space.lg,
-		borderTopWidth: 1,
-		borderBottomWidth: 1,
-		borderColor: theme.colors.inputBorder,
+		paddingVertical: theme.space.sm,
+		marginBottom: theme.space.md,
+		backgroundColor: theme.colors.inputBackground,
+		borderRadius: theme.radius.md,
 	},
 	likeButtonContainer: {
 		flexDirection: "row",

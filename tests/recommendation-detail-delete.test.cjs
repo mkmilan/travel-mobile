@@ -24,13 +24,13 @@ function pairedScreen(kind,remove){
   const auth=authFixture(),host=hooksFixture(),props={};let reads=0,serverRec=rec();
   const loader=async()=>{reads++;return {data:[serverRec],totalPages:1};};
   const list=createPagedList(loader),route={id:'trip',params:{}};
-  const components=Object.fromEntries(['ProfileListStatus','RecommendationCard','RecommendationDetailModal','AddRecommendationModal','CommentList','TransportIcon','TripMapThumbnail','AddCommentModal','LikersModal','MapModal','IconStatDisplay','Section','SocialButton','RefreshControl'].map(x=>[x,x]));
+  const components=Object.fromEntries(['ProfileListStatus','TripRecommendationCard','RecommendationCard','RecommendationDetailModal','AddRecommendationModal','CommentList','TransportIcon','TripMapThumbnail','AddCommentModal','LikersModal','MapModal','IconStatDisplay','Section','SocialButton','RefreshControl'].map(x=>[x,x]));
   const dependencies={...defaults,...components,...host.hooks,useAuthStore:auth.store,useNavigation:()=>({setParams(){}}),useRoute:()=>route,getRecommendationsByUser:loader,useProfileList:()=>({...list.getSnapshot(),identity:list,initialLoading:!list.getSnapshot().loaded,ensureLoaded:list.ensureLoaded,refresh:list.refresh,loadMore:list.loadMore,setItems:list.setItems}),lineStringToCoords:()=>[],getTripJsonById:async()=>{reads++;return {_id:route.id,user:{_id:'actor'},recommendations:[serverRec],likes:[],comments:[]};},useLocalSearchParams:()=>route,useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),BackHandler:{addEventListener:()=>({remove(){}})},calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',getPoiNote:()=>'',isoToDate:()=>''};
   const parent=kind==='profile'?fixture('src/screens/profile/tabs/RecommendationsTab.js','RecommendationsTab',{userId:'actor',isSelf:true},dependencies):fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{},dependencies);
   const detail=detailEnvironment(props,remove,auth);
   const renderParent=()=>host.render(()=>parent.render());
   const render=()=>{const tree=renderParent(),node=nodes(tree,'RecommendationDetailModal')[0];Object.assign(props,node?.props||{isVisible:false,recommendation:null});detail.render();return detail.render();};
-  return {...detail,host:detail.host,parentHost:host,route,list,reads:()=>reads,setServer:next=>{serverRec=next;},renderParent,render,async open(){if(kind==='profile')await list.ensureLoaded();else{renderParent();await tick();}const tree=renderParent();if(kind==='profile'){const flat=nodes(tree,'FlatList')[0];await flat.props.renderItem({item:flat.props.data[0]}).props.onPress();}else nodes(tree,'RecommendationCard')[0].props.onPress();render();},selected(){return nodes(renderParent(),'RecommendationDetailModal')[0].props.recommendation;}};
+  return {...detail,host:detail.host,parentHost:host,route,list,reads:()=>reads,setServer:next=>{serverRec=next;},renderParent,render,async open(){if(kind==='profile')await list.ensureLoaded();else{renderParent();await tick();}const tree=renderParent();if(kind==='profile'){const flat=nodes(tree,'FlatList')[0];await flat.props.renderItem({item:flat.props.data[0]}).props.onPress();}else nodes(tree,'TripRecommendationCard')[0].props.onPress();render();},selected(){return nodes(renderParent(),'RecommendationDetailModal')[0].props.recommendation;}};
 }
 
 test('actual profile and trip detail/gallery pairs retain failed thumbnail, single-flight repeated confirmations and retry confirmed deletion',async()=>{
@@ -116,5 +116,5 @@ test('trip detail resumes its read after an auth transition settles without a se
   const screen=pairedScreen('trip',async()=>{});await screen.open();const before=screen.reads();
   screen.auth.set({...screen.auth.store.getState(),sessionEpoch:1,isSessionChanging:true});screen.render();await tick();assert.equal(screen.reads(),before);
   screen.setServer({...rec(),name:'Current session place'});screen.auth.set({...screen.auth.store.getState(),isSessionChanging:false});screen.render();await tick();
-  assert.ok(screen.reads()>before);assert.equal(nodes(screen.renderParent(),'RecommendationCard')[0].props.rec.name,'Current session place');assert.equal(screen.props.isVisible,false);
+  assert.ok(screen.reads()>before);assert.equal(nodes(screen.renderParent(),'TripRecommendationCard')[0].props.rec.name,'Current session place');assert.equal(screen.props.isVisible,false);
 });

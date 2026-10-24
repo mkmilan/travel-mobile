@@ -40,7 +40,7 @@ test('recording screens hide POI creation but retain upload-only legacy repair, 
 });
 
 test('trip details hide the entire POI section for empty and populated trips and restore existing controls', () => {
-  const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(n=>[n,n]));
+  const components=Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(n=>[n,n]));
   for (const enabled of [false,true]) for (const count of [0,4]) {
     const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
       ...native,...components,ENABLE_POI_UI:enabled,theme,StyleSheet:style,getPoiNote:p=>p.note,
@@ -51,7 +51,7 @@ test('trip details hide the entire POI section for empty and populated trips and
     screen.setState(0,{_id:'trip',user:session.user,pointsOfInterest:Array.from({length:count},(_,i)=>({_id:`p${i}`,note:'Saved'}))});screen.setState(1,false);
     const sections=nodes(screen.render(),'Section');
     assert.equal(sections.some(n=>n.props.title==='Points of Interest'),enabled);
-    assert.ok(sections.some(n=>n.props.title==='Recommendations'));
+    assert.ok(sections.some(n=>n.props.title==='Places from this trip'));
     if(enabled&&count)assert.equal(typeof sections.find(n=>n.props.title==='Points of Interest').props.onSeeAll,'function');
   }
 });
