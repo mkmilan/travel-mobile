@@ -68,8 +68,8 @@ test('screen saves selected transport key and DAO retains metadata in SQL and up
   let sql,params;
   const dao=load('src/db/tripDao.js','({finishTrip,createTripPayload})',{getActiveTrip:async()=>({}),openDatabase:async()=>({getAllAsync:async()=>[{status:'stopped'}],runAsync:async(query,values)=>{sql=query;params=values;}})});
   await dao.finishTrip(saved.id,saved.data,'owner');
-  assert.match(sql,/UPDATE trips/); assert.equal(JSON.stringify(params.slice(1)),JSON.stringify(['Title','Description','A','B','walking','private','fixture-trip','owner']));
-  const payload=dao.createTripPayload({title:params[1],description:params[2],start_name:params[3],end_name:params[4],default_transport_mode:params[5],default_trip_visibility:params[6]},[]);
+  assert.match(sql,/UPDATE trips/); assert.equal(JSON.stringify(params.slice(1)),JSON.stringify(['Title','Description','A','A','B','B','walking','private','fixture-trip','owner']));
+  const payload=dao.createTripPayload({title:params[1],description:params[2],start_name:params[3],end_name:params[5],default_transport_mode:params[7],default_trip_visibility:params[8]},[]);
   assert.equal(payload.defaultTravelMode,'walking');assert.equal(payload.defaultTripVisibility,'private');assert.equal(payload.description,'Description');assert.equal(payload.startLocationName,'A');assert.equal(payload.endLocationName,'B');
 });
 

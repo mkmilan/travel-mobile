@@ -16,6 +16,7 @@ import {
 	getPendingTrips,
 	getLocalTrip,
 	getTripEndpoints,
+	rememberTripLocationNames,
 	getPoiForEdit,
 	updatePoiNote,
 	tripMetadataDefaults,
@@ -518,6 +519,10 @@ export default function RecordScreen() {
 						} catch {
 							// Missing/failed optional names must not strand a stopped recording.
 						}
+						if (!isCurrent()) return;
+						try {
+							await rememberTripLocationNames(tripId, names, operation.userId, isCurrent);
+						} catch { /* Optional persistence must not block the details form or Save. */ }
 						if (!isCurrent()) return;
 						// An edit opened while naming was pending owns its manual fields.
 						if (metadataDraft.current !== previousDraft) return;

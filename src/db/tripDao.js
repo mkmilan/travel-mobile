@@ -196,6 +196,24 @@ export const stopTrip = async (tripId, endTime, userId) => {
 	await db.runAsync(`UPDATE trips SET status = 'stopped', end_time = COALESCE(end_time, ?), metadata_confirmed = CASE WHEN metadata_confirmed IS NULL AND status IN ('recording','paused') THEN -1 ELSE metadata_confirmed END WHERE id = ? AND user_id = ? AND status IN ('recording','paused','stopped')`, [endTime, tripId, userId]);
 };
 
+// Optional endpoint labels survive Cancel/relaunch without confirming visibility or
+// transport choices. Fill only missing labels; manual saves and frozen requests win.
+export const rememberTripLocationNames = async (tripId, names, userId, isCurrent = () => true) => {
+	const clean = value => typeof value === "string" && value.trim() && value.trim().toLowerCase() !== "unknown" ? value.trim() : null;
+	const startName = clean(names?.startName), endName = clean(names?.endName);
+	if ((!startName && !endName) || !isCurrent()) return;
+	const db = await openDatabase();
+	const trip = await getOwnedTrip(db, tripId, userId);
+	await requireStoppedTrip(trip);
+	if (!isCurrent() || hasConfirmedTripMetadata(trip) || trip.upload_payload) return;
+	await db.runAsync(`UPDATE trips
+		SET start_name = CASE WHEN start_name IS NULL OR TRIM(start_name) = '' THEN COALESCE(?, start_name) ELSE start_name END,
+			end_name = CASE WHEN end_name IS NULL OR TRIM(end_name) = '' THEN COALESCE(?, end_name) ELSE end_name END
+		WHERE id = ? AND user_id = ? AND status = 'stopped'
+			AND COALESCE(metadata_confirmed, -1) != 1 AND upload_payload IS NULL`,
+		[startName, endName, tripId, userId]);
+};
+
 export const finishTrip = async (
 	tripId,
 	{ endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility },
@@ -206,19 +224,23 @@ export const finishTrip = async (
 	await requireStoppedTrip(trip);
 	if (trip.upload_payload) throw new Error("Upload already started. Retry the saved upload, then edit the online trip.");
 	if (!TRIP_MODES.includes(defaultTransportMode) || !TRIP_VISIBILITIES.includes(defaultTripVisibility)) throw metadataRequired();
+	// A details draft can open before optional endpoint naming settles. Keep its
+	// manual text, but do not replace subsequently resolved labels with Unknown.
+	// Read the fallback in UPDATE itself so an optional write after the row read wins.
+	const knownName = value => typeof value === "string" && value.trim() && value.trim().toLowerCase() !== "unknown" ? value : null;
 	await db.runAsync(
 		`UPDATE trips
        SET status = 'stopped',
            end_time = ?,
            title = ?,
            description = ?,
-           start_name = ?,
-           end_name = ?,
+           start_name = COALESCE(?, NULLIF(start_name, ''), ?),
+           end_name = COALESCE(?, NULLIF(end_name, ''), ?),
            default_transport_mode = ?,
            default_trip_visibility = ?,
            metadata_confirmed = 1
      WHERE id = ? AND user_id = ? AND status = 'stopped'`,
-		[endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility, tripId, userId]
+		[endTime, title, description, knownName(startName), startName, knownName(endName), endName, defaultTransportMode, defaultTripVisibility, tripId, userId]
 	);
 };
 

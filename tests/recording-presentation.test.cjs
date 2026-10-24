@@ -14,10 +14,11 @@ const texts = tree => nodes(tree,'Text').flatMap(n=>n.children).join(' ');
 const flatten = styles => Object.assign({}, ...[styles].flat(Infinity).filter(Boolean));
 
 // Baseline includes 410 tombstone handling (trip-delete.test.cjs), plus bounded
-// endpoint naming and stale-draft/session guards (recording-forms.test.cjs).
+// endpoint naming and stale-draft/session guards (recording-forms.test.cjs), plus
+// reviewed optional endpoint persistence (recording-name-persistence.test.cjs).
 test('recording logic matches reviewed lifecycle and terminal-deletion-response baseline', () => {
   const source=read(file),logic=source.slice(source.indexOf('//5000,'),source.indexOf('// ─────── UI'));
-  assert.equal(createHash('sha256').update(logic).digest('hex'),'a8af4c91bd1597201518f982d7feda1a1645079ea4e551f94dc886e2aeb35afa');
+  assert.equal(createHash('sha256').update(logic).digest('hex'),'3428794a461cd222dacc4f46895b557711b844aaa250e0cc6d3acce4abdd58b9');
 });
 
 test('all recording states have clear labeled controls and a single scrolling surface', () => {
