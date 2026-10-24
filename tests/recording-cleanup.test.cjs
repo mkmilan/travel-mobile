@@ -22,7 +22,7 @@ function harness({db,active={},running=true,fail=true,sessionState=session(),ext
       runMigrations:db?.migrate||(async()=>{}),getPendingTrips:db?.dao.getPendingTrips||(async()=>[]),
       getLocalTrip:db?.dao.getLocalTrip||(async()=>{throw Error('missing');}),ownsLocalTrip:db?.dao.ownsLocalTrip||(async()=>false),
       ...markers,Location:location,TASK_NAME:'task',toast:n=>notices.push(n),
-      CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',
+      RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',
       ...extra,...overrides,
     });
     screen.render();const cleanup=effects[0]();
@@ -45,14 +45,14 @@ test('failed legacy cleanup survives remount with Retry Stop, blocks Start and p
   const {f,id}=await savedFixture();try {
     const before=await snapshot(f),h=harness({db:f,active:{...original,tripId:id}});
     let screen=h.mount();await tick();
-    assert.equal(screen.status(),'Status: CLEANUP_REQUIRED');assert.ok(screen.retry());assert.equal(screen.retry().props.disabled,false);
-    assert.equal(nodes(screen.tree(),'CircleButton').some(n=>n.props.icon==='play'),false);
+    assert.equal(screen.status(),'Status: GPS cleanup needed');assert.ok(screen.retry());assert.equal(screen.retry().props.disabled,false);
+    assert.equal(nodes(screen.tree(),'RecordingButton').some(n=>n.props.icon==='play'),false);
     assert.equal(h.state.active.tripId,undefined);assert.ok(h.state.active.cleanupId);assert.equal(h.state.running,true);
     await assert.rejects(h.markers.setActiveTrip('new','new-s','owner'),/Stop/);
     screen.cleanup();screen=h.mount();await tick();assert.equal(h.state.stops,2);assert.ok(screen.retry());
     h.state.fail=false;await screen.retry().props.onPress();
     assert.equal(h.state.stops,3);assert.equal(h.state.running,false);assert.deepEqual(h.state.active,{});
-    assert.equal(screen.status(),'Status: IDLE');assert.equal(screen.notices.at(-1).title,'Stale recording stopped');
+    assert.equal(screen.status(),'Status: Not recording');assert.equal(screen.notices.at(-1).title,'Stale recording stopped');
     assert.equal(await snapshot(f),before);screen.cleanup();
   }finally{f.close();}
 });
@@ -63,7 +63,7 @@ test('build-4 missing local row still stops its exact old collector without recr
       const id=await f.dao.startTrip('owner');await f.db.runAsync('DELETE FROM trips WHERE id=?',[id]);
       const before=await snapshot(f);const h=harness({db:f,active:{...original,tripId:id},fail:false,running});
       const screen=h.mount();await tick();assert.equal(h.state.stops,running?1:0);assert.equal(h.state.running,false);
-      assert.deepEqual(h.state.active,{});assert.equal(screen.status(),'Status: IDLE');assert.equal(await snapshot(f),before);screen.cleanup();
+      assert.deepEqual(h.state.active,{});assert.equal(screen.status(),'Status: Not recording');assert.equal(await snapshot(f),before);screen.cleanup();
     }finally{f.close();}
   }
 });
@@ -71,14 +71,14 @@ test('build-4 missing local row still stops its exact old collector without recr
 test('markerless running collector has the same visible fail/retry path; truly inactive startup remains idle',async()=>{
   const h=harness();const screen=h.mount();await tick();
   assert.ok(screen.retry());assert.ok(h.state.active.cleanupId);assert.equal(h.state.active.tripId,undefined);
-  h.state.fail=false;await screen.retry().props.onPress();assert.equal(screen.status(),'Status: IDLE');assert.equal(h.state.stops,2);screen.cleanup();
-  const inactive=harness({running:false,fail:false}),other=inactive.mount();await tick();assert.equal(other.status(),'Status: IDLE');assert.equal(inactive.state.stops,0);assert.equal(other.notices.length,0);other.cleanup();
+  h.state.fail=false;await screen.retry().props.onPress();assert.equal(screen.status(),'Status: Not recording');assert.equal(h.state.stops,2);screen.cleanup();
+  const inactive=harness({running:false,fail:false}),other=inactive.mount();await tick();assert.equal(other.status(),'Status: Not recording');assert.equal(inactive.state.stops,0);assert.equal(other.notices.length,0);other.cleanup();
 });
 
 test('different-owner marker is not stopped or cleared and does not expose trip details',async()=>{
   const h=harness({active:{...original,userId:'other'},extra:{getLocalTrip:async()=>{throw Error('must not read');}}});
   const screen=h.mount();await tick();assert.equal(h.state.stops,0);assert.deepEqual(h.state.active,{...original,userId:'other'});
-  assert.equal(screen.status(),'Status: CLEANUP_REQUIRED');assert.match(screen.notices.at(-1).msg,/different account/);screen.cleanup();
+  assert.equal(screen.status(),'Status: GPS cleanup needed');assert.match(screen.notices.at(-1).msg,/different account/);screen.cleanup();
 });
 
 test('cleanup never replaces an already-newer recording or an asynchronously replaced marker',async()=>{
@@ -105,7 +105,7 @@ test('unmount before native cleanup dispatch suppresses stop and leaves a retrya
   const wait=deferred(),h=harness({active:{...original},fail:false});let checks=0;
   h.location.hasStartedLocationUpdatesAsync=async()=>{checks++;if(checks===2)await wait.promise;return h.state.running;};
   const screen=h.mount();await tick();screen.cleanup();wait.resolve();await tick();assert.equal(h.state.stops,0);assert.ok(h.state.active.cleanupId);
-  const next=h.mount();await tick();assert.equal(h.state.stops,1);assert.equal(next.status(),'Status: IDLE');next.cleanup();
+  const next=h.mount();await tick();assert.equal(h.state.stops,1);assert.equal(next.status(),'Status: Not recording');next.cleanup();
 });
 
 test('hung native Stop is bounded, retained and deduplicated across retries; Start and ordinary clear cannot bypass it',async()=>{
@@ -121,13 +121,13 @@ test('hung native Stop is bounded, retained and deduplicated across retries; Sta
 
 test('resolved native Stop is not reported inactive if the task still reports running',async()=>{
   const h=harness({active:{...original},fail:false});h.location.stopLocationUpdatesAsync=async()=>{h.state.stops++;};
-  const screen=h.mount();await tick();assert.equal(screen.status(),'Status: CLEANUP_REQUIRED');assert.ok(h.state.active.cleanupId);
+  const screen=h.mount();await tick();assert.equal(screen.status(),'Status: GPS cleanup needed');assert.ok(h.state.active.cleanupId);
   assert.match(screen.notices.at(-1).msg,/still running/);assert.equal(screen.notices.some(n=>n.title==='Stale recording stopped'),false);screen.cleanup();
 });
 
 test('unreadable marker and rejected native inspection stay visibly blocked rather than treating unknown as inactive',async()=>{
   for(const overrides of [{getActiveTrip:async()=>{throw Error('Storage unavailable');}},{readRecordingTaskState:async()=>{throw Error('Native unavailable');}}]) {
-    const h=harness({active:{...original}}),screen=h.mount(overrides);await tick();assert.equal(screen.status(),'Status: CLEANUP_REQUIRED');
+    const h=harness({active:{...original}}),screen=h.mount(overrides);await tick();assert.equal(screen.status(),'Status: GPS cleanup needed');
     assert.equal(h.state.stops,0);assert.deepEqual(h.state.active,original);assert.ok(screen.retry());screen.cleanup();
   }
 });
@@ -158,10 +158,10 @@ test('failed Start plus failed shutdown removes foreground watcher, exposes Retr
   const f=await sqliteFixture();try {
     const h=harness({db:f,running:false,fail:true,extra:{startTrip:f.dao.startTrip,startSegment:()=> 'segment',ensureRecordingPermissions:async()=>true}});
     h.location.startLocationUpdatesAsync=async()=>{h.state.running=true;throw Error('Start failed after native launch');};
-    const screen=h.mount();await tick();const start=nodes(screen.tree(),'CircleButton').find(n=>n.props.icon==='play').props.onPress;
-    await start();assert.equal(screen.status(),'Status: CLEANUP_REQUIRED');assert.equal(h.state.watcherRemovals,1);assert.ok(h.state.active.cleanupId);
+    const screen=h.mount();await tick();const start=nodes(screen.tree(),'RecordingButton').find(n=>n.props.icon==='play').props.onPress;
+    await start();assert.equal(screen.status(),'Status: GPS cleanup needed');assert.equal(h.state.watcherRemovals,1);assert.ok(h.state.active.cleanupId);
     await start();assert.equal((await f.db.getAllAsync('SELECT * FROM trips')).length,1);assert.equal(h.state.stops,1);
-    const before=await snapshot(f);h.state.fail=false;await screen.retry().props.onPress();assert.equal(screen.status(),'Status: IDLE');assert.equal(await snapshot(f),before);screen.cleanup();
+    const before=await snapshot(f);h.state.fail=false;await screen.retry().props.onPress();assert.equal(screen.status(),'Status: Not recording');assert.equal(await snapshot(f),before);screen.cleanup();
   }finally{f.close();}
 });
 
@@ -169,7 +169,7 @@ test('failed row lookup is not treated as a deleted legacy row when ownership st
   const f=await sqliteFixture();try {
     const id=await f.dao.startTrip('owner');const h=harness({db:f,active:{...original,tripId:id}});
     const screen=h.mount({getLocalTrip:async()=>{throw Error('SQLite read failed');}});await tick();
-    assert.equal(h.state.stops,0);assert.equal(h.state.active.tripId,id);assert.equal(screen.status(),'Status: CLEANUP_REQUIRED');
+    assert.equal(h.state.stops,0);assert.equal(h.state.active.tripId,id);assert.equal(screen.status(),'Status: GPS cleanup needed');
     assert.equal(screen.notices.at(-1).msg,'SQLite read failed');screen.cleanup();
   }finally{f.close();}
 });
@@ -178,8 +178,8 @@ test('native inspection timeout exposes Retry Stop without accepting a late unkn
   const timers=[],wait=deferred();const h=harness({markerExtra:{setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){}}});
   h.location.hasStartedLocationUpdatesAsync=()=>wait.promise;
   const screen=h.mount();await tick();timers.shift()();await tick();
-  assert.equal(screen.status(),'Status: CLEANUP_REQUIRED');assert.equal(screen.retry().props.disabled,false);assert.equal(h.state.stops,0);
-  wait.resolve(false);await tick();assert.equal(screen.status(),'Status: CLEANUP_REQUIRED');screen.cleanup();
+  assert.equal(screen.status(),'Status: GPS cleanup needed');assert.equal(screen.retry().props.disabled,false);assert.equal(h.state.stops,0);
+  wait.resolve(false);await tick();assert.equal(screen.status(),'Status: GPS cleanup needed');screen.cleanup();
 });
 
 test('logout takes over cancelled screen cleanup but never retries against a newer owner marker',async()=>{

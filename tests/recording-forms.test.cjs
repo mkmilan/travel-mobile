@@ -133,7 +133,7 @@ test('Cancel returns to a stopped-screen action that reopens the same trip draft
   nodes(tree).find(node=>node.props.label==='bicycle').props.onPress();nodes(tree).find(node=>node.props.label==='private').props.onPress();
   tree=form.render();tree.props.onClose();assert.equal(form.render().props.visible,false);
   const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {
-    ...native,theme,useAuthStore:Object.assign(select=>select({user:{_id:'fixture'}}),{getState:()=>({user:{_id:'fixture'},token:'token'})}),getLocalTrip:async()=>({status:'stopped'}),...tripTools,CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',Ionicons:'Ionicons',StyleSheet:{create:styles=>styles,absoluteFillObject:{}},
+    ...native,theme,useAuthStore:Object.assign(select=>select({user:{_id:'fixture'}}),{getState:()=>({user:{_id:'fixture'},token:'token'})}),getLocalTrip:async()=>({status:'stopped'}),...tripTools,RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',Ionicons:'Ionicons',StyleSheet:{create:styles=>styles,absoluteFillObject:{}},
   });
   screen.setState(0,'stopped');screen.setState(1,'trip');screen.setState(19,{current:{tripId:'trip',userId:'fixture',token:'token'}});const screenTree=screen.render();
   nodes(screenTree,'TripSaveModal')[0].props.ref.current=form.ref.current;

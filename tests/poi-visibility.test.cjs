@@ -25,10 +25,10 @@ test('recording screens hide POI creation but retain upload-only legacy repair, 
     const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {
       ...native,ENABLE_POI_UI:enabled,theme,StyleSheet:style,
       useAuthStore:Object.assign(select=>select(session),{getState:()=>session}),
-      CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',
+      RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',
     });
     screen.setState(0,status);screen.setState(7,false);
-    const tree=screen.render(),buttons=nodes(tree,'CircleButton').map(n=>n.props.icon);
+    const tree=screen.render(),buttons=nodes(tree,'RecordingButton').map(n=>n.props.icon);
     assert.equal(nodes(tree,'AddPoiModal').length,enabled?2:1);
     assert.equal(nodes(tree,'AddRecommendationModal').length,1);
     if(['recording','paused'].includes(status)) {

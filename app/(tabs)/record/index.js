@@ -1,6 +1,7 @@
 import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 import { TASK_NAME } from "@/src/background/TripLocationTask";
-import CircleButton from "@/src/components/CircleButton";
+import RecordingButton from "@/src/components/RecordingButton";
+import recordingHero from "@/assets/images/recording-journey.png";
 import AddPoiModal from "@/src/components/modals/AddPoiModal";
 import AddRecommendationModal from "@/src/components/modals/AddRecommendationModal";
 import TripSaveModal from "@/src/components/modals/TripSaveModal";
@@ -36,7 +37,7 @@ import { ensureRecordingPermissions } from "@/src/utils/recordingPermissions";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 //5000, 10 = 5sec 10 meters
 const TIME_INTERVAL = 5000;
@@ -715,7 +716,6 @@ export default function RecordScreen() {
 	// ─────── UI ──────────────────────────────────────────────────────────────
 	return (
 		<View style={styles.container}>
-			<Text style={styles.status}>Status: {status.toUpperCase()}</Text>
 
 			{isResolvingLocation && (
 				<View style={styles.loadingOverlay}>
@@ -732,81 +732,97 @@ export default function RecordScreen() {
 					</View>
 				)}
 
-			{status === "cleanup_required" && (
-				<View style={{ alignSelf: "stretch", marginBottom: 24 }}>
-					<Text accessibilityRole="alert" style={{ color: theme.colors.text, marginBottom: 12 }}>
-						{recoveryError || "Stopping an unfinished GPS collector. Your saved trip data will not be changed."}
+			<FlatList
+				contentContainerStyle={styles.content}
+				keyboardShouldPersistTaps="handled"
+				data={pending}
+				keyExtractor={(t) => t.id}
+				ListHeaderComponent={<>
+					<Image source={recordingHero} resizeMode="cover" accessible={false}
+						style={[styles.hero, status !== "idle" && styles.heroCompact]} />
+					<Text accessibilityRole="header" style={styles.title}>
+						{status === "stopped" ? "Saved on this device" : "Record your trip"}
 					</Text>
-					<TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry Stop" disabled={isRestoring}
-						onPress={() => recoveryRequest.current?.()}>
-						<Text style={{ color: theme.colors.link }}>{isRestoring ? "Checking GPS…" : "Retry Stop"}</Text>
-					</TouchableOpacity>
-				</View>
-			)}
+					<Text testID="recording-status" accessibilityLiveRegion="polite" style={styles.status}>
+						Status: {({ idle: "Not recording", recording: "Recording", paused: "Paused", stopped: "Saved locally", cleanup_required: "GPS cleanup needed" })[status]}
+					</Text>
+					<Text style={styles.description}>
+						{status === "idle" ? (isRestoring ? "Checking for an unfinished recording…" : "Record your route on this device. Upload each trip later when you’re connected.")
+							: status === "recording" ? "Your route is being recorded on this device."
+							: status === "paused" ? "Route recording is paused. Resume when you’re ready."
+							: status === "stopped" ? "Your recorded route is saved locally. Review the trip details, then upload when you’re connected."
+							: "Stop the unfinished GPS collector before recording again."}
+					</Text>
+					{status === "cleanup_required" && (
+						<View style={{ alignSelf: "stretch", marginBottom: 24 }}>
+							<Text accessibilityRole="alert" style={{ color: theme.colors.text, marginBottom: 12 }}>
+								{recoveryError || "Stopping an unfinished GPS collector. Your saved trip data will not be changed."}
+							</Text>
+							<TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry Stop" disabled={isRestoring}
+								onPress={() => recoveryRequest.current?.()} style={[styles.secondaryButton, isRestoring && styles.disabled]}>
+								<Text style={{ color: theme.colors.link }}>{isRestoring ? "Checking GPS…" : "Retry Stop"}</Text>
+							</TouchableOpacity>
+						</View>
+					)}
 
-			{status === "idle" && !isRestoring && <CircleButton icon="play" color="green" onPress={handleStart} />}
+					{status === "idle" && !isRestoring && <RecordingButton icon="play" label="Start recording" onPress={handleStart} />}
 
-			{(status === "recording" || status === "paused") && (
-				<>
-					<View style={styles.row}>
-						<CircleButton
-							icon={status === "recording" ? "pause" : "play"}
-							color={theme.colors.secondary}
-							onPress={handlePauseResume}
-						/>
-						<CircleButton icon="stop" color={theme.colors.error} onPress={handleStop} />
-					</View>
-					{/* ── NEW secondary buttons ───────────────── */}
-					<View style={styles.row}>
-						{ENABLE_POI_UI && <CircleButton
-							icon="location-sharp"
-							color={theme.colors.info}
-							onPress={handleAddPoi}
-							// style={{ marginLeft: theme.space.md }}
-						/>}
-						{/* <Text style={styles.actionButtonText}>Add POI</Text> */}
-						<CircleButton icon="star" color={theme.colors.warning} onPress={handleOpenRecommendationModal} />
-						{/* <Text style={styles.actionButtonText}>Add Recommendation</Text> */}
-					</View>
-				</>
-			)}
+					{(status === "recording" || status === "paused") && (
+						<>
+							<View style={styles.row}>
+								<RecordingButton
+									icon={status === "recording" ? "pause" : "play"}
+									label={status === "recording" ? "Pause recording" : "Resume recording"}
+									onPress={handlePauseResume}
+								/>
+								<RecordingButton icon="stop" label="Stop recording" danger onPress={handleStop} />
+							</View>
+							<View style={styles.row}>
+								{ENABLE_POI_UI && <RecordingButton
+									icon="location-sharp"
+									label="Add POI" secondary
+									onPress={handleAddPoi}
+								/>}
+								<RecordingButton icon="star" label="Add recommendation" secondary onPress={handleOpenRecommendationModal} />
+							</View>
+						</>
+					)}
 
-			{status === "stopped" && (
-				<>
-					<TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit trip details" onPress={() => handleEditDetails().catch((error) => toast({ type: "danger", title: "Could not open trip details", msg: error.message }))} disabled={isUploading} style={{ marginBottom: 24 }}>
-						<Text style={{ color: theme.colors.link, fontSize: 16 }}>Edit trip details</Text>
-					</TouchableOpacity>
-					<CircleButton icon="cloud-upload" color="green" onPress={() => handleUpload()} />
-					<TouchableOpacity onPress={resetState} style={{ marginTop: 24 }} disabled={isUploading}>
-						<Text style={{ color: theme.colors.link, fontSize: 16 }}>Start a new trip</Text>
-					</TouchableOpacity>
-				</>
-			)}
+					{status === "stopped" && (
+						<>
+							<TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit trip details" onPress={() => handleEditDetails().catch((error) => toast({ type: "danger", title: "Could not open trip details", msg: error.message }))} disabled={isUploading} style={[styles.secondaryButton, isUploading && styles.disabled]}>
+								<Text style={{ color: theme.colors.link, fontSize: 16 }}>Edit trip details</Text>
+							</TouchableOpacity>
+							<RecordingButton icon="cloud-upload" label="Upload trip" onPress={() => handleUpload()} />
+							<TouchableOpacity accessibilityRole="button" onPress={resetState} style={[styles.secondaryButton, isUploading && styles.disabled]} disabled={isUploading}>
+								<Text style={{ color: theme.colors.link, fontSize: 16 }}>New trip</Text>
+							</TouchableOpacity>
+						</>
+					)}
 
-			{/* local trips still on device */}
-			{pending.length > 0 && (
-				<View style={{ alignSelf: "stretch", marginTop: 32 }}>
-					<Text style={{ color: theme.colors.text, marginBottom: 6 }}>Trips on device ({pending.length})</Text>
+					{/* local trips still on device */}
+					{pending.length > 0 && (
+						<View style={styles.pendingSection}>
+							<Text accessibilityRole="header" style={styles.sectionTitle}>Trips on this device ({pending.length})</Text>
+							<Text style={styles.listHint}>Upload trips individually when connected.</Text>
 
-					<FlatList
-						data={pending}
-						keyExtractor={(t) => t.id}
-						style={{ maxHeight: 260 }}
-						renderItem={({ item }) => (
-							<PendingRow
-								item={item}
-								isUploading={isUploading}
-								uploadingTripId={uploadingTripId}
-								onUpload={() => handleUpload(item.id)}
-								onDelete={() => handleDelete(item.id)}
-								onRecover={() => handleRecover(item.id)}
-								isActive={isRestoring || status === "cleanup_required" || (item.id === tripId && ["recording", "paused"].includes(status))}
-								canRecover={!isRestoring && !["recording", "paused", "cleanup_required"].includes(status)}
-							/>
-						)}
+						</View>
+					)}
+
+				</>}
+				renderItem={({ item }) => (
+					<PendingRow
+						item={item}
+						isUploading={isUploading}
+						uploadingTripId={uploadingTripId}
+						onUpload={() => handleUpload(item.id)}
+						onDelete={() => handleDelete(item.id)}
+						onRecover={() => handleRecover(item.id)}
+						isActive={isRestoring || status === "cleanup_required" || (item.id === tripId && ["recording", "paused"].includes(status))}
+						canRecover={!isRestoring && !["recording", "paused", "cleanup_required"].includes(status)}
 					/>
-				</View>
-			)}
+				)}
+			/>
 
 			<TripSaveModal key={user?._id || "signed-out"} ref={sheetRef} onConfirm={handleSaveMeta} />
 			{ENABLE_POI_UI && <AddPoiModal key={`add-poi-${user?._id || "signed-out"}`} ref={poiModalRef} onSubmit={handlePoiSubmit} />}
@@ -830,78 +846,68 @@ const PendingRow = ({ item, onUpload, onDelete, onRecover, isActive, canRecover,
 	const deleteButtonDisabled = isUploading || isActive || unfinished; // Disable delete if any upload is in progress
 
 	return (
-		<View style={{ flexDirection: "row", paddingVertical: 4, alignItems: "center" }}>
-			<Text style={{ color: theme.colors.text, flex: 1 }}>
-				{new Date(item.start_time).toLocaleDateString()} · {item.pointsCount} pts{unfinished ? " · unfinished" : ""}
+		<View style={styles.pendingCard}>
+			<Text style={styles.pendingTitle}>{item.title || "Recorded trip"}</Text>
+			<Text style={styles.pendingMeta}>
+				{new Date(item.start_time).toLocaleDateString()} · {item.pointsCount} points
 			</Text>
+			<Text style={styles.pendingMeta}>{unfinished ? "Unfinished recording" : "Saved on this device"}</Text>
+			<View style={styles.pendingActions}>
 			{unfinished && !isActive && canRecover && !isUploading && (
-				<TouchableOpacity accessibilityLabel="Recover recording" onPress={onRecover} style={{ marginRight: 16 }}>
+				<TouchableOpacity accessibilityRole="button" accessibilityLabel="Recover recording" onPress={onRecover} style={styles.rowAction}>
 					<Text style={{ color: theme.colors.link }}>Recover</Text>
 				</TouchableOpacity>
 			)}
 			{isCurrentlyUploadingThisItem ? (
-				<ActivityIndicator size="small" color="green" style={{ marginRight: 16 }} />
+				<View style={styles.rowAction} accessibilityLiveRegion="polite">
+					<ActivityIndicator size="small" color={theme.colors.primary} />
+					<Text style={styles.pendingMeta}>Uploading…</Text>
+				</View>
 			) : (
-				<Ionicons
-					name="cloud-upload"
-					size={20}
-					color={uploadButtonDisabled ? theme.colors.disabled : "green"}
-					style={{ marginRight: 16 }}
-					onPress={uploadButtonDisabled ? null : onUpload}
-				/>
+				<TouchableOpacity accessibilityRole="button" accessibilityLabel="Upload trip" disabled={uploadButtonDisabled}
+					style={[styles.rowAction, uploadButtonDisabled && styles.disabled]} onPress={uploadButtonDisabled ? null : onUpload}>
+					<Ionicons name="cloud-upload" size={20} color={theme.colors.primary} />
+					<Text style={{ color: theme.colors.primary }}>Upload</Text>
+				</TouchableOpacity>
 			)}
-			<Ionicons
-				name="trash"
-				size={20}
-				color={deleteButtonDisabled ? theme.colors.disabled : "#D14343"}
-				onPress={deleteButtonDisabled ? null : onDelete}
-			/>
+			<TouchableOpacity accessibilityRole="button" accessibilityLabel="Delete local trip" disabled={deleteButtonDisabled}
+				style={[styles.rowAction, deleteButtonDisabled && styles.disabled]} onPress={deleteButtonDisabled ? null : onDelete}>
+				<Ionicons name="trash" size={20} color={theme.colors.error} />
+				<Text style={{ color: theme.colors.error }}>Delete</Text>
+			</TouchableOpacity>
+			</View>
 		</View>
 	);
 };
 
 // ─────── styles ────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-	container: {
-		flex: 1,
-		backgroundColor: theme.colors.background,
-		justifyContent: "center",
-		alignItems: "center",
-		padding: theme.space.lg,
-	},
-	status: {
-		fontSize: 20,
-		marginBottom: theme.space.lg,
-		color: theme.colors.text,
-	},
-	// row: { flexDirection: "row", gap: theme.space.md, flexWrap: "wrap" },
-	// circle: { borderRadius: 50, padding: theme.space.md },
+	container: { flex: 1, backgroundColor: theme.colors.background },
+	content: { padding: theme.space.lg, paddingBottom: theme.space.xl * 2, width: "100%", maxWidth: 640, alignSelf: "center" },
+	hero: { width: "100%", height: 180, borderRadius: theme.radius.lg, marginBottom: theme.space.lg },
+	heroCompact: { height: 112 },
+	title: { color: theme.colors.text, fontSize: 28, fontWeight: "700", marginBottom: theme.space.sm },
+	status: { color: theme.colors.primary, fontSize: theme.fontSize.md, fontWeight: "600", marginBottom: theme.space.sm },
+	description: { color: theme.colors.textMuted, fontSize: theme.fontSize.md, lineHeight: 24, marginBottom: theme.space.lg },
+	row: { gap: theme.space.md, marginBottom: theme.space.md },
+	secondaryButton: { minHeight: 48, justifyContent: "center", alignItems: "center", padding: theme.space.md,
+		borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.inputBorder, backgroundColor: theme.colors.inputBackground, marginVertical: theme.space.sm },
+	disabled: { opacity: 0.5 },
+	pendingSection: { marginTop: theme.space.xl },
+	sectionTitle: { color: theme.colors.text, fontSize: theme.fontSize.lg, fontWeight: "600", marginBottom: theme.space.xs },
+	listHint: { color: theme.colors.textMuted, fontSize: theme.fontSize.sm, marginBottom: theme.space.md },
+	pendingCard: { backgroundColor: theme.colors.inputBackground, borderWidth: 1, borderColor: theme.colors.inputBorder,
+		borderRadius: theme.radius.md, padding: theme.space.md, marginBottom: theme.space.md },
+	pendingTitle: { color: theme.colors.text, fontSize: theme.fontSize.md, fontWeight: "600", marginBottom: theme.space.xs },
+	pendingMeta: { color: theme.colors.textMuted, fontSize: theme.fontSize.sm, lineHeight: 22 },
+	pendingActions: { flexDirection: "row", flexWrap: "wrap", gap: theme.space.sm, marginTop: theme.space.sm },
+	rowAction: { minHeight: 48, minWidth: 48, flexDirection: "row", gap: theme.space.sm, alignItems: "center", justifyContent: "center", padding: theme.space.sm },
 	loadingOverlay: {
 		...StyleSheet.absoluteFillObject,
 		backgroundColor: "rgba(255, 255, 255, 0.7)",
 		justifyContent: "center",
 		alignItems: "center",
-		zIndex: 10, // Ensure it's on top
+		zIndex: 10,
 	},
-	loadingText: {
-		marginTop: theme.space.sm,
-		fontSize: theme.fontSize.md,
-		color: theme.colors.text,
-	},
-	row: {
-		flexDirection: "row",
-		gap: theme.space.md,
-		flexWrap: "wrap",
-		marginBottom: theme.space.md,
-	},
-	circle: { borderRadius: 50, padding: theme.space.md },
-	actionButtonContainer: {
-		alignItems: "center",
-		marginTop: theme.space.md,
-	},
-	actionButtonText: {
-		color: theme.colors.text,
-		marginTop: theme.space.xs,
-		fontSize: theme.fontSize.sm,
-	},
+	loadingText: { marginTop: theme.space.sm, fontSize: theme.fontSize.md, color: theme.colors.text },
 });

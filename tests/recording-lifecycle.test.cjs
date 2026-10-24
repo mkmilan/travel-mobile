@@ -98,9 +98,9 @@ test('pending UI blocks recording/paused/restored upload and delete, while inact
   for(const status of ['recording','paused','stopped']) {
     for(const isActive of [false,true]) {
       const tree=fixture('app/(tabs)/record/index.js','PendingRow',{item:{id:'trip',status,start_time:end,pointsCount:1},isActive,canRecover:true,onUpload(){},onDelete(){},onRecover(){}},{...native,theme,Ionicons:'Ionicons',StyleSheet:{create:x=>x,absoluteFillObject:{}}}).render();
-      const buttons=nodes(tree,'Ionicons');assert.equal(typeof buttons.find(n=>n.props.name==='cloud-upload').props.onPress==='function',status==='stopped'&&!isActive);
-      assert.equal(typeof buttons.find(n=>n.props.name==='trash').props.onPress==='function',status==='stopped'&&!isActive);
-      assert.equal(nodes(tree,'TouchableOpacity').length,status!=='stopped'&&!isActive?1:0);
+      const buttons=nodes(tree,'TouchableOpacity');assert.equal(typeof buttons.find(n=>n.props.accessibilityLabel==='Upload trip').props.onPress==='function',status==='stopped'&&!isActive);
+      assert.equal(typeof buttons.find(n=>n.props.accessibilityLabel==='Delete local trip').props.onPress==='function',status==='stopped'&&!isActive);
+      assert.equal(buttons.filter(n=>n.props.accessibilityLabel==='Recover recording').length,status!=='stopped'&&!isActive?1:0);
     }
   }
 });
@@ -177,9 +177,9 @@ test('actual restoration distinguishes running native collector from interrupted
     const f=await sqliteFixture();try {
       const id=await f.dao.startTrip('owner');let active={tripId:id,segmentId:'s',userId:'owner'},effects=[],removed=0;
       f.setActive(active);const session={user:{_id:'owner'},token:'token'};
-      const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {readRecordingTaskState,...native,theme,StyleSheet:{create:x=>x,absoluteFillObject:{}},useEffect:fn=>effects.push(fn),useAuthStore:Object.assign(select=>select(session),{getState:()=>session}),runMigrations:f.migrate,getPendingTrips:f.dao.getPendingTrips,getLocalTrip:f.dao.getLocalTrip,setTripRecordingStatus:f.dao.setTripRecordingStatus,getActiveTrip:async()=>active,clearActiveTrip:async()=>{active={};f.setActive({});},Location:{Accuracy:{High:1},hasStartedLocationUpdatesAsync:async()=>running,watchPositionAsync:async()=>({remove:()=>removed++})},TASK_NAME:'task',toast(){},CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal'});
+      const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {readRecordingTaskState,...native,theme,StyleSheet:{create:x=>x,absoluteFillObject:{}},useEffect:fn=>effects.push(fn),useAuthStore:Object.assign(select=>select(session),{getState:()=>session}),runMigrations:f.migrate,getPendingTrips:f.dao.getPendingTrips,getLocalTrip:f.dao.getLocalTrip,setTripRecordingStatus:f.dao.setTripRecordingStatus,getActiveTrip:async()=>active,clearActiveTrip:async()=>{active={};f.setActive({});},Location:{Accuracy:{High:1},hasStartedLocationUpdatesAsync:async()=>running,watchPositionAsync:async()=>({remove:()=>removed++})},TASK_NAME:'task',toast(){},RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal'});
       screen.render();const cleanup=effects[0]();await new Promise(setImmediate);const tree=screen.render();
-      assert.ok(nodes(tree,'Text').some(n=>n.children.join('')===`Status: ${running?'RECORDING':'PAUSED'}`));
+      assert.ok(nodes(tree,'Text').some(n=>n.children.join('')===`Status: ${running?'Recording':'Paused'}`));
       assert.equal((await f.dao.getLocalTrip(id,'owner')).status,running?'recording':'paused');
       assert.equal(Boolean(active.tripId),running);cleanup();assert.equal(removed,running?1:0);
     } finally {f.close();}
@@ -193,7 +193,7 @@ test('legacy uploaded/stopped collector cleanup preserves history and reports na
       const before=JSON.stringify(await f.db.getAllAsync('SELECT * FROM trips'));const points=JSON.stringify(await f.db.getAllAsync('SELECT * FROM track_points'));
       let active={tripId:id,segmentId:'s',userId:'owner'},effects=[],stops=0,notices=[],running=true;f.setActive(active);
       const {stopAbandonedRecording}=recordingFixture(()=>active,value=>{active=value;f.setActive(value);});const session={user:{_id:'owner'},token:'token'};
-      const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {readRecordingTaskState,...native,theme,StyleSheet:{create:x=>x,absoluteFillObject:{}},useEffect:fn=>effects.push(fn),useAuthStore:Object.assign(select=>select(session),{getState:()=>session}),runMigrations:f.migrate,getPendingTrips:f.dao.getPendingTrips,getLocalTrip:f.dao.getLocalTrip,getActiveTrip:async()=>active,clearActiveTrip:async()=>{active={};f.setActive({});},stopAbandonedRecording,Location:{hasStartedLocationUpdatesAsync:async()=>running,stopLocationUpdatesAsync:async()=>{stops++;if(fail)throw Error('synthetic native stop failure');running=false;}},TASK_NAME:'task',toast:n=>notices.push(n),CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal'});
+      const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {readRecordingTaskState,...native,theme,StyleSheet:{create:x=>x,absoluteFillObject:{}},useEffect:fn=>effects.push(fn),useAuthStore:Object.assign(select=>select(session),{getState:()=>session}),runMigrations:f.migrate,getPendingTrips:f.dao.getPendingTrips,getLocalTrip:f.dao.getLocalTrip,getActiveTrip:async()=>active,clearActiveTrip:async()=>{active={};f.setActive({});},stopAbandonedRecording,Location:{hasStartedLocationUpdatesAsync:async()=>running,stopLocationUpdatesAsync:async()=>{stops++;if(fail)throw Error('synthetic native stop failure');running=false;}},TASK_NAME:'task',toast:n=>notices.push(n),RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal'});
       screen.render();effects[0]();await new Promise(setImmediate);assert.equal(stops,1);assert.equal(notices.at(-1).title,fail?'Recording recovery needs attention':'Stale recording stopped');
       assert.equal(JSON.stringify(await f.db.getAllAsync('SELECT * FROM trips')),before);assert.equal(JSON.stringify(await f.db.getAllAsync('SELECT * FROM track_points')),points);
     } finally {f.close();}
@@ -202,8 +202,8 @@ test('legacy uploaded/stopped collector cleanup preserves history and reports na
 
 test('account initialization clears stale GPS and POI draft before a new owner can add a note',async()=>{
   let effects=[],notices=[];const session={user:{_id:'new-owner'},token:'new-token'};
-  const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {ENABLE_POI_UI:true,readRecordingTaskState,...native,theme,StyleSheet:{create:x=>x,absoluteFillObject:{}},useEffect:fn=>effects.push(fn),useAuthStore:Object.assign(select=>select(session),{getState:()=>session}),runMigrations:async()=>{},getPendingTrips:async()=>[],getActiveTrip:async()=>({}),Location:{hasStartedLocationUpdatesAsync:async()=>false},TASK_NAME:'task',toast:n=>notices.push(n),CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal'});
+  const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {ENABLE_POI_UI:true,readRecordingTaskState,...native,theme,StyleSheet:{create:x=>x,absoluteFillObject:{}},useEffect:fn=>effects.push(fn),useAuthStore:Object.assign(select=>select(session),{getState:()=>session}),runMigrations:async()=>{},getPendingTrips:async()=>[],getActiveTrip:async()=>({}),Location:{hasStartedLocationUpdatesAsync:async()=>false},TASK_NAME:'task',toast:n=>notices.push(n),RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal'});
   screen.setState(10,{current:{lat:10,lon:20}});screen.setState(11,{current:{lat:10,lon:20}});screen.setState(14,{current:{tripId:'old',userId:'old-owner'}});
-  screen.render();effects[0]();await new Promise(setImmediate);screen.setState(0,'recording');screen.setState(1,'new-trip');const tree=screen.render();nodes(tree,'CircleButton').find(n=>n.props.icon==='location-sharp').props.onPress();
+  screen.render();effects[0]();await new Promise(setImmediate);screen.setState(0,'recording');screen.setState(1,'new-trip');const tree=screen.render();nodes(tree,'RecordingButton').find(n=>n.props.icon==='location-sharp').props.onPress();
   assert.equal(notices.at(-1).title,'Location not available yet');
 });

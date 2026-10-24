@@ -31,8 +31,8 @@ function fixture(file, name, props = {}, dependencies = {}) {
 }
 function nodes(tree, type) {
   if (!tree || typeof tree !== 'object') return [];
-  return [...(!type || tree.type === type ? [tree] : []), ...(tree.children || []).flatMap(child=>nodes(child,type))];
+  return [...(!type || tree.type === type ? [tree] : []), ...(tree.children || []).flatMap(child=>nodes(child,type)), ...nodes(tree.props?.ListHeaderComponent,type)];
 }
 const theme = {space:{sm:8, md:12, lg:24}, radius:{md:12,lg:20},fontSize:{sm:14,md:16,lg:20},colors:{}};
-const native = Object.fromEntries(['View','Text','TextInput','Pressable','ScrollView','Modal','SafeAreaView','SafeAreaProvider','KeyboardAvoidingView','ActivityIndicator','FlatList','TouchableOpacity'].map(name=>[name,name]));
+const native = {recordingHero:'recording-journey.png', ...Object.fromEntries(['Image','View','Text','TextInput','Pressable','ScrollView','Modal','SafeAreaView','SafeAreaProvider','KeyboardAvoidingView','ActivityIndicator','FlatList','TouchableOpacity'].map(name=>[name,name]))};
 module.exports = {read, load, fixture, nodes, theme, native};

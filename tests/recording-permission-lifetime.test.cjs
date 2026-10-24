@@ -48,11 +48,11 @@ async function harness() {
       ...markers,...db.dao,runMigrations:db.migrate,ensureRecordingPermissions,Location,TASK_NAME:'trip-location-task',
       startTrip:async(...args)=>{state.rows++;return db.dao.startTrip(...args);},startSegment:()=>`segment-${state.rows}-${state.starts}`,
       toast:notice=>state.notices.push(notice),Alert:{alert:(...args)=>state.alerts.push(args)},
-      CircleButton:'CircleButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',
+      RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',
       ...overrides,
     });
     const tree=()=>host.render(()=>screen.render());tree();
-    const button=icon=>nodes(tree(),'CircleButton').find(node=>node.props.icon===icon);
+    const button=icon=>nodes(tree(),'RecordingButton').find(node=>node.props.icon===icon);
     return {tree,button,press:icon=>button(icon).props.onPress(),unmount:()=>host.unmount(),
       status:()=>nodes(tree(),'Text').map(node=>node.children.join('')).find(text=>text.startsWith('Status:'))};
   }
@@ -159,7 +159,7 @@ test('permission denial, rationale cancellation and inspection failure keep Star
       const screen=h.mount();await tick();const before=await h.snapshot(),start=screen.press('play');await tick();
       if(mode==='cancel')h.state.alerts.at(-1)[2].find(button=>button.text==='Cancel').onPress();await start;
       assert.equal(h.state.rows,0);assert.equal(h.state.starts,0);assert.deepEqual(h.state.active,{});assert.equal(await h.snapshot(),before);
-      assert.equal(screen.status(),'Status: IDLE');assert.equal(h.state.notices.length,mode==='cancel'?0:1);screen.unmount();
+      assert.equal(screen.status(),'Status: Not recording');assert.equal(h.state.notices.length,mode==='cancel'?0:1);screen.unmount();
     }finally{h.close();}
   }
 });
@@ -175,13 +175,13 @@ test('normal Start deduplicates pending permissions and Pause/Resume preserves e
   const h=await harness();try {
     const wait=holdPermission(h),screen=h.mount();await tick();const start=screen.press('play');await screen.press('play');
     assert.equal(h.state.calls.length,1);wait.resolve(granted());await start;
-    const id=h.state.active.tripId;assert.equal(h.state.rows,1);assert.equal(h.state.starts,1);assert.equal(screen.status(),'Status: RECORDING');
+    const id=h.state.active.tripId;assert.equal(h.state.rows,1);assert.equal(h.state.starts,1);assert.equal(screen.status(),'Status: Recording');
     assert.equal((await h.db.dao.getLocalTrip(id,'owner')).default_trip_visibility,'private');
     const point={lat:0,lon:12.5,timestamp:'2026-01-02T03:04:05.000Z',speed:2,accuracy:3};
     await h.db.dao.insertTrackPoint(id,h.state.active.segmentId,point);
     const points=JSON.stringify(await h.db.db.getAllAsync('SELECT * FROM track_points'));
-    await screen.press('pause');assert.equal(screen.status(),'Status: PAUSED');assert.equal(h.state.running,false);assert.deepEqual(h.state.active,{});
-    await screen.press('play');assert.equal(screen.status(),'Status: RECORDING');assert.equal(h.state.starts,2);assert.equal(h.state.rows,1);
+    await screen.press('pause');assert.equal(screen.status(),'Status: Paused');assert.equal(h.state.running,false);assert.deepEqual(h.state.active,{});
+    await screen.press('play');assert.equal(screen.status(),'Status: Recording');assert.equal(h.state.starts,2);assert.equal(h.state.rows,1);
     assert.equal(h.state.active.tripId,id);assert.equal(JSON.stringify(await h.db.db.getAllAsync('SELECT * FROM track_points')),points);screen.unmount();
   }finally{h.close();}
 });
@@ -220,7 +220,7 @@ test('late native Start after same-token relogin cannot stop or clear a newer sa
     const marker=JSON.stringify(h.state.active),before=await h.snapshot(),stops=h.state.stops,notices=h.state.notices.length;
     wait.resolve();await start;
     assert.equal(JSON.stringify(h.state.active),marker);assert.equal(h.state.running,true);assert.equal(h.state.stops,stops);
-    assert.equal(h.state.notices.length,notices);assert.equal(current.status(),'Status: RECORDING');assert.equal(await h.snapshot(),before);current.unmount();
+    assert.equal(h.state.notices.length,notices);assert.equal(current.status(),'Status: Recording');assert.equal(await h.snapshot(),before);current.unmount();
   }finally{h.close();}
 });
 
@@ -240,6 +240,6 @@ test('late permission grant leaves a newer same-owner collector and every durabl
     const marker=JSON.stringify(h.state.active),before=await h.snapshot(),notices=h.state.notices.length,stops=h.state.stops;
     permission.resolve(granted());await start;
     assert.equal(h.state.rows,1);assert.equal(h.state.starts,1);assert.equal(h.state.stops,stops);assert.equal(h.state.notices.length,notices);
-    assert.equal(JSON.stringify(h.state.active),marker);assert.equal(await h.snapshot(),before);assert.equal(current.status(),'Status: RECORDING');current.unmount();
+    assert.equal(JSON.stringify(h.state.active),marker);assert.equal(await h.snapshot(),before);assert.equal(current.status(),'Status: Recording');current.unmount();
   }finally{h.close();}
 });
