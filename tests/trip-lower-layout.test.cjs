@@ -4,7 +4,7 @@ const {fixture,nodes,native,theme} = require('./helpers/component-fixture.cjs');
 const tick = () => new Promise(setImmediate);
 const components = Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(name=>[name,name]));
 function screenFor(overrides={}, actor='owner', loadTrip=async()=>{throw Error('Refresh permission denied');}) {
-  let session={user:{_id:actor},token:'fixture-session',sessionEpoch:1,isAuthenticated:true};
+  let priming=false;let session={user:{_id:actor},token:'fixture-session',sessionEpoch:1,isAuthenticated:true};
   const calls={alerts:[],likers:[],comments:[],likes:[],photos:[],deletes:[],navigation:[]};
   const recommendations=Array.from({length:4},(_,i)=>({_id:`rec-${i}`,name:`Place ${i}`,user:{_id:'owner'},photos:[]}));
   const trip={_id:'trip',user:{_id:'owner'},title:'Saved journey',recommendations,photos:['photo-a','photo-b'],commentsCount:2,comments:['comment-a','comment-b'],...overrides};
@@ -15,14 +15,14 @@ function screenFor(overrides={}, actor='owner', loadTrip=async()=>{throw Error('
     useRouter:()=>({push:path=>calls.navigation.push(path)}),useLocalSearchParams:()=>({id:'trip'}),
     useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),useCallback:f=>f,useFocusEffect(){},
     calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
-    getTripJsonById:loadTrip,
+    getTripJsonById:()=>priming ? Promise.resolve(trip) : loadTrip(),
     getTripLikers:async id=>{calls.likers.push(id);return [{_id:'liker'}];},
     getTripComments:async id=>{calls.comments.push(id);return [{_id:'comment-a'},{_id:'comment-b'}];},
     likeTrip:async id=>calls.likes.push(id),unlikeTrip:async()=>{},
     deleteTripPhoto:async(...args)=>calls.photos.push(args),deleteRecommendation:async id=>calls.deletes.push(id),
   });
   screen.setState(0,trip);screen.setState(1,false);screen.setState(14,8);
-  return {...screen,calls,trip,switchSession(){session={...session,user:{_id:'other'},token:'next',sessionEpoch:2};}};
+  return {...screen,calls,trip,async prime(){priming=true;await nodes(screen.render(),'RecommendationDetailModal')[0].props.onRefresh();priming=false;},switchSession(){session={...session,user:{_id:'other'},token:'next',sessionEpoch:2};}};
 }
 const section=(tree,title)=>nodes(tree,'Section').find(node=>node.props.title===title);
 const social=(tree,icon)=>nodes(tree,'SocialButton').find(node=>node.props.iconName===icon);
@@ -101,7 +101,7 @@ test('failed initial loads still show the actual error instead of empty gallerie
 });
 
 test('empty gallery does not conceal a known refresh failure or discard loaded places',async()=>{
-  const screen=screenFor({photos:[]});const tree=screen.render();
+  const screen=screenFor({photos:[]});await screen.prime();const tree=screen.render();
   await nodes(tree,'RecommendationDetailModal')[0].props.onRefresh();const refreshed=screen.render();
   assert.ok(nodes(refreshed,'Text').some(node=>node.props.accessibilityRole==='alert' && node.children.includes('Refresh permission denied')));
   assert.equal(nodes(refreshed,'PhotoGallery').length,0);assert.ok(section(refreshed,'Places from this trip'));
@@ -115,7 +115,7 @@ const deferred = () => {let resolve,reject;const promise=new Promise((yes,no)=>{
 test('thumbnail retry signal advances once per successful load, not rerenders, local edits or failed refreshes',async()=>{
   const pending=[];
   const screen=screenFor({},'owner',()=>{const task=deferred();pending.push(task);return task.promise;});
-  const initial=photoIdentity(screen);
+  await screen.prime();const initial=photoIdentity(screen);
   assert.equal(photoIdentity(screen),initial);
   const failed=refreshTrip(screen);assert.equal(photoIdentity(screen),initial);
   pending[0].reject(Error('offline'));await failed;assert.equal(photoIdentity(screen),initial);
@@ -131,7 +131,7 @@ test('older successful response cannot grant a thumbnail retry after a newer fai
   for(const newerFails of [true,false]) {
     const pending=[];
     const screen=screenFor({},'owner',()=>{const task=deferred();pending.push(task);return task.promise;});
-    const older=refreshTrip(screen),newer=refreshTrip(screen);
+    await screen.prime();const older=refreshTrip(screen),newer=refreshTrip(screen);
     if(newerFails) pending[1].reject(Error('newer failed'));else pending[1].resolve(screen.trip);
     await newer;const accepted=photoIdentity(screen);
     pending[0].resolve(screen.trip);await older;

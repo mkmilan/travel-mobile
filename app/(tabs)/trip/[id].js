@@ -148,7 +148,8 @@ export default function TripDetailScreen() {
 	}, []);
 
 	// Retry thumbnails only after a successful current load, not local trip edits
-	// or failed refreshes. Older overlapping requests cannot grant a new attempt.
+	// or failed refreshes. The same request identity protects data, errors and
+	// loading settlement as well as thumbnail retries from overlapping reads.
 	const latestTripPhotoRequest = useRef(null);
 	const tripPhotoRefreshIdentity = useRef(null);
 
@@ -159,7 +160,9 @@ export default function TripDetailScreen() {
 			setLoading(false);
 			return;
 		}
-		const photoRequest = {};
+		// Focus callbacks retain their first render; carry loaded status through the
+		// current request rather than relying on their captured trip value.
+		const photoRequest = { context, hasData: latestTripPhotoRequest.current?.context === context && latestTripPhotoRequest.current.hasData };
 		latestTripPhotoRequest.current = photoRequest;
 		if (!isRefetch) {
 			// Only show main loading indicator on initial load
@@ -169,15 +172,14 @@ export default function TripDetailScreen() {
 		else setError(null);
 		try {
 			const data = await getTripJsonById(context.tripId);
-			if (!isCurrentContext(context)) return;
+			if (!isCurrentContext(context) || latestTripPhotoRequest.current !== photoRequest) return;
 			setError(null); // A successful focus/retry also recovers an earlier initial-load error.
 			const likesArray = data.likes || [];
 			// Get comment COUNT from initial trip load, but not the comment objects themselves for display
 			const initialCommentsArray = data.comments || [];
 
-			if (latestTripPhotoRequest.current === photoRequest) {
-				tripPhotoRefreshIdentity.current = photoRequest;
-			}
+			photoRequest.hasData = true;
+			tripPhotoRefreshIdentity.current = photoRequest;
 			setTrip({
 				...data,
 				likesCount: likesArray.length,
@@ -200,13 +202,14 @@ export default function TripDetailScreen() {
 				await fetchCommentsData(context); // Keep follow-on reads in the same screen/session.
 			}
 		} catch (err) {
-			if (isCurrentContext(context)) {
+			if (isCurrentContext(context) && latestTripPhotoRequest.current === photoRequest) {
 				const message = err?.message || "Could not load trip details.";
-				if (isRefetch) setRefreshError({ context, message });
+				if (isRefetch && photoRequest.hasData) setRefreshError({ context, message });
 				else setError(message);
 			}
 		} finally {
-			if (!isRefetch && isCurrentContext(context)) {
+			// The newest refetch may supersede the initial load; it owns its spinner too.
+			if (isCurrentContext(context) && latestTripPhotoRequest.current === photoRequest) {
 				setLoading(false);
 			}
 		}

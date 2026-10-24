@@ -199,7 +199,7 @@ function tripDetailCallbacks(overrides={}) {
   const calls=[],requests=[];const record=name=>(...args)=>calls.push({name,args});
   const api=name=>(...args)=>{requests.push({name,args});return Promise.resolve(name==='trip'?{_id:'trip-a',likes:[],comments:[]}:{_id:'saved'});};
   const dependencies={
-    latestTripPhotoRequest:{current:null},tripPhotoRefreshIdentity:{current:null},
+    latestTripPhotoRequest:{current:overrides.trip === null ? null : {context,hasData:true}},tripPhotoRefreshIdentity:{current:null},
     renderContext:context,screenContext,screenMounted,commentsRequest:{current:null},useAuthStore:{getState:()=>session},tripId:context.tripId,isAuthenticated:true,currentUser:session.user,trip:{_id:'trip-a',recommendations:[{_id:'existing'}],commentsCount:0},
     comments:[],commentsLoading:false,isCommentListExpanded:false,isCommentsSectionVisible:false,
     getTripJsonById:api('trip'),getTripComments:api('comments'),addRecommendation:api('create'),updateRecommendation:api('update'),
@@ -273,22 +273,23 @@ function tripDetailScreen(overrides={}) {
   const session={user:{_id:'owner'},token:'session-a',isAuthenticated:true};
   const useAuthStore=Object.assign(()=>session,{getState:()=>session});
   const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton'].map(name=>[name,name]));
-  let focus;const params={id:'trip-a'};
+  let focus,priming=false;const params={id:'trip-a'};
   const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
     ...defaults,...components,useAuthStore,useLocalSearchParams:()=>params,
     useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),
     useCallback:fn=>fn,useFocusEffect:callback=>{focus=callback;},
     calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',lineStringToCoords:()=>[],
     addRecommendation:async()=>({_id:'saved'}),updateRecommendation:async()=>({_id:'saved'}),
-    getTripJsonById:async()=>({_id:params.id,likes:[],comments:[]}),Alert:{alert(){}},...overrides,
+    Alert:{alert(){}},...overrides,
+    getTripJsonById:()=>priming || !overrides.getTripJsonById ? Promise.resolve({_id:params.id,user:{_id:'owner'},recommendations:[],likes:[],comments:[]}) : overrides.getTripJsonById(),
   });
   screen.setState(0,{_id:'trip-a',user:{_id:'owner'},recommendations:[],commentsCount:0});screen.setState(1,false);
-  return {...screen,session,params,useAuthStore,focus:()=>focus()};
+  return {...screen,session,params,useAuthStore,focus:()=>focus(),async prime(){priming=true;screen.render();focus();await tick();priming=false;screen.render();}};
 }
 
 test('failed immediate and retained recommendation refresh keep the same form mounted with bounded retry',async()=>{
   const reads=[];const screen=tripDetailScreen({getTripJsonById:()=>{const request=deferred();reads.push(request);return request.promise;}});
-  const original=nodes(screen.render(),'AddRecommendationModal')[0];
+  await screen.prime();const original=nodes(screen.render(),'AddRecommendationModal')[0];
   const saved=await original.props.onSubmit({_id:'saved'},true,true);assert.equal(reads.length,1);
   reads[0].reject(Error('Immediate refresh offline'));await tick();
   let tree=screen.render();let editor=nodes(tree,'AddRecommendationModal')[0];
@@ -304,7 +305,7 @@ test('failed immediate and retained recommendation refresh keep the same form mo
 test('partial-photo draft survives its actual parent refresh failure without a new recommendation create',async()=>{
   const read=deferred();let creates=0,photos=[];
   const screen=tripDetailScreen({getTripJsonById:()=>read.promise,addRecommendation:async()=>{creates++;return {_id:'created-rec'};}});
-  const original=nodes(screen.render(),'AddRecommendationModal')[0];
+  await screen.prime();const original=nodes(screen.render(),'AddRecommendationModal')[0];
   const editor=fixture('src/components/modals/AddRecommendationModal.js','AddRecommendationModal',original.props,{
     ...defaults,useAuthStore:screen.useAuthStore,TripPhotoThumb:'TripPhotoThumb',Ionicons:'Ionicons',MapView:'MapView',Marker:'Marker',StarRating:'StarRating',
     RECOMMENDATION_CATEGORIES:[{value:'nature',label:'Nature'}],RECOMMENDATION_TAGS:[{value:'quiet',label:'Quiet'}],
@@ -322,12 +323,53 @@ test('partial-photo draft survives its actual parent refresh failure without a n
 
 test('initial-load error remains blocking but current successful focus refresh recovers it',async()=>{
   const get=deferred();const screen=tripDetailScreen({getTripJsonById:()=>get.promise});
-  screen.setState(2,'Initial request failed');let tree=screen.render();assert.equal(nodes(tree,'AddRecommendationModal').length,0);
+  await screen.prime();screen.setState(2,'Initial request failed');let tree=screen.render();assert.equal(nodes(tree,'AddRecommendationModal').length,0);
   assert.ok(nodes(tree,'Text').some(node=>node.children.includes('Initial request failed')));
   screen.focus();get.resolve({_id:'trip-a',likes:[],comments:[]});await tick();tree=screen.render();assert.equal(nodes(tree,'AddRecommendationModal').length,1);
   // A different route cannot inherit an old route's background error banner.
   const failure=deferred();const changed=tripDetailScreen({getTripJsonById:()=>failure.promise});
-  const saved=await nodes(changed.render(),'AddRecommendationModal')[0].props.onSubmit({_id:'rec'},true);
+  await changed.prime();const saved=await nodes(changed.render(),'AddRecommendationModal')[0].props.onSubmit({_id:'rec'},true);
   failure.reject(Error('Old route refresh failed'));await tick();assert.match(alertText(changed.render()),/Old route refresh failed/);
   changed.params.id='trip-b';assert.equal(alertText(changed.render()),'');await saved.refreshCallback();
+});
+
+test('trip detail newest request alone publishes data, thumbnail retry identity, errors and loading',async()=>{
+  for(const oldFails of [false,true])for(const newFails of [false,true]) {
+    const reads=[],identity={current:null};
+    const screen=tripDetailCallbacks({tripPhotoRefreshIdentity:identity,getTripJsonById:()=>{const p=deferred();reads.push(p);return p.promise;}});
+    const old=screen.fetchTripDetails(true),fresh=screen.fetchTripDetails(true);
+    if(newFails)reads[1].reject(Error('new failure'));else reads[1].resolve({_id:'trip-a',title:'new',likes:['owner'],comments:[]});await fresh;
+    const before=screen.calls.length,newIdentity=identity.current;
+    if(oldFails)reads[0].reject(Error('old failure'));else reads[0].resolve({_id:'trip-a',title:'old',likes:[],comments:[]});await old;
+    assert.equal(screen.calls.length,before);assert.equal(identity.current,newIdentity);
+    assert.equal(screen.calls.at(-1).name,'loading');assert.equal(screen.calls.at(-1).args[0],false);
+    if(newFails)assert.equal(screen.calls.find(call=>call.name==='refresh-error'&&call.args[0])?.args[0].message,'new failure');
+    else assert.equal(screen.calls.find(call=>call.name==='trip').args[0].title,'new');
+  }
+});
+test('mount focus superseding initial detail read owns spinner and initial error recovery',async()=>{
+  for(const newFails of [false,true])for(const olderFirst of [false,true]) {
+    const reads=[];const screen=tripDetailCallbacks({trip:null,getTripJsonById:()=>{const p=deferred();reads.push(p);return p.promise;}});
+    const initial=screen.fetchTripDetails(),focus=screen.fetchTripDetails(true);
+    if(olderFirst){const before=screen.calls.length;reads[0].resolve({_id:'old',likes:[],comments:[]});await initial;assert.equal(screen.calls.length,before);}
+    if(newFails)reads[1].reject(Error('current initial failure'));else reads[1].resolve({_id:'new',likes:[],comments:[]});await focus;
+    assert.equal(screen.calls.at(-1).name,'loading');assert.equal(screen.calls.at(-1).args[0],false);
+    if(newFails)assert.equal(screen.calls.find(call=>call.name==='error'&&call.args[0])?.args[0],'current initial failure');
+    else assert.equal(screen.calls.find(call=>call.name==='trip').args[0]._id,'new');
+    if(!olderFirst){const before=screen.calls.length;reads[0].reject(Error('obsolete initial failure'));await initial;assert.equal(screen.calls.length,before);}
+  }
+});
+
+test('retained initial focus callback keeps loaded trip and shows retry banner on later failure',async()=>{
+  const {hooksFixture}=require('./helpers/hooks-fixture.cjs');const host=hooksFixture();const reads=[];
+  const screen=tripDetailScreen({...host.hooks,BackHandler:{addEventListener:()=>({remove(){}})},getTripJsonById:()=>{const p=deferred();reads.push(p);return p.promise;}});
+  // Start as a real mount, not this older fixture's pre-seeded loaded screen.
+  // Hook state comes from host, so setState on the fixture does not pre-seed it.
+  const render=()=>host.render(()=>screen.render());render();assert.equal(reads.length,2);
+  reads[1].resolve({_id:'trip-a',user:{_id:'owner'},recommendations:[],likes:[],comments:[]});await tick();
+  reads[0].resolve({_id:'old',likes:[],comments:[]});await tick();
+  assert.ok(nodes(render(),'AddRecommendationModal').length);
+  host.blur();host.focus();assert.equal(reads.length,3);reads[2].reject(Error('Focus offline'));await tick();
+  const tree=render();assert.ok(nodes(tree,'AddRecommendationModal').length);assert.match(alertText(tree),/Focus offline/);
+  assert.ok(button(tree,'trip-refresh-retry'));
 });
