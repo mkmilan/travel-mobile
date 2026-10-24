@@ -578,3 +578,11 @@ export const deleteServerTrip = async (tripId, expectedUserId, { isCurrent } = {
 	if (receipt?.deleted !== true || receipt.tripId !== tripId || typeof receipt.cleanupPending !== "boolean") throw new Error("Deletion is not confirmed yet. Please retry.");
 	return receipt;
 };
+
+// Read-only discovery also finds cleanup reopened by a late upload failure.
+export const getPendingTripDeletionsApi = async (expectedUserId, { isCurrent } = {}) => {
+	if (!ENABLE_SAFE_TRIP_DELETE) return [];
+	const data = await apiFetch("/mobile/trip-deletions", { expectedUserId, requiredStatus: 200, requestGuard: isCurrent });
+	if (!Array.isArray(data?.pending) || data.pending.some(row => typeof row?.tripId !== "string" || !/^[a-f0-9]{24}$/i.test(row.tripId))) throw new Error("Pending cleanup response was not valid.");
+	return data.pending;
+};

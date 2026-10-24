@@ -4,8 +4,8 @@ import { Alert, Pressable, Text, View } from "react-native";
 import { ENABLE_SAFE_TRIP_DELETE } from "../constants/featureFlags";
 import { useAuthStore } from "../stores/auth";
 import { useTripSocialStore } from "../stores/tripSocialStore";
-import { deleteServerTrip } from "../services/api";
-import { getPendingTripDeletions, settlePendingTripDeletion, reconcileDeletedServerTrip } from "../db/tripDao";
+import { deleteServerTrip, getPendingTripDeletionsApi } from "../services/api";
+import { getPendingTripDeletions, rememberPendingTripDeletion, settlePendingTripDeletion, reconcileDeletedServerTrip } from "../db/tripDao";
 
 // Owner-driven retries only. Rows survive restart and never appear to another account.
 export default function PendingTripDeletions() {
@@ -21,11 +21,23 @@ export default function PendingTripDeletions() {
 		const context = { userId: user?._id, token, epoch: sessionEpoch };
 		active.current = context;
 		if (ENABLE_SAFE_TRIP_DELETE && context.userId && token && !isSessionChanging) {
-			getPendingTripDeletions(context.userId).then(rows => {
-				if (current(context)) setResult({ context, rows });
-			}).catch(() => {
-				if (current(context)) setResult({ context, rows: [], error: "Could not load pending deletions. Reopen My Trips to retry." });
-			});
+			(async () => {
+				let rows = [];
+				try {
+					rows = await getPendingTripDeletions(context.userId);
+					if (!current(context)) return;
+					setResult({ context, rows });
+					const pending = await getPendingTripDeletionsApi(context.userId, { isCurrent: () => current(context) });
+					for (const { tripId } of pending) {
+						if (!current(context)) return;
+						await rememberPendingTripDeletion(tripId, context.userId);
+					}
+					rows = await getPendingTripDeletions(context.userId);
+					if (current(context)) setResult({ context, rows });
+				} catch (_) {
+					if (current(context)) setResult({ context, rows, error: "Could not check all pending deletions. Saved retries are kept; reopen My Trips to check again." });
+				}
+			})();
 		}
 		return () => { if (active.current === context) active.current = null; };
 	}, [user?._id, token, sessionEpoch, isSessionChanging]));
@@ -36,16 +48,19 @@ export default function PendingTripDeletions() {
 		running.current = true;
 		setResult({ ...result, busy: true, error: null });
 		try {
+			let failures = 0;
 			for (const { trip_id: tripId } of result.rows) {
 				if (!current(context)) return;
-				const receipt = await deleteServerTrip(tripId, context.userId, { isCurrent: () => current(context) });
-				if (!current(context)) return;
-				useTripSocialStore.getState().invalidateDeletedTrip(tripId);
-				await reconcileDeletedServerTrip(tripId, context.userId);
-				await settlePendingTripDeletion(tripId, context.userId, receipt);
+				try {
+					const receipt = await deleteServerTrip(tripId, context.userId, { isCurrent: () => current(context) });
+					if (!current(context)) return;
+					useTripSocialStore.getState().invalidateDeletedTrip(tripId);
+					await reconcileDeletedServerTrip(tripId, context.userId);
+					await settlePendingTripDeletion(tripId, context.userId, receipt);
+				} catch (_) { failures++; }
 			}
 			const rows = await getPendingTripDeletions(context.userId);
-			if (current(context)) setResult({ context, rows, error: rows.length ? "Cleanup is still pending. You can retry later." : null });
+			if (current(context)) setResult({ context, rows, error: failures ? `${failures} deletion or cleanup request(s) could not be confirmed. Saved retries are kept.` : rows.length ? "Cleanup is still pending. You can retry later." : null });
 		} catch (error) {
 			if (current(context)) setResult({ ...result, error: `Deletion or cleanup was not completed: ${error.message}` });
 		} finally {

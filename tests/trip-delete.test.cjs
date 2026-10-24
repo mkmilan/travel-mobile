@@ -41,7 +41,7 @@ test('a remounted screen shares an in-flight delete and local cleanup failure do
 
 function apiFixture({enabled=true,status=200,data=receipt,csrf,capability={safeTripDeletion:1}}={}){
   let state={user:{_id:'owner'},token:'secret',sessionEpoch:1,isSessionChanging:false};const calls=[];
-  const api=load('src/services/api.js','({deleteServerTrip})',{
+  const api=load('src/services/api.js','({deleteServerTrip,getPendingTripDeletionsApi})',{
     ENABLE_SAFE_TRIP_DELETE:enabled,Constants:{expoConfig:{extra:{API_URL:'https://fixture.invalid/api'}}},Updates:{},console:{log(){},warn(){},error(){}},
     require:()=>({useAuthStore:{getState:()=>state}}),SecureStore:{getItemAsync:async key=>key==='auth-token'?state.token:JSON.stringify({...state.user,token:state.token})},getCsrfToken:csrf|| (async()=> 'csrf'),
     fetch:async(url,options)=>{calls.push({url,options});if(url.endsWith("/deletion-capability"))return {status:200,ok:true,headers:{get:()=>"application/json"},json:async()=>capability};return {status,ok:status<400,headers:{get:()=> 'application/json'},json:async()=>data};},
@@ -225,7 +225,7 @@ test('failure to persist retry identity prevents dispatch', async () => {
 test('actual persistent cleanup banner requires confirmation, preserves pending, and hides across accounts',async()=>{
  const host=hooksFixture(),auth=authFixture(),alerts=[],calls=[];let rows=[{trip_id:serverId}],pending=true;
  const screen=fixture('src/components/PendingTripDeletions.js','PendingTripDeletions',{}, {
-  ...native,...host.hooks,ENABLE_SAFE_TRIP_DELETE:true,useAuthStore:auth.store,
+  ...native,...host.hooks,ENABLE_SAFE_TRIP_DELETE:true,useAuthStore:auth.store,getPendingTripDeletionsApi:async()=>[],rememberPendingTripDeletion:async()=>{},
   Alert:{alert:(...args)=>alerts.push(args)},getPendingTripDeletions:async owner=>{calls.push(['read',owner]);return rows;},
   deleteServerTrip:async(id,owner,options)=>{assert.equal(options.isCurrent(),true);calls.push(['delete',id,owner]);return {...receipt,cleanupPending:pending};},
   settlePendingTripDeletion:async(_id,_owner,r)=>{if(!r.cleanupPending)rows=[];},reconcileDeletedServerTrip:async()=>{},useTripSocialStore:{getState:()=>({invalidateDeletedTrip(){}})},
@@ -241,7 +241,7 @@ test('actual persistent cleanup banner requires confirmation, preserves pending,
 test('actual cleanup banner drops late UI and reconciliation after blur',async()=>{
  const host=hooksFixture(),auth=authFixture(),alerts=[],pending=deferred();let reconciles=0,settles=0;
  const screen=fixture('src/components/PendingTripDeletions.js','PendingTripDeletions',{}, {
-  ...native,...host.hooks,ENABLE_SAFE_TRIP_DELETE:true,useAuthStore:auth.store,Alert:{alert:(...args)=>alerts.push(args)},getPendingTripDeletions:async()=>[{trip_id:serverId}],
+  ...native,...host.hooks,ENABLE_SAFE_TRIP_DELETE:true,useAuthStore:auth.store,getPendingTripDeletionsApi:async()=>[],rememberPendingTripDeletion:async()=>{},Alert:{alert:(...args)=>alerts.push(args)},getPendingTripDeletions:async()=>[{trip_id:serverId}],
   deleteServerTrip:()=>pending.promise,settlePendingTripDeletion:async()=>{settles++;},reconcileDeletedServerTrip:async()=>{reconciles++;},useTripSocialStore:{getState:()=>({invalidateDeletedTrip(){}})},
  });
  const render=()=>host.render(()=>screen.render());render();await tick();nodes(render(),'Pressable')[0].props.onPress();const work=alerts[0][2].find(b=>b.style==='destructive').onPress();await tick();host.blur();pending.resolve(receipt);await work;
@@ -251,4 +251,29 @@ test('actual cleanup banner drops late UI and reconciliation after blur',async()
 test('pending cleanup identity survives process-like SQLite reopen without recording content',async()=>{
  const fs=require('node:fs'),os=require('node:os'),path=require('node:path');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'mobile-cleanup-')),file=path.join(dir,'synthetic.sqlite');let f;
  try {f=await sqliteFixture(file);await f.dao.rememberPendingTripDeletion(serverId,'owner');f.close();f=await sqliteFixture(file);const rows=await f.dao.getPendingTripDeletions('owner');assert.equal(rows.length,1);assert.equal(rows[0].trip_id,serverId);assert.deepEqual(Object.keys(rows[0]),['trip_id']);assert.equal((await f.dao.getPendingTripDeletions('other')).length,0);}finally{f?.close();fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('cleanup discovery merges server late-upload manifests and a failed retry does not starve later rows',async()=>{
+ const host=hooksFixture(),auth=authFixture(),alerts=[],calls=[];const later='abcdef1234567890abcdef12';let rows=[{trip_id:serverId}];
+ const screen=fixture('src/components/PendingTripDeletions.js','PendingTripDeletions',{}, {
+  ...native,...host.hooks,ENABLE_SAFE_TRIP_DELETE:true,useAuthStore:auth.store,Alert:{alert:(...args)=>alerts.push(args)},
+  getPendingTripDeletions:async()=>rows,getPendingTripDeletionsApi:async()=>[{tripId:later}],rememberPendingTripDeletion:async(id,owner)=>{assert.equal(owner,'actor');rows=[...rows,{trip_id:id}];},
+  deleteServerTrip:async(id)=>{calls.push(id);if(id===serverId)throw Error('not found');return {...receipt,tripId:id};},settlePendingTripDeletion:async(id)=>{rows=rows.filter(row=>row.trip_id!==id);},reconcileDeletedServerTrip:async()=>{},useTripSocialStore:{getState:()=>({invalidateDeletedTrip(){}})},
+ });
+ const render=()=>host.render(()=>screen.render());render();await tick();assert.equal(rows.length,2);assert.equal(calls.length,0);
+ nodes(render(),'Pressable')[0].props.onPress();await alerts[0][2].find(b=>b.style==='destructive').onPress();assert.deepEqual(calls,[serverId,later]);assert.deepEqual(rows,[{trip_id:serverId}]);assert.ok(nodes(render(),'Text').some(n=>JSON.stringify(n).includes('1 deletion or cleanup')));
+});
+test('failed server cleanup discovery keeps local pending retries available',async()=>{
+ const host=hooksFixture(),auth=authFixture();
+ const screen=fixture('src/components/PendingTripDeletions.js','PendingTripDeletions',{}, {
+  ...native,...host.hooks,ENABLE_SAFE_TRIP_DELETE:true,useAuthStore:auth.store,getPendingTripDeletions:async()=>[{trip_id:serverId}],getPendingTripDeletionsApi:async()=>{throw Error('offline');},
+ });
+ const render=()=>host.render(()=>screen.render());render();await tick();assert.equal(nodes(render(),'Pressable').length,1);assert.ok(nodes(render(),'Text').some(n=>JSON.stringify(n).includes('Saved retries are kept')));
+});
+
+
+test('server cleanup discovery is gated, authenticated, validates IDs, and never uses a delete method',async()=>{
+ const disabled=apiFixture({enabled:false});assert.equal((await disabled.getPendingTripDeletionsApi('owner')).length,0);assert.equal(disabled.calls.length,0);
+ const f=apiFixture({data:{pending:[{tripId:serverId}]}});assert.equal((await f.getPendingTripDeletionsApi('owner'))[0].tripId,serverId);assert.equal(f.calls[0].options.method,'GET');assert.match(f.calls[0].url,/\/mobile\/trip-deletions$/);assert.equal(f.calls[0].options.headers.Authorization,'Bearer secret');
+ await assert.rejects(apiFixture({data:{pending:[{tripId:'bad'}]}}).getPendingTripDeletionsApi('owner'),/not valid/);
 });
