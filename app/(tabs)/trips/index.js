@@ -3,7 +3,7 @@ import useProfileList from "@/src/hooks/useProfileList";
 import ProfileListStatus from "@/src/components/ProfileListStatus";
 import { recordAuthDiagnostic } from "@/src/utils/authDiagnostics";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
 import TripCardContainer from "@/src/components/TripCardContainer";
@@ -29,7 +29,16 @@ export default function MyTrips() {
 	// Share the same session-scoped invalidation as feed/profile lists. A late
 	// pre-deletion page cannot repopulate this replacement list or its sheets.
 	const { identity, items, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore, refreshOnNextFocus } = useProfileList(user?._id, loadMyTrips, 10, "", true);
-	useEffect(() => { items.forEach(primeCounts); }, [items, primeCounts]);
+	const primed = useRef({ identity: null, items: new Map() });
+	useEffect(() => {
+		if (primed.current.identity !== identity) primed.current = { identity, items: new Map() };
+		items.forEach(item => {
+			// Only a newly returned server object is authoritative. Reusing an old
+			// page/card/sheet must not overwrite social changes made since loading it.
+			if (primed.current.items.get(item._id) !== item) primeCounts(item);
+			primed.current.items.set(item._id, item);
+		});
+	}, [items, identity, primeCounts]);
 	const [sheet, setSheet] = useState(null);
 	const selectedTrip = sheet?.identity === identity ? sheet.trip : null;
 	const sheetType = selectedTrip ? sheet.type : null;
@@ -47,6 +56,7 @@ export default function MyTrips() {
 				keyExtractor={(t) => t._id}
 				renderItem={({ item }) => (
 					<TripCardContainer
+						primeOnMount={false}
 						trip={item}
 						onOpenSheet={openSheet}
 						onPress={() => { refreshOnNextFocus(); router.push(`/trip/${item._id}`); }}
@@ -70,9 +80,10 @@ export default function MyTrips() {
 			/>
 
 			{/* ---- reusable bottom-sheets (one copy each) ---- */}
-			<LikersSheet trip={selectedTrip} visible={sheetType === "likers"} onClose={closeSheet} />
-			<CommentsSheet trip={selectedTrip} visible={sheetType === "comments"} onClose={closeSheet} />
+			<LikersSheet primeOnMount={false} trip={selectedTrip} visible={sheetType === "likers"} onClose={closeSheet} />
+			<CommentsSheet primeOnMount={false} trip={selectedTrip} visible={sheetType === "comments"} onClose={closeSheet} />
 			<RecommendationsSheet
+				primeOnMount={false}
 				trip={selectedTrip}
 				userId={user?._id}
 				visible={sheetType === "recs"}

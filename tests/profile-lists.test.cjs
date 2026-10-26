@@ -69,13 +69,13 @@ test('status UI distinguishes loading, empty and retryable error',()=>{
 });
 test('TripsTab uses the stable list hook and renders initial spinner rather than premature empty text',()=>{
   const source=read('src/screens/profile/tabs/TripsTab.js');assert.match(source,/useProfileList\(userId, getTripsByUser\)/);assert.doesNotMatch(source,/useFocusEffect|setLoading|fetchPage/);
-  const tree=fixture('src/screens/profile/tabs/TripsTab.js','TripsTab',{userId:'fixture'},{...native,theme,RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',TripCardContainer:'TripCardContainer',LikersSheet:'LikersSheet',CommentsSheet:'CommentsSheet',RecommendationsSheet:'RecommendationsSheet',useRouter:()=>({}),getTripsByUser:()=>{},useProfileList:()=>({items:[],loading:false,initialLoading:true})}).render();
+  const tree=fixture('src/screens/profile/tabs/TripsTab.js','TripsTab',{userId:'fixture'},{...native,theme,RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',TripCardContainer:'TripCardContainer',LikersSheet:'LikersSheet',CommentsSheet:'CommentsSheet',RecommendationsSheet:'RecommendationsSheet',useRouter:()=>({}),getTripsByUser:()=>{},useTripSocialStore:()=>({primeCounts(){}}),useProfileList:()=>({items:[],loading:false,initialLoading:true})}).render();
   assert.equal(nodes(tree,'FlatList')[0].props.ListEmptyComponent.props.loading,true);
 });
 
 test('Trips sheets are hidden immediately when profile/session identity changes',()=>{
   let identity={};const items=[{_id:'old'}];
-  const screen=fixture('src/screens/profile/tabs/TripsTab.js','TripsTab',{userId:'fixture'}, {...native,theme,RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',TripCardContainer:'TripCardContainer',LikersSheet:'LikersSheet',CommentsSheet:'CommentsSheet',RecommendationsSheet:'RecommendationsSheet',useRouter:()=>({}),getTripsByUser:()=>{},useProfileList:()=>({identity,items})});
+  const screen=fixture('src/screens/profile/tabs/TripsTab.js','TripsTab',{userId:'fixture'}, {...native,theme,RefreshControl:'RefreshControl',ProfileListStatus:'ProfileListStatus',TripCardContainer:'TripCardContainer',LikersSheet:'LikersSheet',CommentsSheet:'CommentsSheet',RecommendationsSheet:'RecommendationsSheet',useRouter:()=>({}),getTripsByUser:()=>{},useTripSocialStore:()=>({primeCounts(){}}),useProfileList:()=>({identity,items})});
   let tree=screen.render();nodes(tree,'FlatList')[0].props.renderItem({item:items[0]}).props.onOpenSheet('comments',items[0]);
   tree=screen.render();assert.equal(nodes(tree,'CommentsSheet')[0].props.visible,true);
   identity={};tree=screen.render();assert.equal(nodes(tree,'CommentsSheet')[0].props.visible,false);assert.equal(nodes(tree,'CommentsSheet')[0].props.trip,null);

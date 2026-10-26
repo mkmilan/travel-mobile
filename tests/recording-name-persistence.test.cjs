@@ -20,7 +20,10 @@ function screen(f,id,overrides={}) {
   let confirm;
   const opened=[], notices=[], events=[];
   const session={user:{_id:owner},token:'synthetic',sessionEpoch:1};
-  const ctx={...f.dao,...nameDao(f),console,Date,tripId:id,status:'paused',user:session.user,
+  const ctx={...f.dao,...nameDao(f),console,Date,tripId:id,
+    displayedRecording:{current:{tripId:id}},pendingRecommendation:{current:null},recordingLifetime:{current:{}},segmentId:'segment',token:session.token,sessionEpoch:session.sessionEpoch,
+    showOwnedCleanupError:async()=>{},acquireRecordingTransition:async()=>()=>{},readControlledRecording:async()=>({}),getActiveTrip:async()=>({}),
+    stopAbandonedRecording:async()=>{events.push('collector-stopped','marker-cleared');return 'stopped';},status:'paused',user:session.user,
     useAuthStore:{getState:()=>session},stopRequest:{current:null},lifecycleRequest:{current:false},
     uploadRequest:{current:false},isRestoring:false,metadataDraft:{current:null},tripEndTime:{current:null},
     pendingNames:{current:null},firstPoint:{current:null},lastPoint:{current:null},TASK_NAME:'synthetic',

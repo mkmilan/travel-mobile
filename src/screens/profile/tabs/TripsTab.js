@@ -1,6 +1,6 @@
 // screens/profile/tabs/TripsTab.js
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
 import useProfileList from "@/src/hooks/useProfileList";
@@ -11,6 +11,7 @@ import LikersSheet from "@/src/components/sheets/LikersSheet";
 import RecommendationsSheet from "@/src/components/sheets/RecommendationsSheet";
 
 import { getTripsByUser } from "@/src/services/api";
+import { useTripSocialStore } from "@/src/stores/tripSocialStore";
 import { theme } from "@/src/theme";
 
 /* ------------------------------------------------------------------ */
@@ -19,6 +20,17 @@ import { theme } from "@/src/theme";
 export default function TripsTab({ userId }) {
 	/* ---------------- local list state ---------------- */
 	const { identity, items, loading, initialLoading, refreshing, error, refresh: onRefresh, loadMore, refreshOnNextFocus } = useProfileList(userId, getTripsByUser);
+	const { primeCounts } = useTripSocialStore();
+	const primed = useRef({ identity: null, items: new Map() });
+	useEffect(() => {
+		if (primed.current.identity !== identity) primed.current = { identity, items: new Map() };
+		items.forEach(item => {
+			// Only a newly returned server object is authoritative. Reusing an old
+			// page/card/sheet must not overwrite social changes made since loading it.
+			if (primed.current.items.get(item._id) !== item) primeCounts(item);
+			primed.current.items.set(item._id, item);
+		});
+	}, [items, identity, primeCounts]);
 
 	/* ---------------- sheet state ---------------- */
 	const [sheet, setSheet] = useState(null);
@@ -41,6 +53,7 @@ export default function TripsTab({ userId }) {
 				keyExtractor={(t) => t._id}
 				renderItem={({ item }) => (
 					<TripCardContainer
+						primeOnMount={false}
 						user={item.user}
 						trip={item}
 						onOpenSheet={openSheet}
@@ -61,9 +74,9 @@ export default function TripsTab({ userId }) {
 			/>
 
 			{/* ---- shared bottom sheets (one copy each) ---- */}
-			<LikersSheet trip={selectedTrip} visible={sheetType === "likers"} onClose={closeSheet} />
-			<CommentsSheet trip={selectedTrip} visible={sheetType === "comments"} onClose={closeSheet} />
-			<RecommendationsSheet trip={selectedTrip} visible={sheetType === "recs"} onClose={closeSheet} />
+			<LikersSheet primeOnMount={false} trip={selectedTrip} visible={sheetType === "likers"} onClose={closeSheet} />
+			<CommentsSheet primeOnMount={false} trip={selectedTrip} visible={sheetType === "comments"} onClose={closeSheet} />
+			<RecommendationsSheet primeOnMount={false} trip={selectedTrip} visible={sheetType === "recs"} onClose={closeSheet} />
 		</View>
 	);
 }

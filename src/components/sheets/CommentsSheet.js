@@ -20,11 +20,11 @@ import {
 import Avatar from "../ui/Avatar";
 import BaseSheet from "./BaseSheet";
 
-export default function CommentsSheet({ trip, visible, onClose }) {
+export default function CommentsSheet({ trip, visible, onClose, primeOnMount = true }) {
 	const { user, token } = useAuthStore(); // current logged-in user
 	const router = useRouter();
 	/* ---- social slice ---- */
-	const { comments, loadComments, addComment } = useTripSocial(trip || {});
+	const { comments, loadComments, addComment } = useTripSocial(trip || {}, primeOnMount);
 	const loader = useSocialSheetLoader({ tripId: trip?._id, visible, load: loadComments });
 
 	/* ---- local state ---- */

@@ -71,12 +71,14 @@ export const useTripSocialStore = create((set, get) => ({
 		const isCurrentSession = captureSession();
 		const trip = scopedTrip(get(), tripId);
 		const liked = !trip.isLikedByCurrentUser;
+		const likeRevision = (trip.likeRevision || 0) + 1;
 		// optimistic
 		set((s) => ({
 			trips: {
 				...s.trips,
 				[tripId]: {
 					...trip,
+					likeRevision,
 					isLikedByCurrentUser: liked,
 					likesCount: (trip.likesCount || 0) + (liked ? 1 : -1),
 				},
@@ -85,9 +87,15 @@ export const useTripSocialStore = create((set, get) => ({
 		try {
 			liked ? await likeTrip(tripId) : await unlikeTrip(tripId);
 		} catch (e) {
-			if (!isCurrentSession()) return;
-			// revert on error
-			set((s) => ({ trips: { ...s.trips, [tripId]: trip } }));
+			if (!isCurrentSession() || scopedTrip(get(), tripId).likeRevision !== likeRevision) return;
+			// Revert only this Like, retaining newer comments/recommendations. A
+			// later Like or accepted server snapshot owns its own revision.
+			set((s) => ({ trips: { ...s.trips, [tripId]: {
+				...scopedTrip(s, tripId),
+				likeRevision: likeRevision + 1,
+				isLikedByCurrentUser: trip.isLikedByCurrentUser,
+				likesCount: trip.likesCount,
+			} } }));
 		}
 	},
 
@@ -164,6 +172,7 @@ export const useTripSocialStore = create((set, get) => ({
 				...s.trips,
 				[tripId]: {
 					...scopedTrip(s, tripId),
+					likeRevision: (scopedTrip(s, tripId).likeRevision || 0) + 1,
 					isLikedByCurrentUser: isLiked,
 					likesCount: count,
 				},
@@ -187,6 +196,7 @@ export const useTripSocialStore = create((set, get) => ({
 				...s.trips,
 				[trip._id]: {
 					...scopedTrip(s, trip._id),
+					likeRevision: (scopedTrip(s, trip._id).likeRevision || 0) + 1,
 					likesCount: trip.likesCount,
 					commentsCount: trip.commentsCount,
 					recommendationCount: trip.recommendationCount,

@@ -1,12 +1,22 @@
 // app/(tabs)/_layout.js
 import { IconSymbol } from "@/src/components/ui/IconSymbol";
 import { Tabs } from "expo-router";
+import { useNavigationState, useRoute } from "expo-router/react-navigation";
 import { Platform } from "react-native";
 
 export default function TabLayout() {
+	const route = useRoute();
+	const fromSearch = useNavigationState(state => {
+		const index = state.routes.findIndex(frame => frame.key === route.key);
+		return index > 0 && state.routes[index - 1].name === "search/index";
+	});
 	return (
 			<Tabs
 				initialRouteName="trips/index"
+				// Search pushes a new root Tabs frame. Do not seed it with an
+				// unvisited Feed route: its first Back must bubble to Search.
+				// Select by this frame's key, including on its very first render.
+				backBehavior={fromSearch ? "history" : "firstRoute"}
 				screenOptions={{
 					headerShown: false /* the root header handles top bar */,
 					tabBarActiveTintColor: "dark-blue",

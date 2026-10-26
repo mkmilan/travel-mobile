@@ -1,5 +1,17 @@
 import { getActiveTrip as readActiveTrip, claimRecordingCleanup as claimCleanup, finishRecordingCleanup as finishCleanup } from "./activeTrip";
 
+// Mounted Record routes share one native collector. Serialize their lifecycle
+// transitions so a pending native start cannot settle after a newer stop/start.
+// The persisted marker still supplies the cross-session/process ownership guard.
+let recordingTransition = Promise.resolve();
+export async function acquireRecordingTransition() {
+	const previous = recordingTransition;
+	let release;
+	recordingTransition = new Promise(resolve => { release = resolve; });
+	await previous;
+	return release;
+}
+
 const pendingStops = new Map();
 const boundedWait = (work, timeoutMs) => new Promise((resolve, reject) => {
 	const timer = setTimeout(() => reject(new Error("GPS shutdown is still pending. Try Stop again; new recording is blocked until shutdown is confirmed.")), timeoutMs);

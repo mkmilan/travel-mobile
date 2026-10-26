@@ -9,8 +9,8 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Text } from "react-native";
 import BaseSheet from "./BaseSheet";
 
-export default function RecommendationsSheet({ trip, visible, onClose, userId }) {
-	const { recommendations, loadRecommendations } = useTripSocial(trip || {});
+export default function RecommendationsSheet({ trip, visible, onClose, userId, primeOnMount = true }) {
+	const { recommendations, loadRecommendations } = useTripSocial(trip || {}, primeOnMount);
 	const loader = useSocialSheetLoader({ tripId: trip?._id, visible, load: loadRecommendations });
 
 	const [selection, setSelection] = useState(null);

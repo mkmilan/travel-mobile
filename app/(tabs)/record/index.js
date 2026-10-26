@@ -35,16 +35,19 @@ import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
 import { clearActiveTrip, getActiveTrip, setActiveTrip } from "@/src/utils/activeTrip";
 import { toast } from "@/src/utils/toast";
-import { stopAbandonedRecording, readRecordingTaskState } from "@/src/utils/recordingAttempt";
+import { stopAbandonedRecording, readRecordingTaskState, acquireRecordingTransition } from "@/src/utils/recordingAttempt";
 import { ensureRecordingPermissions } from "@/src/utils/recordingPermissions";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 //5000, 10 = 5sec 10 meters
 const TIME_INTERVAL = 5000;
 const DISTANCE_INTERVAL = 10;
+const sameRecording = (a, b) => a?.tripId === b?.tripId && a?.segmentId === b?.segmentId
+	&& a?.userId === b?.userId && a?.cleanupId === b?.cleanupId;
 
 export default function RecordScreen() {
 	// ─────── state ────────────────────────────────────────────────────────────
@@ -79,6 +82,9 @@ export default function RecordScreen() {
 	const recoveryRequest = useRef(null);
 	const [recoveryError, setRecoveryError] = useState(null);
 	const recordingLifetime = useRef(null);
+	const displayedRecording = useRef(null);
+	displayedRecording.current = { tripId, segmentId, status };
+	const pendingRecommendation = useRef(null);
 
 	const user = useAuthStore((s) => s.user);
 	const token = useAuthStore((s) => s.token);
@@ -98,6 +104,7 @@ export default function RecordScreen() {
 		metadataDraft.current = null;
 		pendingPoiRepair.current = null;
 		pendingPoi.current = null;
+		pendingRecommendation.current = null;
 		firstPoint.current = null;
 		lastPoint.current = null;
 		tripEndTime.current = null;
@@ -113,7 +120,9 @@ export default function RecordScreen() {
 			if (busy || !isCurrent()) return;
 			busy = true;
 			setIsRestoring(true);
+			const release = await acquireRecordingTransition();
 			try {
+				if (!isCurrent()) return;
 				await runMigrations();
 				if (!isCurrent()) return;
 				await refreshPending();
@@ -174,6 +183,7 @@ export default function RecordScreen() {
 					toast({ type: "warning", title: "Recording recovery needs attention", msg: error.message });
 				}
 			} finally {
+				release();
 				busy = false;
 				if (isCurrent()) setIsRestoring(false);
 			}
@@ -190,6 +200,100 @@ export default function RecordScreen() {
 			locationWatcher.current = null;
 		};
 	}, [user?._id, token, sessionEpoch, isSessionChanging]);
+
+	// A hidden Record tab can remain mounted under a newer Search-origin frame.
+	// Reconcile only its view on focus; never rerun the mutating startup recovery,
+	// clear a marker, or discard a same-trip metadata/POI draft here.
+	useFocusEffect(useCallback(() => {
+		let cancelled = false;
+		const lifetime = recordingLifetime.current;
+		const isCurrent = () => !cancelled && !!lifetime && recordingLifetime.current === lifetime
+			&& useAuthStore.getState().user?._id === user?._id
+			&& useAuthStore.getState().token === token && useAuthStore.getState().sessionEpoch === sessionEpoch
+			&& !useAuthStore.getState().isSessionChanging;
+		const sync = async () => {
+			const release = await acquireRecordingTransition();
+			try {
+				if (!isCurrent()) return;
+				const active = await getActiveTrip();
+				const rows = await getPendingTrips(user?._id);
+				if (!isCurrent()) return;
+				const previous = displayedRecording.current;
+				const selectedId = active.tripId || previous.tripId;
+				const selected = rows.find(row => row.id === selectedId);
+				let endpoints;
+				if (selected && selectedId !== previous.tripId && active.userId === user?._id) {
+					try { endpoints = await getTripEndpoints(selectedId, user._id); } catch { /* Optional local preview. */ }
+				}
+				const latest = await getActiveTrip();
+				if (!isCurrent() || !sameRecording(active, latest)) return;
+				setPending(rows);
+				if (active.cleanupId || (active.tripId && active.userId !== user?._id)) {
+					setStatus("cleanup_required");
+					return;
+				}
+				if (active.tripId && (!selected || !["recording", "paused"].includes(selected.status))) {
+					setStatus("cleanup_required");
+					return;
+				}
+				if (selectedId !== previous.tripId) {
+					// Do not reuse A's live coordinates for B's POI or endpoint names.
+					firstPoint.current = endpoints?.start || null;
+					lastPoint.current = null; // A persisted endpoint is not a fresh POI location.
+				}
+				const nextStatus = selected ? (selected.status === "recording" && !active.tripId ? "paused" : selected.status) : "idle";
+				displayedRecording.current = { tripId: selected?.id || null, segmentId: active.tripId ? active.segmentId : previous.segmentId, status: nextStatus };
+				setTripId(displayedRecording.current.tripId);
+				setSegment(displayedRecording.current.segmentId);
+				setStatus(nextStatus);
+				setRecoveryError(null);
+				// This observer only supplies local POI/endpoint previews. It does
+				// not start/stop the background collector or write recorded points.
+				try {
+					if (active.tripId && selected?.status === "recording") {
+						if (!locationWatcher.current) {
+							release(); // A slow preview must not block Pause/Stop.
+							await startLocationWatcher();
+						}
+					} else if (locationWatcher.current) await stopLocationWatcher();
+				} catch {
+					if (isCurrent()) toast({ type: "warning", title: "Current location unavailable", msg: "Try returning to Record to refresh the location preview." });
+				}
+			} catch (error) {
+				if (isCurrent()) { setStatus("cleanup_required"); setRecoveryError(error.message); }
+			} finally { release(); }
+		};
+		sync();
+		return () => { cancelled = true; };
+	}, [user?._id, token, sessionEpoch, isSessionChanging]));
+
+	// This read is repeated after permission dialogs/confirmation and inside the
+	// shared transition. A stale frame must never stop another segment or trip.
+	const readControlledRecording = async (expected, isCurrent, { resume = false } = {}) => {
+		const active = await getActiveTrip();
+		if (!isCurrent()) return null;
+		if (active.cleanupId || (active.tripId && !sameRecording(active, expected))) {
+			throw new Error("The recording changed. Return to Record to refresh its controls.");
+		}
+		const trip = await getLocalTrip(expected.tripId, expected.userId);
+		if (!isCurrent()) return null;
+		if (!["recording", "paused"].includes(trip.status)
+			|| (resume && active.tripId)) throw new Error("The recording changed. Return to Record to refresh its controls.");
+		const latest = await getActiveTrip();
+		if (!isCurrent()) return null;
+		if (!sameRecording(active, latest)) throw new Error("The recording changed. Return to Record to refresh its controls.");
+		return active;
+	};
+
+	const showOwnedCleanupError = async (expected, isCurrent, error) => {
+		if (!expected || !isCurrent()) return;
+		try {
+			const active = await getActiveTrip();
+			if (!isCurrent() || !active.cleanupId || !sameRecording(active.cleanupTarget, expected)) return;
+		} catch { if (!isCurrent()) return; /* Unknown marker state also needs explicit recovery. */ }
+		setStatus("cleanup_required");
+		setRecoveryError(error.message || "GPS shutdown needs another check. Try Stop again.");
+	};
 
 	const refreshPending = async () => {
 		const uid = user?._id;
@@ -284,10 +388,13 @@ export default function RecordScreen() {
 			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
 		if (!uid || uid !== user?._id || !session.token || session.token !== token || session.sessionEpoch !== sessionEpoch || !isCurrent()) return;
 		lifecycleRequest.current = true;
+		let release = () => {};
 		let attempt;
 		try {
 			// No trip or marker is created before both permissions are granted.
 			if (!(await requestRecordingAccess(isCurrent)) || !isCurrent()) return;
+			release = await acquireRecordingTransition();
+			if (!isCurrent()) return;
 			const existing = await getActiveTrip();
 			if (!isCurrent()) return;
 			if (existing.cleanupId || existing.tripId) {
@@ -342,6 +449,7 @@ export default function RecordScreen() {
 				// Persisted cleanup evidence is retried by the next live screen.
 			} finally {
 				lifecycleRequest.current = false;
+				release();
 			}
 		}
 	};
@@ -356,19 +464,31 @@ export default function RecordScreen() {
 			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
 		if (!tripId || !session.token || session.user?._id !== user?._id || session.token !== token || session.sessionEpoch !== sessionEpoch || !isCurrent()) return;
 		lifecycleRequest.current = true;
+		let release = () => {};
+		const expected = { tripId, segmentId, userId: session.user._id };
 		let attempt;
+		let stopTarget;
 		try {
+			if (status === "paused") {
+				if (!(await readControlledRecording(expected, isCurrent, { resume: true }))) return;
+				if (!(await requestRecordingAccess(isCurrent)) || !isCurrent()) return;
+			}
+			release = await acquireRecordingTransition();
+			if (!isCurrent()) return;
 			if (status === "recording") {
+				const active = await readControlledRecording(expected, isCurrent);
+				if (!active || !isCurrent()) return;
+				stopTarget = active;
 				await stopLocationWatcher();
-				if (await Location.hasStartedLocationUpdatesAsync(TASK_NAME)) await Location.stopLocationUpdatesAsync(TASK_NAME);
+				const outcome = await stopAbandonedRecording({ ...active, location: Location, taskName: TASK_NAME, getActiveTrip, isCurrent });
 				if (!isCurrent()) return;
-				await clearActiveTrip();
+				if (outcome !== "stopped") throw new Error("The recording changed. Return to Record to refresh its controls.");
 				await setTripRecordingStatus(tripId, "paused", session.user._id);
 				if (!isCurrent()) return;
 				setStatus("paused");
 				toast({ type: "info", title: "Paused" });
 			} else if (status === "paused") {
-				if (!(await requestRecordingAccess(isCurrent)) || !isCurrent()) return;
+				if (!(await readControlledRecording(expected, isCurrent, { resume: true }))) return;
 				await setTripRecordingStatus(tripId, "recording", session.user._id);
 				if (!isCurrent()) return;
 				const seg = startSegment();
@@ -404,6 +524,7 @@ export default function RecordScreen() {
 			}
 			if (isCurrent()) await refreshPending();
 		} catch (error) {
+			await showOwnedCleanupError(stopTarget, isCurrent, error);
 			if (isCurrent()) toast({ type: "danger", title: "Could not change recording state", msg: error.message });
 		} finally {
 			try {
@@ -412,6 +533,7 @@ export default function RecordScreen() {
 				// Cleanup-only marker remains available to the next live session.
 			} finally {
 				lifecycleRequest.current = false;
+				release();
 			}
 		}
 	};
@@ -420,10 +542,20 @@ export default function RecordScreen() {
 		if (isRestoring || lifecycleRequest.current || uploadRequest.current || ["recording", "paused", "cleanup_required"].includes(status)) return;
 		const session = { ...useAuthStore.getState() };
 		if (!session.token || session.user?._id !== user?._id) return;
+		const lifetime = recordingLifetime.current;
+		const isCurrent = () => !!lifetime && recordingLifetime.current === lifetime
+			&& useAuthStore.getState().user?._id === session.user._id
+			&& useAuthStore.getState().token === session.token
+			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
 		lifecycleRequest.current = true;
+		const release = await acquireRecordingTransition();
 		try {
+			if (!isCurrent()) return;
+			const active = await getActiveTrip();
+			if (!isCurrent()) return;
+			if (active.tripId || active.cleanupId) throw new Error("The recording changed. Return to Record to refresh its controls.");
 			await setTripRecordingStatus(tid, "paused", session.user._id);
-			if (useAuthStore.getState().user?._id !== session.user._id || useAuthStore.getState().token !== session.token) return;
+			if (!isCurrent()) return;
 			metadataDraft.current = null;
 			firstPoint.current = null;
 			lastPoint.current = null;
@@ -432,11 +564,12 @@ export default function RecordScreen() {
 			setSegment(null);
 			setStatus("paused");
 			await refreshPending();
-			toast({ type: "info", title: "Recovered paused trip", msg: "Resume recording, or tap Stop to review and save its details." });
+			if (isCurrent()) toast({ type: "info", title: "Recovered paused trip", msg: "Resume recording, or tap Stop to review and save its details." });
 		} catch (error) {
-			toast({ type: "warning", title: "Could not recover trip", msg: error.message });
+			if (isCurrent()) toast({ type: "warning", title: "Could not recover trip", msg: error.message });
 		} finally {
 			lifecycleRequest.current = false;
+			release();
 		}
 	};
 
@@ -473,38 +606,42 @@ export default function RecordScreen() {
 
 	const handleStop = async () => {
 		if (stopRequest.current || lifecycleRequest.current || isRestoring) return;
+		const session = { ...useAuthStore.getState() };
+		const lifetime = recordingLifetime.current;
+		const expected = { tripId, segmentId, userId: user?._id };
+		if (!tripId || !session.token || session.user?._id !== user?._id || session.token !== token || session.sessionEpoch !== sessionEpoch) return;
 		Alert.alert("Stop recording?", "Are you sure you want to finish this track?", [
 			{ text: "Continue", style: "cancel" },
 			{
 				text: "Stop",
 				style: "destructive",
 				onPress: async () => {
-					if (stopRequest.current) return;
-					const session = { ...useAuthStore.getState() };
-					if (!tripId || !user?._id || session.user?._id !== user._id) return;
+					if (stopRequest.current || lifecycleRequest.current) return;
 					const operation = { token: session.token, userId: user._id, sessionEpoch: session.sessionEpoch };
 					const previousDraft = metadataDraft.current;
 					stopRequest.current = operation;
-					const isCurrent = () => stopRequest.current === operation
+					const isCurrent = () => !!lifetime && recordingLifetime.current === lifetime && stopRequest.current === operation
 						&& useAuthStore.getState().token === operation.token
 						&& useAuthStore.getState().user?._id === operation.userId
 						&& useAuthStore.getState().sessionEpoch === operation.sessionEpoch
 						&& !useAuthStore.getState().isSessionChanging;
-					setIsResolvingLocation(true);
+					const release = await acquireRecordingTransition();
+					let stopTarget;
 					try {
+						if (!isCurrent()) return;
+						setIsResolvingLocation(true);
+						const active = await readControlledRecording(expected, isCurrent);
+						if (!active || !isCurrent()) return;
+						stopTarget = active;
 						await stopLocationWatcher();
+						const outcome = await stopAbandonedRecording({ ...active, location: Location, taskName: TASK_NAME, getActiveTrip, isCurrent });
 						if (!isCurrent()) return;
-						// Paused trips may already have no background task to stop.
-						const running = await Location.hasStartedLocationUpdatesAsync(TASK_NAME);
-						if (!isCurrent()) return;
-						if (running) await Location.stopLocationUpdatesAsync(TASK_NAME);
-						if (!isCurrent()) return;
-						await clearActiveTrip();
-						if (!isCurrent()) return;
+						if (outcome !== "stopped") throw new Error("The recording changed. Return to Record to refresh its controls.");
 						tripEndTime.current = new Date().toISOString();
 						await stopTrip(tripId, tripEndTime.current, operation.userId);
 						if (!isCurrent()) return;
 						setStatus("stopped");
+						release(); // Optional naming must not hold the native transition.
 						await refreshPending();
 
 						let names = {};
@@ -524,22 +661,24 @@ export default function RecordScreen() {
 							await rememberTripLocationNames(tripId, names, operation.userId, isCurrent);
 						} catch { /* Optional persistence must not block the details form or Save. */ }
 						if (!isCurrent()) return;
-						// An edit opened while naming was pending owns its manual fields.
-						if (metadataDraft.current !== previousDraft) return;
+						// A new recording selected during naming also owns the visible UI.
+						if (metadataDraft.current !== previousDraft || displayedRecording.current.tripId !== tripId) return;
 						const startName = names?.startName || "Unknown";
 						const endName = names?.endName || "Unknown";
 						pendingNames.current = { startName, endName };
 						const title = names?.startName && names?.endName ? `From ${startName} to ${endName}` : "Recorded trip";
 						const trip = await getLocalTrip(tripId, operation.userId);
 						if (!isCurrent()) return;
-						if (metadataDraft.current !== previousDraft) return;
+						if (metadataDraft.current !== previousDraft || displayedRecording.current.tripId !== tripId) return;
 						metadataDraft.current = { tripId, userId: operation.userId, token: operation.token,
 							endTime: trip.end_time, startName: trip.start_name || startName, endName: trip.end_name || endName };
 						const defaults = tripMetadataDefaults(trip, useAuthStore.getState().user?.settings || {});
 						sheetRef.current?.open(trip.title || title, defaults.mode, defaults.visibility, trip.description || "");
 					} catch (error) {
+						await showOwnedCleanupError(stopTarget, isCurrent, error);
 						if (isCurrent()) toast({ type: "danger", title: "Could not stop recording", msg: error?.message || "Please try Stop again." });
 					} finally {
+						release();
 						if (stopRequest.current === operation) {
 							stopRequest.current = null;
 							setIsResolvingLocation(false);
@@ -642,6 +781,7 @@ export default function RecordScreen() {
 		lastPoint.current = null;
 		tripEndTime.current = null;
 		metadataDraft.current = null;
+		pendingRecommendation.current = null;
 	};
 
 	// secondary buttons
@@ -690,6 +830,13 @@ export default function RecordScreen() {
 
 	// Handle recommendation submission
 	const handleRecommendationSubmit = async (recommendationData) => {
+		const context = pendingRecommendation.current;
+		const isCurrent = () => context && context.tripId === displayedRecording.current.tripId
+			&& context.lifetime === recordingLifetime.current
+			&& useAuthStore.getState().user?._id === context.userId
+			&& useAuthStore.getState().token === context.token
+			&& useAuthStore.getState().sessionEpoch === context.sessionEpoch && !useAuthStore.getState().isSessionChanging;
+		if (!isCurrent()) throw new Error("The recording changed. Reopen Add recommendation on the current trip.");
 		if (!tripId || (status !== "recording" && status !== "paused")) {
 			console.warn("[RecordScreen] No active trip to add recommendation to", { tripId, status });
 			toast({
@@ -700,7 +847,10 @@ export default function RecordScreen() {
 		}
 
 		try {
-			const newRec = await addRecommendation(tripId, recommendationData);
+			const trip = await getLocalTrip(context.tripId, context.userId);
+			if (!isCurrent() || !["recording", "paused"].includes(trip.status)) throw new Error("The recording changed. Reopen Add recommendation on the current trip.");
+			const newRec = await addRecommendation(context.tripId, recommendationData);
+			if (!isCurrent()) return null;
 			toast({
 				type: "success",
 				title: "Recommendation saved",
@@ -708,6 +858,7 @@ export default function RecordScreen() {
 			});
 			return newRec ? { _id: newRec } : null;
 		} catch (error) {
+			if (!isCurrent()) return null;
 			console.error("Failed to save recommendation:", error);
 			toast({ type: "error", title: "Failed to save recommendation" });
 		}
@@ -740,6 +891,10 @@ export default function RecordScreen() {
 			return;
 		}
 
+		const session = useAuthStore.getState();
+		if (session.user?._id !== user?._id || session.token !== token || session.sessionEpoch !== sessionEpoch || session.isSessionChanging) return;
+		pendingRecommendation.current = { tripId, userId: session.user?._id, token: session.token,
+			sessionEpoch: session.sessionEpoch, lifetime: recordingLifetime.current };
 		addRecommendationModalRef.current?.open(locationData);
 	};
 

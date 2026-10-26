@@ -8,8 +8,8 @@ import { ActivityIndicator, FlatList, Pressable, Text } from "react-native";
 import Avatar from "../ui/Avatar";
 import BaseSheet from "./BaseSheet";
 
-export default function LikersSheet({ trip, visible, onClose }) {
-	const { likers, loadLikers } = useTripSocial(trip || {});
+export default function LikersSheet({ trip, visible, onClose, primeOnMount = true }) {
+	const { likers, loadLikers } = useTripSocial(trip || {}, primeOnMount);
 	const loader = useSocialSheetLoader({ tripId: trip?._id, visible, load: loadLikers });
 	const router = useRouter();
 

@@ -4,7 +4,7 @@ const {fixture,nodes,native,theme} = require('./helpers/component-fixture.cjs');
 const tick = () => new Promise(setImmediate);
 const components = Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(name=>[name,name]));
 function screenFor(overrides={}, actor='owner', loadTrip=async()=>{throw Error('Refresh permission denied');}) {
-  let priming=false;let session={user:{_id:actor},token:'fixture-session',sessionEpoch:1,isAuthenticated:true};
+  let priming=false,focus;let session={user:{_id:actor},token:'fixture-session',sessionEpoch:1,isAuthenticated:true};
   const calls={alerts:[],likers:[],comments:[],likes:[],photos:[],deletes:[],navigation:[]};
   const recommendations=Array.from({length:4},(_,i)=>({_id:`rec-${i}`,name:`Place ${i}`,user:{_id:'owner'},photos:[]}));
   const trip={_id:'trip',user:{_id:'owner'},title:'Saved journey',recommendations,photos:['photo-a','photo-b'],commentsCount:2,comments:['comment-a','comment-b'],...overrides};
@@ -12,8 +12,8 @@ function screenFor(overrides={}, actor='owner', loadTrip=async()=>{throw Error('
     ...native,...components,theme,StyleSheet:{create:x=>x},
     console:{log(){},error(){}},Alert:{alert:(...args)=>calls.alerts.push(args)},
     useAuthStore:Object.assign(()=>session,{getState:()=>session}),
-    useRouter:()=>({push:path=>calls.navigation.push(path)}),useLocalSearchParams:()=>({id:'trip'}),
-    useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),useCallback:f=>f,useFocusEffect(){},
+    useRouter:()=>({push:path=>calls.navigation.push(path)}),useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>({id:'trip'}),
+    useTripSocialStore:Object.assign(()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),{getState:()=>({trips:{}})}),useCallback:f=>f,useFocusEffect:fn=>{focus=fn;},
     calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
     getTripJsonById:()=>priming ? Promise.resolve(trip) : loadTrip(),
     getTripLikers:async id=>{calls.likers.push(id);return [{_id:'liker'}];},
@@ -22,7 +22,7 @@ function screenFor(overrides={}, actor='owner', loadTrip=async()=>{throw Error('
     deleteTripPhoto:async(...args)=>calls.photos.push(args),deleteRecommendation:async id=>calls.deletes.push(id),
   });
   screen.setState(0,trip);screen.setState(1,false);screen.setState(14,8);
-  return {...screen,calls,trip,async prime(){priming=true;await nodes(screen.render(),'RecommendationDetailModal')[0].props.onRefresh();priming=false;},switchSession(){session={...session,user:{_id:'other'},token:'next',sessionEpoch:2};}};
+  return {...screen,calls,trip,focus:()=>focus(),async prime(){priming=true;await nodes(screen.render(),'RecommendationDetailModal')[0].props.onRefresh();priming=false;},switchSession(){session={...session,user:{_id:'other'},token:'next',sessionEpoch:2};}};
 }
 const section=(tree,title)=>nodes(tree,'Section').find(node=>node.props.title===title);
 const social=(tree,icon)=>nodes(tree,'SocialButton').find(node=>node.props.iconName===icon);
@@ -65,7 +65,7 @@ test('card press opens existing detail with same record; only owner receives lon
 
 test('saved card press cannot open recommendation detail after the session changes',()=>{
   const screen=screenFor();const card=nodes(screen.render(),'TripRecommendationCard')[0];screen.switchSession();card.props.onPress();
-  assert.equal(nodes(screen.render(),'RecommendationDetailModal')[0].props.isVisible,false);
+  assert.equal(nodes(screen.render(),'RecommendationDetailModal').length,0);
 });
 
 test('social comments toggle retains counts, explicit list expansion and close/reopen state',async()=>{
@@ -145,7 +145,7 @@ test('old-session response and rejection cannot advance the current thumbnail re
     const pending=[];
     const screen=screenFor({},'owner',()=>{const task=deferred();pending.push(task);return task.promise;});
     const old=refreshTrip(screen);screen.switchSession();
-    const current=refreshTrip(screen);pending[1].resolve(screen.trip);await current;
+    assert.equal(nodes(screen.render(),'RecommendationDetailModal').length,0);screen.focus();pending[1].resolve(screen.trip);await tick();
     const accepted=photoIdentity(screen);
     if(fails) pending[0].reject(Error('old-session error'));else pending[0].resolve(screen.trip);
     await old;assert.equal(photoIdentity(screen),accepted);

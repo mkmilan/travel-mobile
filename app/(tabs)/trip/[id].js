@@ -38,7 +38,7 @@ import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration } from "@/src/utils/fo
 import { lineStringToCoords } from "@/src/utils/geo";
 import { getPoiNote } from "@/src/utils/poiNote";
 import { Feather } from "@expo/vector-icons";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -81,11 +81,12 @@ const DropdownMenu = ({ isVisible, onClose, onEdit, onDelete, onAddRecommendatio
 // --- Main Screen Component ---
 export default function TripDetailScreen() {
 	const router = useRouter();
+	const rootNavigation = useNavigation("/");
 	const { id: tripId } = useLocalSearchParams();
 	const { user: currentUser, token, isAuthenticated, sessionEpoch, isSessionChanging } = useAuthStore();
 	const { setRecCount, setLikeState, setCommentCount } = useTripSocialStore();
 
-	const [trip, setTrip] = useState(null); // Will store the full trip object including its own commentsCount
+	const [loadedTrip, setTrip] = useState(null); // Full trip data belongs to its loading context.
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [refreshError, setRefreshError] = useState(null);
@@ -119,13 +120,39 @@ export default function TripDetailScreen() {
 		screenContext.current = { tripId, userId: currentUser?._id, token, sessionEpoch, key: (screenContext.current?.key || 0) + 1 };
 	}
 	const renderContext = screenContext.current;
+	// Hidden tab routes can be reused for another ID or login without unmounting.
+	// Gate data during render, before effects run, rather than showing the old trip.
+	const tripDataContext = useRef(renderContext);
+	const errorContext = useRef(renderContext);
+	const trip = !isSessionChanging && tripDataContext.current === renderContext && loadedTrip?._id === tripId ? loadedTrip : null;
+	const currentError = errorContext.current === renderContext ? error : null;
+	const likeRequest = useRef(null);
+	const likeRevision = useRef(0);
+	const likersRequest = useRef(null);
+	const [likePending, setLikePending] = useState(false);
 	const isCurrentContext = (context) => {
 		const session = useAuthStore.getState();
 		return screenMounted.current && context === screenContext.current && session.token === context.token && session.user?._id === context.userId && session.sessionEpoch === context.sessionEpoch && !session.isSessionChanging;
 	};
+	const isCurrentTrip = (context = renderContext) => isCurrentContext(context) && tripDataContext.current === context && trip?._id === context.tripId;
 	useEffect(() => {
 		setIsAddCommentModalVisible(false);
+		setIsDropdownVisible(false);
+		setIsRecDetailModalVisible(false);
+		setSelectedRecommendation(null);
+		setIsLikersModalVisible(false);
+		setLikers([]);
+		setLikersError("");
+		setLikersLoading(false);
+		setMapModalVisible(false);
+		setComments([]);
+		setCommentsError("");
 		setCommentsLoading(false);
+		setIsCommentsSectionVisible(false);
+		setIsCommentListExpanded(false);
+		setShowAllPois(false);
+		setShowAllRecommendations(false);
+		setLikePending(false);
 	}, [tripId, currentUser?._id, token, sessionEpoch, isSessionChanging]);
 	useEffect(() => {
 		screenMounted.current = true;
@@ -136,16 +163,23 @@ export default function TripDetailScreen() {
 
 	const addRecommendationModalRef = useRef(null);
 
-	useEffect(() => {
+	useFocusEffect(useCallback(() => {
+		let focused = true;
 		const backAction = () => {
-			router.replace("/(tabs)/trips/");
-			return true; // Prevent default behavior
+			if (!focused) return false;
+			// Only Search-origin tabs have source-aware history. Preserve the
+			// existing Trips return elsewhere (including direct/deep links).
+			const rootState = rootNavigation.getState();
+			const fromSearch = rootState.routes[rootState.index - 1]?.name === "search/index";
+			if (fromSearch && router.canGoBack()) router.back();
+			else router.replace("/(tabs)/trips/");
+			return true;
 		};
 
 		const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
 
-		return () => backHandler.remove();
-	}, []);
+		return () => { focused = false; backHandler.remove(); };
+	}, [router, rootNavigation]));
 
 	// Retry thumbnails only after a successful current load, not local trip edits
 	// or failed refreshes. The same request identity protects data, errors and
@@ -156,6 +190,7 @@ export default function TripDetailScreen() {
 	const fetchTripDetails = async (isRefetch = false, context = renderContext) => {
 		if (!isCurrentContext(context)) return;
 		if (!context.tripId) {
+			errorContext.current = context;
 			setError("Trip ID is missing.");
 			setLoading(false);
 			return;
@@ -173,6 +208,8 @@ export default function TripDetailScreen() {
 		try {
 			const data = await getTripJsonById(context.tripId);
 			if (!isCurrentContext(context) || latestTripPhotoRequest.current !== photoRequest) return;
+			if (data?._id !== context.tripId) throw new Error("The loaded trip did not match this page.");
+			errorContext.current = context;
 			setError(null); // A successful focus/retry also recovers an earlier initial-load error.
 			const likesArray = data.likes || [];
 			// Get comment COUNT from initial trip load, but not the comment objects themselves for display
@@ -180,6 +217,8 @@ export default function TripDetailScreen() {
 
 			photoRequest.hasData = true;
 			tripPhotoRefreshIdentity.current = photoRequest;
+			tripDataContext.current = context;
+			likeRevision.current += 1;
 			setTrip({
 				...data,
 				likesCount: likesArray.length,
@@ -188,6 +227,9 @@ export default function TripDetailScreen() {
 			});
 
 			setOptimisticLikesCount(likesArray.length);
+			// This accepted server snapshot also supersedes any older optimistic
+			// rollback in the shared cache, not only the detail's local heart.
+			setLikeState(context.tripId, { isLiked: !!context.userId && likesArray.includes(context.userId), count: likesArray.length });
 			if (context.userId) {
 				setIsLikedByCurrentUser(likesArray.includes(context.userId));
 			} else {
@@ -205,7 +247,7 @@ export default function TripDetailScreen() {
 			if (isCurrentContext(context) && latestTripPhotoRequest.current === photoRequest) {
 				const message = err?.message || "Could not load trip details.";
 				if (isRefetch && photoRequest.hasData) setRefreshError({ context, message });
-				else setError(message);
+				else { errorContext.current = context; setError(message); }
 			}
 		} finally {
 			// The newest refetch may supersede the initial load; it owns its spinner too.
@@ -235,11 +277,18 @@ export default function TripDetailScreen() {
 	const isOwner = isAuthenticated && trip && trip.user?._id === currentUser?._id;
 
 	const handleToggleLike = async () => {
-		if (!isAuthenticated || !trip) {
+		const context = renderContext;
+		if (!isCurrentTrip(context)) return;
+		if (!isAuthenticated) {
 			Alert.alert("Login Required", "You need to be logged in to like a trip.");
 			return;
 		}
 
+		if (likeRequest.current?.context === context) return;
+		const operation = { context, revision: likeRevision.current };
+		likeRequest.current = operation;
+		setLikePending(true);
+		const isCurrent = () => isCurrentTrip(context) && likeRequest.current === operation;
 		const originalLikedState = isLikedByCurrentUser;
 		const currentLikes = optimisticLikesCount;
 
@@ -247,44 +296,54 @@ export default function TripDetailScreen() {
 		setOptimisticLikesCount(!originalLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1));
 
 		// push optimistic state to the slice immediately
-		setLikeState(tripId, {
+		setLikeState(context.tripId, {
 			isLiked: !originalLikedState,
-			count: !originalLikedState ? currentLikes + 1 : currentLikes - 1,
+			count: !originalLikedState ? currentLikes + 1 : Math.max(0, currentLikes - 1),
 		});
+		operation.cacheRevision = useTripSocialStore.getState().trips[context.tripId]?.likeRevision;
 		try {
 			if (!originalLikedState) {
-				await likeTrip(tripId);
+				await likeTrip(context.tripId);
 			} else {
-				await unlikeTrip(tripId);
+				await unlikeTrip(context.tripId);
 			}
 			// Optionally, the API for like/unlike could return the updated trip/likesCount
 			// For now, useFocusEffect will eventually sync.
 		} catch (err) {
+			// Never roll an old account, route, request, or refreshed snapshot back.
+			if (!isCurrent() || likeRevision.current !== operation.revision || useTripSocialStore.getState().trips[context.tripId]?.likeRevision !== operation.cacheRevision) return;
 			console.error("Failed to update like status:", err);
 			Alert.alert("Error", "Could not update like status. Please try again.");
 			setIsLikedByCurrentUser(originalLikedState);
 			setOptimisticLikesCount(currentLikes);
-			setLikeState(tripId, { isLiked: originalLikedState, count: currentLikes });
+			setLikeState(context.tripId, { isLiked: originalLikedState, count: currentLikes });
+		} finally {
+			if (likeRequest.current === operation) {
+				likeRequest.current = null;
+				if (isCurrentTrip(context)) setLikePending(false);
+			}
 		}
 	};
 
-	const fetchLikersData = async () => {
-		// For the LikersModal
-		if (!tripId) return;
+	const fetchLikersData = async (context = renderContext) => {
+		if (!isCurrentTrip(context)) return;
+		const operation = { context };
+		likersRequest.current = operation;
+		const isCurrent = () => isCurrentTrip(context) && likersRequest.current === operation;
 		setLikersLoading(true);
 		setLikersError("");
 		try {
-			const likersData = await getTripLikers(tripId); // This API fetches user objects
-			setLikers(likersData || []);
+			const likersData = await getTripLikers(context.tripId); // This API fetches user objects
+			if (isCurrent()) setLikers(likersData || []);
 		} catch (err) {
-			console.error("Failed to fetch likers:", err);
-			setLikersError(err.message || "Could not load likers.");
+			if (isCurrent()) setLikersError(err?.message || "Could not load likers.");
 		} finally {
-			setLikersLoading(false);
+			if (isCurrent()) setLikersLoading(false);
 		}
 	};
 
 	const handleOpenLikersModal = () => {
+		if (!isCurrentTrip()) return;
 		fetchLikersData();
 		setIsLikersModalVisible(true);
 	};
@@ -323,6 +382,7 @@ export default function TripDetailScreen() {
 	};
 
 	const handleToggleCommentsSection = () => {
+		if (!isCurrentTrip()) return;
 		const newVisibility = !isCommentsSectionVisible;
 		setIsCommentsSectionVisible(newVisibility);
 		// If comments were embedded, they are already in `comments` state.
@@ -337,6 +397,7 @@ export default function TripDetailScreen() {
 	};
 
 	const handleToggleCommentList = () => {
+		if (!isCurrentTrip()) return;
 		const newExpandedState = !isCommentListExpanded;
 		setIsCommentListExpanded(newExpandedState);
 		// If expanding and comments were not fully loaded or need refresh
@@ -348,8 +409,9 @@ export default function TripDetailScreen() {
 
 	const handleAddCommentSubmit = async (text) => {
 		const context = renderContext;
-		const isCurrent = () => isCurrentContext(context);
-		if (!tripId || !isAuthenticated || !isCurrent()) {
+		const isCurrent = () => isCurrentTrip(context);
+		if (!isCurrent()) throw new Error("The trip or account changed. Reopen the comment form.");
+		if (!tripId || !isAuthenticated) {
 			Alert.alert("Error", "You must be logged in to comment.");
 			throw new Error("Not authenticated");
 		}
@@ -373,26 +435,29 @@ export default function TripDetailScreen() {
 	};
 
 	const handleDeleteComment = async (commentId) => {
-		if (!tripId || !isAuthenticated) return;
+		const context = renderContext;
+		const isCurrent = () => isCurrentTrip(context);
+		if (!isAuthenticated || !isCurrent()) return;
 		Alert.alert("Delete Comment", "Are you sure you want to delete this comment?", [
 			{ text: "Cancel", style: "cancel" },
 			{
 				text: "Delete",
 				style: "destructive",
 				onPress: async () => {
+					if (!isCurrent()) return;
 					try {
-						await deleteTripComment(tripId, commentId);
-						setComments((prevComments) => (prevComments || []).filter((comment) => comment._id !== commentId));
+						await deleteTripComment(context.tripId, commentId);
+						if (!isCurrent()) return;
+						setComments((prevComments) => isCurrent() ? (prevComments || []).filter((comment) => comment._id !== commentId) : prevComments);
 						if (trip && typeof trip.commentsCount === "number" && trip.commentsCount > 0) {
-							setTrip((prevTrip) => ({
+							setTrip((prevTrip) => isCurrent() && prevTrip?._id === context.tripId ? {
 								...prevTrip,
 								commentsCount: Math.max(0, prevTrip.commentsCount - 1),
-							}));
+							} : prevTrip);
 							setCommentCount(tripId, Math.max(0, (trip?.commentsCount || 1) - 1));
 						}
 					} catch (err) {
-						console.error("Failed to delete comment:", err);
-						Alert.alert("Error", err.message || "Could not delete comment.");
+						if (isCurrent()) Alert.alert("Error", err?.message || "Could not delete comment.");
 					}
 				},
 			},
@@ -400,6 +465,7 @@ export default function TripDetailScreen() {
 	};
 
 	const handleEdit = () => {
+		if (!isCurrentTrip() || !isOwner) return;
 		setIsDropdownVisible(false);
 		router.push(`/trip/${tripId}/edit`);
 	};
@@ -443,6 +509,7 @@ export default function TripDetailScreen() {
 	};
 
 	const handleAddRecommendation = () => {
+		if (!isCurrentTrip() || !isOwner) return;
 		setIsDropdownVisible(false);
 		if (addRecommendationModalRef.current) {
 			let initialMapLocation = null;
@@ -465,6 +532,7 @@ export default function TripDetailScreen() {
 	};
 
 	const handleEditRecommendation = (recommendation) => {
+		if (!isCurrentTrip() || !trip.recommendations?.some(rec => rec._id === recommendation?._id)) return;
 		addRecommendationModalRef.current?.openEdit(recommendation);
 	};
 
@@ -474,7 +542,7 @@ export default function TripDetailScreen() {
 		shouldRefreshImmediately = true
 	) => {
 		const context = renderContext;
-		const isCurrent = () => isCurrentContext(context);
+		const isCurrent = () => isCurrentTrip(context);
 		if (!context.tripId || !isAuthenticated || !isCurrent()) {
 			throw new Error("The trip or account changed. Reopen the recommendation form.");
 		}
@@ -501,10 +569,10 @@ export default function TripDetailScreen() {
 		}
 	};
 
-	const handleShare = () => Alert.alert("Share", "Share functionality to be implemented.");
+	const handleShare = () => { if (isCurrentTrip()) Alert.alert("Share", "Share functionality to be implemented."); };
 
 	const handleViewRecommendationDetail = (rec) => {
-		if (!isCurrentContext(renderContext)) return;
+		if (!isCurrentTrip()) return;
 		recommendationContext.current = renderContext;
 		const freshRec = trip.recommendations?.find((r) => r._id === rec._id) || rec;
 		console.log("🔍 Opening recommendation detail:", freshRec.name, "photos:", freshRec.photos?.length || 0);
@@ -514,7 +582,9 @@ export default function TripDetailScreen() {
 
 	// Handle recommendation deletion
 	const handleDeleteRecommendation = async (recommendation) => {
-		if (!isOwner) return; // Only trip owner can delete recommendations
+		const context = renderContext;
+		const isCurrent = () => isCurrentTrip(context);
+		if (!isOwner || !isCurrent()) return; // Only trip owner can delete recommendations
 
 		Alert.alert(
 			"Delete Recommendation",
@@ -525,12 +595,14 @@ export default function TripDetailScreen() {
 					text: "Delete",
 					style: "destructive",
 					onPress: async () => {
+						if (!isCurrent()) return;
 						try {
 							await deleteRecommendation(recommendation._id);
+							if (!isCurrent()) return;
 
 							// Update trip state immediately
 							setTrip((prevTrip) => {
-								if (!prevTrip) return prevTrip;
+								if (!isCurrent() || prevTrip?._id !== context.tripId) return prevTrip;
 
 								const updatedRecommendations =
 									prevTrip.recommendations?.filter((rec) => rec._id !== recommendation._id) || [];
@@ -546,8 +618,7 @@ export default function TripDetailScreen() {
 
 							Alert.alert("Success", "Recommendation deleted successfully");
 						} catch (error) {
-							console.error("Failed to delete recommendation:", error);
-							Alert.alert("Error", "Failed to delete recommendation");
+							if (isCurrent()) Alert.alert("Error", "Failed to delete recommendation");
 						}
 					},
 				},
@@ -563,7 +634,7 @@ export default function TripDetailScreen() {
 	};
 
 	// console.log("Trip details TRIP{ID} PAGE:", trip?.recommendations);
-	if (loading && !trip) {
+	if (!trip && (loading || !currentError)) {
 		// Show loading only if trip is not yet set
 		return (
 			<View style={styles.centered}>
@@ -572,11 +643,11 @@ export default function TripDetailScreen() {
 		);
 	}
 
-	if (error) {
+	if (currentError) {
 		// Show error if error state is set
 		return (
 			<View style={styles.centered}>
-				<Text style={styles.errorText}>{error}</Text>
+				<Text style={styles.errorText}>{currentError}</Text>
 				<Pressable onPress={() => router.back()} style={styles.button}>
 					<Text style={styles.buttonText}>Go Back</Text>
 				</Pressable>
@@ -621,17 +692,21 @@ export default function TripDetailScreen() {
 
 	/* helper only for owner */
 	const handleRemovePhoto = async (photoId) => {
+		const context = renderContext;
+		const isCurrent = () => isCurrentTrip(context);
+		if (!isOwner || !isCurrent()) return;
 		try {
-			await deleteTripPhoto(tripId, photoId);
-			setTrip((t) => ({ ...t, photos: (t.photos || []).filter((id) => id !== photoId) }));
+			await deleteTripPhoto(context.tripId, photoId);
+			if (!isCurrent()) return;
+			setTrip((t) => isCurrent() && t?._id === context.tripId ? { ...t, photos: (t.photos || []).filter((id) => id !== photoId) } : t);
 		} catch (e) {
-			Alert.alert("Delete failed", e.message);
+			if (isCurrent()) Alert.alert("Delete failed", e?.message || "Could not delete photo.");
 		}
 	};
 
 	// Apply only a confirmed photo deletion from the detail modal.
 	const handlePhotoDeleted = (recommendationId, photoId) => {
-		if (!isCurrentContext(renderContext)) return;
+		if (!isCurrentTrip()) return;
 		// Keep the trip and its open recommendation in sync after confirmation.
 		setTrip((prevTrip) => {
 			if (!prevTrip) return prevTrip;
@@ -681,7 +756,7 @@ export default function TripDetailScreen() {
 				</View>
 			)}
 			<View style={styles.header}>
-				<Pressable onPress={() => router.push(`/user/${tripUser._id}`)} style={styles.userInfo}>
+				<Pressable onPress={() => { if (isCurrentTrip()) router.push(`/user/${tripUser._id}`); }} style={styles.userInfo}>
 					<Avatar
 						user={tripUser}
 						photoId={tripUser.profilePictureUrl}
@@ -691,7 +766,7 @@ export default function TripDetailScreen() {
 					<Text style={styles.userName}>{tripUser.username || "Unknown User"}</Text>
 				</Pressable>
 				{isOwner && (
-					<Pressable disabled={currentDeletion?.pending} onPress={() => setIsDropdownVisible(true)} style={styles.menuButton}>
+					<Pressable disabled={currentDeletion?.pending} onPress={() => { if (isCurrentTrip()) setIsDropdownVisible(true); }} style={styles.menuButton}>
 						<Feather name="more-vertical" size={24} color={theme.colors.text} />
 					</Pressable>
 				)}
@@ -709,7 +784,7 @@ export default function TripDetailScreen() {
 
 			<Section title="Route Map">
 				{/* <InteractiveTripMap routeCoords={mapCoords} pois={pois} style={{ marginBottom: theme.space.md }} /> */}
-				<TouchableOpacity onPress={() => setMapModalVisible(true)}>
+				<TouchableOpacity onPress={() => { if (isCurrentTrip()) setMapModalVisible(true); }}>
 					<TripMapThumbnail coords={mapCoords} style={{ height: 300, marginBottom: theme.space.md }} />
 				</TouchableOpacity>
 			</Section>
@@ -729,7 +804,7 @@ export default function TripDetailScreen() {
 			{/* Social Bar */}
 			<View style={styles.socialBar}>
 				<View style={styles.likeButtonContainer}>
-					<TouchableOpacity onPress={handleToggleLike} style={styles.socialIconPressable}>
+					<TouchableOpacity onPress={handleToggleLike} disabled={likePending} style={styles.socialIconPressable}>
 						<Feather
 							name="heart"
 							size={20}
@@ -757,7 +832,7 @@ export default function TripDetailScreen() {
 			{/* Comments Section */}
 			{isCommentsSectionVisible && (
 				<Section title="Comments">
-					<TouchableOpacity style={styles.addCommentCard} onPress={() => setIsAddCommentModalVisible(true)}>
+					<TouchableOpacity style={styles.addCommentCard} onPress={() => { if (isCurrentTrip()) setIsAddCommentModalVisible(true); }}>
 						<Feather name="plus-circle" size={20} color={theme.colors.primary} />
 						<Text style={styles.addCommentCardText}>
 							{(trip.commentsCount || 0) === 0 ? "Be the first to comment!" : "Add a comment"}
@@ -846,7 +921,7 @@ export default function TripDetailScreen() {
 
 			<DropdownMenu
 				isVisible={isDropdownVisible}
-				onClose={() => setIsDropdownVisible(false)}
+				onClose={() => { if (isCurrentTrip()) setIsDropdownVisible(false); }}
 				onEdit={handleEdit}
 				onDelete={handleDelete}
 				onAddRecommendation={handleAddRecommendation}
@@ -855,7 +930,7 @@ export default function TripDetailScreen() {
 			<RecommendationDetailModal
 				key={renderContext.key}
 				isVisible={isRecDetailModalVisible && recommendationContext.current === renderContext}
-				onClose={() => setIsRecDetailModalVisible(false)}
+				onClose={() => { if (isCurrentTrip()) setIsRecDetailModalVisible(false); }}
 				recommendation={recommendationContext.current === renderContext ? selectedRecommendation : null}
 				tripUserId={trip?.user?._id}
 				onEdit={handleEditRecommendation}
@@ -865,7 +940,7 @@ export default function TripDetailScreen() {
 			/>
 			<LikersModal
 				isVisible={isLikersModalVisible}
-				onClose={() => setIsLikersModalVisible(false)}
+				onClose={() => { if (isCurrentTrip()) setIsLikersModalVisible(false); }}
 				likers={likers} // This is the list of user objects for the modal
 				isLoading={likersLoading}
 				error={likersError}
@@ -873,12 +948,12 @@ export default function TripDetailScreen() {
 			<AddCommentModal
 				key={screenContext.current.key}
 				isVisible={isAddCommentModalVisible}
-				onClose={() => setIsAddCommentModalVisible(false)}
+				onClose={() => { if (isCurrentTrip()) setIsAddCommentModalVisible(false); }}
 				onSubmit={handleAddCommentSubmit}
 			/>
 			<MapModal
 				visible={isMapModalVisible}
-				onClose={() => setMapModalVisible(false)}
+				onClose={() => { if (isCurrentTrip()) setMapModalVisible(false); }}
 				routeCoords={mapCoords}
 				pois={pois}
 			/>

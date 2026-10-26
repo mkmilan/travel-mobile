@@ -148,6 +148,9 @@ function stopHandlers({running=true,names=async()=>({startName:null,endName:null
   const session={user:{_id:'fixture-owner'},token:'fixture-token'};const events=[],opened=[],notices=[];let button;
   const stopRequest={current:null},tripEndTime={current:null},pendingNames={current:null},metadataDraft={current:null};
   const handler=require('node:vm').runInNewContext(source.slice(start,end)+';handleStop',{
+    displayedRecording:{current:{tripId:'fixture-trip'}},pendingRecommendation:{current:null},recordingLifetime:{current:{}},segmentId:'segment',token:session.token,sessionEpoch:session.sessionEpoch,
+    showOwnedCleanupError:async()=>{},acquireRecordingTransition:async()=>()=>{},readControlledRecording:async()=>({}),getActiveTrip:async()=>({}),
+    stopAbandonedRecording:async()=>{if(running){events.push('background-stop');await stopBackground();}events.push('clear-active');return 'stopped';},
     lifecycleRequest:{current:false},isRestoring:false,tripId:'fixture-trip',user:{...session.user,settings:{defaultTravelMode:'walking'}},useAuthStore:{getState:()=>session},stopRequest,tripEndTime,pendingNames,firstPoint:{current:null},lastPoint:{current:null},TASK_NAME:'fixture-task',
     Alert:{alert:(_,__,buttons)=>{button=buttons.find(b=>b.text==='Stop');}},stopLocationWatcher:async()=>events.push('foreground-stop'),
     Location:{hasStartedLocationUpdatesAsync:async()=>running,stopLocationUpdatesAsync:async()=>{events.push('background-stop');await stopBackground();}},

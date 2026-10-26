@@ -44,7 +44,7 @@ test('trip details hide the entire POI section for empty and populated trips and
   for (const enabled of [false,true]) for (const count of [0,4]) {
     const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
       ...native,...components,ENABLE_POI_UI:enabled,theme,StyleSheet:style,getPoiNote:p=>p.note,
-      useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({push(){}}),useLocalSearchParams:()=>({id:'trip'}),
+      useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({push(){}}),useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>({id:'trip'}),
       useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),useCallback:f=>f,useFocusEffect(){},
       calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
     });

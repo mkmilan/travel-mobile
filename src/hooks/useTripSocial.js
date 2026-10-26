@@ -8,7 +8,7 @@ import { useAuthStore } from "@/src/stores/auth";
  * Always calls the same number of React-hooks on every render
  * (even when trip is null) so no DevTools warnings.
  */
-export default function useTripSocial(trip) {
+export default function useTripSocial(trip, primeOnMount = true) {
 	useAuthStore(state => state.token);
 	useAuthStore(state => state.user?._id);
 	const scope = getSocialSessionScope();
@@ -19,10 +19,10 @@ export default function useTripSocial(trip) {
 	/* run once per trip to cache the initial counts                */
 	/* ------------------------------------------------------------ */
 	React.useEffect(() => {
-		if (trip && trip._id) {
+		if (primeOnMount && trip && trip._id) {
 			primeCounts(trip);
 		}
-	}, [primeCounts, trip?._id, scope]); // Stable trip/session identities only.
+	}, [primeCounts, trip?._id, scope, primeOnMount]); // Stable trip/session identities only.
 
 	/* ------------------------------------------------------------ */
 	/* if no trip yet (sheet closed) → return inert API             */

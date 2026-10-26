@@ -15,10 +15,11 @@ const flatten = styles => Object.assign({}, ...[styles].flat(Infinity).filter(Bo
 
 // Baseline includes 410 tombstone handling (trip-delete.test.cjs), plus bounded
 // endpoint naming and stale-draft/session guards (recording-forms.test.cjs), plus
-// reviewed optional endpoint persistence (recording-name-persistence.test.cjs).
+// reviewed optional endpoint persistence (recording-name-persistence.test.cjs), and
+// cross-frame ownership/focus/awaited-control safety (recording-cross-frame.test.cjs).
 test('recording logic matches reviewed lifecycle and terminal-deletion-response baseline', () => {
   const source=read(file),logic=source.slice(source.indexOf('//5000,'),source.indexOf('// ─────── UI'));
-  assert.equal(createHash('sha256').update(logic).digest('hex'),'3428794a461cd222dacc4f46895b557711b844aaa250e0cc6d3acce4abdd58b9');
+  assert.equal(createHash('sha256').update(logic).digest('hex'),'4bcef41cbb38ae09bc655df807f643c4a96d7edce5af44bf61ea4caaca39146b');
 });
 
 test('all recording states have clear labeled controls and a single scrolling surface', () => {

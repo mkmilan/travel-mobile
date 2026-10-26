@@ -210,17 +210,19 @@ test('unmount during native Start cleans only its abandoned collector and retain
   }finally{h.close();}
 });
 
-test('late native Start after same-token relogin cannot stop or clear a newer same-owner recording marker',async()=>{
+test('late native Start after same-token relogin settles before a new Record can start another collector',async()=>{
   const h=await harness();try {
     const wait=deferred(),nativeStart=h.Location.startLocationUpdatesAsync;
     h.Location.startLocationUpdatesAsync=async()=>{h.state.starts++;await wait.promise;h.state.running=true;};
     const old=h.mount();await tick();const start=old.press('play');await tick();
     await h.auth().logout();old.unmount();await h.auth().login(account());
-    h.Location.startLocationUpdatesAsync=nativeStart;const current=h.mount();await tick();await current.press('play');
-    const marker=JSON.stringify(h.state.active),before=await h.snapshot(),stops=h.state.stops,notices=h.state.notices.length;
-    wait.resolve();await start;
-    assert.equal(JSON.stringify(h.state.active),marker);assert.equal(h.state.running,true);assert.equal(h.state.stops,stops);
-    assert.equal(h.state.notices.length,notices);assert.equal(current.status(),'Status: Recording');assert.equal(await h.snapshot(),before);current.unmount();
+    h.Location.startLocationUpdatesAsync=nativeStart;const current=h.mount();await tick();
+    assert.equal(current.button('play'),undefined,'new Record waits for the old native transition, not just its cleared marker');
+    assert.equal(h.state.starts,1);wait.resolve();await start;await tick();
+    assert.equal(h.state.running,false);assert.deepEqual(h.state.active,{});
+    await current.press('play');const marker=JSON.stringify(h.state.active),before=await h.snapshot();
+    assert.equal(current.status(),'Status: Recording');assert.equal(h.state.running,true);assert.equal(h.state.starts,2);
+    await tick();assert.equal(JSON.stringify(h.state.active),marker);assert.equal(await h.snapshot(),before);current.unmount();
   }finally{h.close();}
 });
 

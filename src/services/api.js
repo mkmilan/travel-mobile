@@ -278,6 +278,11 @@ export const getFeedTripJson = async (page = 1, pageSize = 10) => {
 	return { items: Array.isArray(data) ? data : data.items || [] };
 };
 
+// Public trips from everyone; independent of the Following feed endpoint.
+export const getDiscoverTripJson = (page = 1, pageSize = 10) => apiFetch(
+	`/v2/trips/json/discover?page=${page}&limit=${pageSize}`, { method: "GET" }
+);
+
 // ───────────────── getTripsByUser  ✅ ─────────────────
 //targeted user id is userId our/user that make call is in req
 export const getTripsByUser = async (userId, page = 1, limit = 10) => {
@@ -517,10 +522,9 @@ export const getUserFollowers = async (userId, page = 1, limit = 10) => {
 /**
  * Search for users, trips, or recommendations.
  * @param {string} searchTerm - The query string.
- * @param {string} searchType - One of "user", "trip", "recommendation".
- * @returns {Promise<{items: Array}>}
+ * @param {string} searchType - One of "users", "trips", "recommendations".
+ * @returns {Promise<Array>} Legacy array response; use searchPageApi for paging.
  */
-//NOT IN USE NOW
 export const searchApi = async (searchTerm, searchType) => {
 	const params = new URLSearchParams();
 	params.append("q", searchTerm);
@@ -532,6 +536,17 @@ export const searchApi = async (searchTerm, searchType) => {
 		csrf: true,
 	});
 	return Array.isArray(data) ? data : [];
+};
+
+/** Search's opt-in envelope keeps older array consumers unchanged. */
+export const searchPageApi = async (searchTerm, searchType, page = 1, limit = 20, category = "", requestGuard) => {
+	const params = new URLSearchParams({ q: searchTerm, type: searchType, page, limit, envelope: "true" });
+	if (searchType === "recommendations" && category) params.set("category", category);
+	const data = await apiFetch(`/v2/search?${params}`, { method: "GET", auth: true, requestGuard });
+	if (!Array.isArray(data?.results) || typeof data.hasMore !== "boolean" || data.page !== page) {
+		throw new Error("Unexpected search response. Please try again.");
+	}
+	return data;
 };
 
 /**

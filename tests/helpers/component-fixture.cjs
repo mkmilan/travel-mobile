@@ -25,6 +25,8 @@ function fixture(file, name, props = {}, dependencies = {}) {
     useRef(initial) {const i=index++; return cells[i] ||= {current:initial};},
     useImperativeHandle:(ref,create)=>{ref.current=create();},
     useEffect() {},
+    useFocusEffect() {},
+    useCallback: callback => callback,
     ...dependencies,
   });
   return {ref, render:()=>{index=0;return component(props, ref);}, setState:(i,value)=>{cells[i]=value;}};

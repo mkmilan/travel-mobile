@@ -183,7 +183,7 @@ test('trip-detail comment completion cannot update a different route/session or 
     const pending=deferred();const session={token:'a',user:{_id:'owner'}};const original={tripId:'trip-a',token:'a',userId:'owner'};
     const screenContext={current:original},screenMounted={current:true};const calls=[];
     const handler=require('node:vm').runInNewContext(source.slice(source.indexOf('const isCurrentContext = '),source.indexOf('\n\tuseEffect',source.indexOf('const isCurrentContext = ')))+'\n'+source.slice(start,end)+';handleAddCommentSubmit',{
-      tripId:'trip-a',isAuthenticated:true,trip:{_id:'trip-a',commentsCount:0},renderContext:original,screenContext,screenMounted,useAuthStore:{getState:()=>session},
+      tripDataContext:{current:original},tripId:'trip-a',isAuthenticated:true,trip:{_id:'trip-a',commentsCount:0},renderContext:original,screenContext,screenMounted,useAuthStore:{getState:()=>session},
       addTripComment:()=>pending.promise,setComments:update=>{calls.push('comments');assert.equal(update([]).length,1);},setTrip:update=>{calls.push('trip');assert.equal(update({_id:'trip-a',commentsCount:0}).commentsCount,1);},setCommentCount:()=>calls.push('count'),setIsCommentListExpanded:()=>calls.push('expand'),setIsCommentsSectionVisible:()=>calls.push('visible'),isCommentListExpanded:false,isCommentsSectionVisible:false,Alert:{alert:()=>calls.push('alert')},
     });
     const request=handler('Text');if(change==='trip')screenContext.current={...original,tripId:'trip-b'};if(change==='session')session.token='b';if(change==='unmount')screenMounted.current=false;
@@ -199,11 +199,11 @@ function tripDetailCallbacks(overrides={}) {
   const calls=[],requests=[];const record=name=>(...args)=>calls.push({name,args});
   const api=name=>(...args)=>{requests.push({name,args});return Promise.resolve(name==='trip'?{_id:'trip-a',likes:[],comments:[]}:{_id:'saved'});};
   const dependencies={
-    latestTripPhotoRequest:{current:overrides.trip === null ? null : {context,hasData:true}},tripPhotoRefreshIdentity:{current:null},
+    latestTripPhotoRequest:{current:overrides.trip === null ? null : {context,hasData:true}},tripPhotoRefreshIdentity:{current:null},tripDataContext:{current:context},errorContext:{current:context},likeRevision:{current:0},
     renderContext:context,screenContext,screenMounted,commentsRequest:{current:null},useAuthStore:{getState:()=>session},tripId:context.tripId,isAuthenticated:true,currentUser:session.user,trip:{_id:'trip-a',recommendations:[{_id:'existing'}],commentsCount:0},
     comments:[],commentsLoading:false,isCommentListExpanded:false,isCommentsSectionVisible:false,
     getTripJsonById:api('trip'),getTripComments:api('comments'),addRecommendation:api('create'),updateRecommendation:api('update'),
-    setLoading:record('loading'),setError:record('error'),setRefreshError:record('refresh-error'),setTrip:record('trip'),setOptimisticLikesCount:record('likes-count'),setIsLikedByCurrentUser:record('liked'),setComments:record('comments'),setCommentsLoading:record('comments-loading'),setCommentsError:record('comments-error'),setRecCount:record('rec-count'),Alert:{alert:record('alert')},...overrides,
+    setLikeState(){},setLoading:record('loading'),setError:record('error'),setRefreshError:record('refresh-error'),setTrip:record('trip'),setOptimisticLikesCount:record('likes-count'),setIsLikedByCurrentUser:record('liked'),setComments:record('comments'),setCommentsLoading:record('comments-loading'),setCommentsError:record('comments-error'),setRecCount:record('rec-count'),Alert:{alert:record('alert')},...overrides,
   };
   const code=[section('isCurrentContext','\n\tuseEffect'),section('fetchTripDetails','\n\tuseEffect'),section('fetchCommentsData','\n\tconst handleToggleCommentsSection'),section('handleRecommendationSubmit','\n\tconst handleShare')].join('\n');
   const methods=require('node:vm').runInNewContext(code+';({fetchTripDetails,fetchCommentsData,handleRecommendationSubmit})',dependencies);
@@ -275,7 +275,7 @@ function tripDetailScreen(overrides={}) {
   const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton'].map(name=>[name,name]));
   let focus,priming=false;const params={id:'trip-a'};
   const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
-    ...defaults,...components,useAuthStore,useLocalSearchParams:()=>params,
+    ...defaults,...components,useAuthStore,useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>params,
     useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),
     useCallback:fn=>fn,useFocusEffect:callback=>{focus=callback;},
     calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',lineStringToCoords:()=>[],
@@ -352,10 +352,10 @@ test('mount focus superseding initial detail read owns spinner and initial error
     const reads=[];const screen=tripDetailCallbacks({trip:null,getTripJsonById:()=>{const p=deferred();reads.push(p);return p.promise;}});
     const initial=screen.fetchTripDetails(),focus=screen.fetchTripDetails(true);
     if(olderFirst){const before=screen.calls.length;reads[0].resolve({_id:'old',likes:[],comments:[]});await initial;assert.equal(screen.calls.length,before);}
-    if(newFails)reads[1].reject(Error('current initial failure'));else reads[1].resolve({_id:'new',likes:[],comments:[]});await focus;
+    if(newFails)reads[1].reject(Error('current initial failure'));else reads[1].resolve({_id:'trip-a',title:'new',likes:[],comments:[]});await focus;
     assert.equal(screen.calls.at(-1).name,'loading');assert.equal(screen.calls.at(-1).args[0],false);
     if(newFails)assert.equal(screen.calls.find(call=>call.name==='error'&&call.args[0])?.args[0],'current initial failure');
-    else assert.equal(screen.calls.find(call=>call.name==='trip').args[0]._id,'new');
+    else assert.equal(screen.calls.find(call=>call.name==='trip').args[0].title,'new');
     if(!olderFirst){const before=screen.calls.length;reads[0].reject(Error('obsolete initial failure'));await initial;assert.equal(screen.calls.length,before);}
   }
 });

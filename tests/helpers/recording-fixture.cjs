@@ -7,7 +7,7 @@ function recordingFixture(get, set, extra = {}) {
       deleteItemAsync: async()=>set({}),
     },
   });
-  const recording = load('src/utils/recordingAttempt.js','({stopAbandonedRecording,readRecordingTaskState})', {
+  const recording = load('src/utils/recordingAttempt.js','({stopAbandonedRecording,readRecordingTaskState,acquireRecordingTransition})', {
     readActiveTrip:markers.getActiveTrip,claimCleanup:markers.claimRecordingCleanup,finishCleanup:markers.finishRecordingCleanup,
     setTimeout,clearTimeout,...extra,
   });

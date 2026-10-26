@@ -8,8 +8,8 @@ import TripCard from "./TripCard";
  * Wraps the dumb <TripCard/> with formatted numbers
  * and the shared social-state actions.
  */
-export default function TripCardContainer({ trip, onOpenSheet, onPress, userNameOverride, user }) {
-	const { likesCount, commentsCount, recommendationCount, isLiked, toggleLike } = useTripSocial(trip);
+export default function TripCardContainer({ trip, onOpenSheet, onPress, userNameOverride, user, canAct, primeOnMount = true }) {
+	const { likesCount, commentsCount, recommendationCount, isLiked, toggleLike } = useTripSocial(trip, primeOnMount);
 
 	/* ---- format everything exactly like the old page did ---- */
 	const distanceLabel = kmOrMiles(trip.distanceMeters);
@@ -40,7 +40,7 @@ export default function TripCardContainer({ trip, onOpenSheet, onPress, userName
 			recommendationsCount={recommendationCount}
 			isLikedByCurrentUser={isLiked}
 			/* actions */
-			onLikePress={toggleLike}
+			onLikePress={() => { if (!canAct || canAct()) return toggleLike(); }}
 			onOpenLikersModalPress={() => onOpenSheet("likers", trip)}
 			onCommentPress={() => onOpenSheet("comments", trip)}
 			onRecommendPress={() => onOpenSheet("recs", trip)}

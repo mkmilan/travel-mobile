@@ -95,7 +95,7 @@ function detailScreen(remove,enabled=true){
   const components=Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(name=>[name,name]));
   const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
     ...native,...components,theme,StyleSheet:{create:x=>x},ENABLE_SAFE_TRIP_DELETE:enabled,createTripDeletion,
-    useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({replace:path=>navigations.push(path),push(){}}),useLocalSearchParams:()=>route,
+    useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({replace:path=>navigations.push(path),push(){}}),useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>route,
     useTripSocialStore:Object.assign(()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),{getState:()=>({invalidateDeletedTrip:id=>invalidations.push(id)})}),useCallback:f=>f,useFocusEffect:fn=>{focus=fn;},
     calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],getTripJsonById:async()=>({_id:serverId,user:{_id:'owner'},recommendations:[]}),
     Alert:{alert:(...args)=>alerts.push(args)},deleteServerTrip:remove,reconcileDeletedServerTrip:async(...args)=>reconciles.push(args),rememberPendingTripDeletion:async()=>{},settlePendingTripDeletion:async()=>{},
@@ -179,7 +179,7 @@ test('unverified terminal upload response stays an ordinary unconfirmed failure,
 
 
 test('detail cannot offer deletion while a previous route’s loaded trip is still on screen',async()=>{
-  let calls=0;const f=detailScreen(async()=>{calls++;return receipt;});f.render();f.route.id='abcdef1234567890abcdef12';f.open();assert.equal(f.alerts.length,0);assert.equal(calls,0);
+  let calls=0;const f=detailScreen(async()=>{calls++;return receipt;});const oldMenu=nodes(f.render()).find(n=>n.type?.name==='DropdownMenu');f.route.id='abcdef1234567890abcdef12';const changed=f.render();assert.equal(nodes(changed).some(n=>n.type?.name==='DropdownMenu'),false);oldMenu.props.onDelete();assert.equal(f.alerts.length,0);assert.equal(calls,0);
 });
 
 
