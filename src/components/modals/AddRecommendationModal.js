@@ -5,10 +5,12 @@ import { RECOMMENDATION_CATEGORIES, RECOMMENDATION_TAGS } from "@/src/constants/
 import usePhotoManager from "@/src/hooks/usePhotoManager";
 import { theme } from "@/src/theme";
 import { useAuthStore } from "@/src/stores/auth";
+import { getFitRegion } from "@/src/utils/geo";
 import { Ionicons } from "@expo/vector-icons";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
 	Alert,
+	Keyboard,
 	ActivityIndicator,
 	Pressable,
 	ScrollView,
@@ -17,8 +19,10 @@ import {
 	TextInput,
 	View,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Polyline } from "react-native-maps";
 import { StarRating } from "../helpers/StarRating";
+
+const isValidLocation = (lat, lon) => Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
 
 // Category Selector Component
 const CategorySelector = ({ selectedCategory, onCategoryChange }) => {
@@ -254,6 +258,12 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		latitudeDelta: 0.0922,
 		longitudeDelta: 0.0421,
 	});
+	// Only new recommendations on saved trips use an explicit, cancellable choice.
+	const [savedTripRoute, setSavedTripRoute] = useState(null);
+	const [pickingLocation, setPickingLocation] = useState(false);
+	const [candidateLocation, setCandidateLocation] = useState(null);
+	const pickerSession = useRef(null);
+	const currentPicker = pickerSession.current;
 
 	const {
 		photos,
@@ -272,7 +282,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 	});
 
 	useImperativeHandle(ref, () => ({
-		open(locationData = null, tripId = null) {
+		open(locationData = null, tripId = null, options = {}) {
 			if ((submitting.current && isCurrent(submitting.current.context)) || isDeleting()) return;
 			submitting.current = null;
 			setSaving(false);
@@ -282,13 +292,22 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 			setIsEditMode(false);
 			setEditingRecommendationId(null);
 			setAssociatedTrip(tripId);
+			pickerSession.current = null;
+			setPickingLocation(false);
+			setCandidateLocation(null);
+			const route = options.requireLocationSelection
+				? (Array.isArray(options.routeCoordinates) ? options.routeCoordinates : [])
+					.filter((point) => Array.isArray(point) && point.length >= 2 && isValidLocation(point[1], point[0]))
+					.map(([lon, lat]) => ({ lat, lon }))
+				: null;
+			setSavedTripRoute(route);
 
 			// Reset photo state
 			setInitialPhotosForManager([]);
 			setManagerPhotos([]);
 
-			const initialLat = locationData?.lat || null;
-			const initialLon = locationData?.lon || null;
+			const initialLat = options.requireLocationSelection ? null : locationData?.lat ?? null;
+			const initialLon = options.requireLocationSelection ? null : locationData?.lon ?? null;
 			setFormData({
 				name: "",
 				description: "",
@@ -300,7 +319,9 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 				associatedTrip: tripId || null,
 			});
 
-			if (initialLat && initialLon) {
+			if (route !== null) {
+				setMapRegion(route.length ? getFitRegion(route) : { latitude: 0, longitude: 0, latitudeDelta: 120, longitudeDelta: 120 });
+			} else if (isValidLocation(initialLat, initialLon)) {
 				setMapRegion({
 					latitude: initialLat,
 					longitude: initialLon,
@@ -328,14 +349,18 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 			setIsEditMode(true);
 			setEditingRecommendationId(recommendation._id);
 			setAssociatedTrip(recommendation.associatedTrip);
+			pickerSession.current = null;
+			setPickingLocation(false);
+			setCandidateLocation(null);
+			setSavedTripRoute(null);
 
 			// Set existing photos for editing
 			const existingPhotos = recommendation.photos || [];
 			setInitialPhotosForManager(existingPhotos);
 			setManagerPhotos(existingPhotos);
 
-			const initialLat = recommendation.location?.coordinates?.[1] || null;
-			const initialLon = recommendation.location?.coordinates?.[0] || null;
+			const initialLat = recommendation.location?.coordinates?.[1] ?? null;
+			const initialLon = recommendation.location?.coordinates?.[0] ?? null;
 			setFormData({
 				name: recommendation.name || "",
 				description: recommendation.description || "",
@@ -346,7 +371,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 				lon: initialLon,
 			});
 
-			if (initialLat && initialLon) {
+			if (isValidLocation(initialLat, initialLon)) {
 				setMapRegion({
 					latitude: initialLat,
 					longitude: initialLon,
@@ -364,7 +389,11 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 	};
 
 	const handleClose = () => {
-		if (!submitting.current && !uploading && !isDeleting()) setVisible(false);
+		if (!submitting.current && !uploading && !isDeleting()) {
+			pickerSession.current = null;
+			setPickingLocation(false);
+			setVisible(false);
+		}
 	};
 
 	const updateField = (field, value) => {
@@ -373,21 +402,51 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 	};
 
 	const handleMapPress = (e) => {
-		const { latitude, longitude } = e.nativeEvent.coordinate;
+		const { latitude, longitude } = e?.nativeEvent?.coordinate || {};
+		if (!isValidLocation(latitude, longitude)) return;
+		if (savedTripRoute !== null) {
+			if (!currentPicker || pickerSession.current !== currentPicker || !isCurrent(renderContext)) return;
+			const location = { lat: latitude, lon: longitude };
+			currentPicker.location = location;
+			setCandidateLocation(location);
+			return;
+		}
 		updateField("lat", latitude);
 		updateField("lon", longitude);
+	};
+	const openLocationPicker = () => {
+		if (submitting.current || uploading || isDeleting() || !visible || !isCurrent(renderContext)) return;
+		Keyboard.dismiss();
+		const location = isValidLocation(formData.lat, formData.lon) ? { lat: formData.lat, lon: formData.lon } : null;
+		pickerSession.current = { location };
+		setCandidateLocation(location);
+		setPickingLocation(true);
+		if (location) setMapRegion(getFitRegion([...(savedTripRoute || []), location]));
+	};
+	const cancelLocationPicker = () => {
+		if (!currentPicker || pickerSession.current !== currentPicker || !isCurrent(renderContext)) return;
+		pickerSession.current = null;
+		setPickingLocation(false);
+		setCandidateLocation(null);
+	};
+	const confirmLocation = () => {
+		if (!currentPicker || pickerSession.current !== currentPicker || !isCurrent(renderContext)) return;
+		const location = currentPicker.location;
+		if (!isValidLocation(location?.lat, location?.lon)) return;
+		setFormData((prev) => ({ ...prev, ...location }));
+		cancelLocationPicker();
 	};
 
 	const handleSubmit = async () => {
 		const context = renderContext;
-		if (submitting.current || uploading || isDeleting() || draftContext.current !== context || !isCurrent(context)) return;
+		if (submitting.current || pickerSession.current || uploading || isDeleting() || draftContext.current !== context || !isCurrent(context)) return;
 		// Basic validation
 		if (!formData.name.trim()) return Alert.alert("Error", "Please enter a name for the recommendation");
 		if (!formData.description.trim()) return Alert.alert("Error", "Please enter a description");
 		if (formData.rating === 0) return Alert.alert("Error", "Please provide a rating");
 		if (!formData.primaryCategory) return Alert.alert("Error", "Please select a category");
 		if (formData.attributeTags.length === 0) return Alert.alert("Error", "Please select at least one feature");
-		if (formData.lat === null || formData.lon === null)
+		if (!isValidLocation(formData.lat, formData.lon))
 			return Alert.alert("Error", "Please select a location on the map");
 
 
@@ -451,6 +510,36 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		}
 	};
 
+	const markerLocation = pickingLocation ? candidateLocation : formData;
+	const hasMarker = isValidLocation(markerLocation?.lat, markerLocation?.lon);
+	const locationMap = (
+		<View style={pickingLocation ? styles.pickerMap : styles.mapContainer}>
+			<MapView
+				style={StyleSheet.absoluteFill}
+				region={mapRegion}
+				onRegionChangeComplete={setMapRegion}
+				onPress={handleMapPress}
+				showsUserLocation={savedTripRoute === null}
+			>
+				{savedTripRoute?.length >= 2 && <Polyline coordinates={savedTripRoute.map((p) => ({ latitude: p.lat, longitude: p.lon }))} strokeWidth={4} strokeColor={theme.colors.primary} />}
+				{hasMarker && <Marker coordinate={{ latitude: markerLocation.lat, longitude: markerLocation.lon }} pinColor={theme.colors.primary} />}
+			</MapView>
+		</View>
+	);
+	if (pickingLocation) return (
+		<BottomModal visible={visible && draftContext.current === renderContext} onClose={cancelLocationPicker}>
+			<ModalHeader title="Choose location" onClose={cancelLocationPicker} />
+			<Text style={styles.label}>Tap the map to place a pin. You can choose a location off the route.</Text>
+			{locationMap}
+			<Pressable testID="recommendation-location-confirm" accessibilityRole="button" disabled={!hasMarker} onPress={confirmLocation} style={[styles.button, styles.pickerButton, { backgroundColor: theme.colors.primary, opacity: hasMarker ? 1 : 0.5 }]}>
+				<Text style={styles.buttonText}>Use this location</Text>
+			</Pressable>
+			<Pressable testID="recommendation-location-cancel" accessibilityRole="button" onPress={cancelLocationPicker} style={[styles.button, styles.pickerButton]}>
+				<Text style={[styles.buttonText, { color: theme.colors.primary }]}>Cancel</Text>
+			</Pressable>
+		</BottomModal>
+	);
+
 	return (
 		<BottomModal visible={visible && draftContext.current === renderContext} onClose={handleClose}>
 			<ModalHeader
@@ -493,26 +582,12 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 
 					<View style={styles.field}>
 						<Text style={styles.label}>Location</Text>
-						<View style={styles.mapContainer}>
-							<MapView
-								style={StyleSheet.absoluteFill}
-								region={mapRegion}
-								onRegionChangeComplete={setMapRegion}
-								onPress={handleMapPress}
-								showsUserLocation
-							>
-								{formData.lat && formData.lon && (
-									<Marker
-										coordinate={{
-											latitude: formData.lat,
-											longitude: formData.lon,
-										}}
-										pinColor={theme.colors.primary}
-									/>
-								)}
-							</MapView>
-						</View>
-						{formData.lat && formData.lon && (
+						{savedTripRoute !== null ? (
+							<Pressable testID="recommendation-location-open" accessibilityRole="button" onPress={openLocationPicker} disabled={saving || uploading || deleting} style={styles.input}>
+								<Text style={{ color: theme.colors.primary }}>{hasMarker ? "Change location on map" : "Choose location on map"}</Text>
+							</Pressable>
+						) : locationMap}
+						{hasMarker && (
 							<Text style={styles.coords}>
 								Lat: {formData.lat.toFixed(4)} Lon: {formData.lon.toFixed(4)}
 							</Text>
@@ -566,6 +641,8 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 });
 
 const styles = StyleSheet.create({
+	pickerMap: { flex: 1, borderRadius: theme.radius.md, overflow: "hidden" },
+	pickerButton: { marginTop: theme.space.sm, marginBottom: 0 },
 	field: { marginBottom: theme.space.md },
 	label: {
 		fontSize: theme.fontSize.sm,

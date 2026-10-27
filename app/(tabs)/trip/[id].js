@@ -511,24 +511,10 @@ export default function TripDetailScreen() {
 	const handleAddRecommendation = () => {
 		if (!isCurrentTrip() || !isOwner) return;
 		setIsDropdownVisible(false);
-		if (addRecommendationModalRef.current) {
-			let initialMapLocation = null;
-			if (trip) {
-				if (trip.simplifiedRoute) {
-					const routeCoords = lineStringToCoords(trip.simplifiedRoute);
-					if (routeCoords && routeCoords.length > 0) {
-						initialMapLocation = { lat: routeCoords[0].latitude, lon: routeCoords[0].longitude };
-					}
-				}
-				if (!initialMapLocation && trip.startLocation?.coordinates?.length === 2) {
-					initialMapLocation = { lat: trip.startLocation.coordinates[1], lon: trip.startLocation.coordinates[0] };
-				}
-				if (!initialMapLocation && trip.endLocation?.coordinates?.length === 2) {
-					initialMapLocation = { lat: trip.endLocation.coordinates[1], lon: trip.endLocation.coordinates[0] };
-				}
-			}
-			addRecommendationModalRef.current.open(initialMapLocation, tripId);
-		}
+		addRecommendationModalRef.current?.open(null, tripId, {
+			requireLocationSelection: true,
+			routeCoordinates: trip.simplifiedRoute?.coordinates,
+		});
 	};
 
 	const handleEditRecommendation = (recommendation) => {

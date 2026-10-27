@@ -327,3 +327,19 @@ test('trip map receives current saved recommendations across close/reopen, refre
   assert.deepEqual(nodes(f.render(), 'MapModal')[0].props.recommendations.map(r => r.name), ['Refreshed place']);
   assert.equal(mutations(f).length, 0); f.host.unmount();
 });
+
+test('saved-trip Add recommendation requests explicit route selection rather than a start/end default', async () => {
+  const f = await app(), opened = [], edited = [];
+  const coordinates = [[20, 10], [24, 12]];
+  f.handler(async () => reply({...f.trip('trip-a'), simplifiedRoute: {type: 'LineString', coordinates}, startLocation: {coordinates: [20, 10]}, endLocation: {coordinates: [24, 12]}}));
+  f.host.blur(); f.host.focus(); await tick(); const tree = f.render();
+  nodes(tree, 'AddRecommendationModal')[0].props.ref.current = {open: (...args) => opened.push(args), openEdit: rec => edited.push(rec)};
+  menu(tree).props.onAddRecommendation();
+  assert.equal(opened.length, 1); assert.equal(opened[0][0], null); assert.equal(opened[0][1], 'trip-a');
+  assert.equal(opened[0][2].requireLocationSelection, true); assert.deepEqual(opened[0][2].routeCoordinates, coordinates);
+  nodes(tree, 'RecommendationDetailModal')[0].props.onEdit(f.trip('trip-a').recommendations[0]);
+  assert.equal(edited.length, 1); assert.equal(edited[0]._id, 'trip-a-rec');
+  f.route.id = 'trip-b'; f.render(); menu(tree).props.onAddRecommendation();
+  assert.equal(opened.length, 1, 'retained trip A action cannot open picker for trip B');
+  assert.equal(mutations(f).length, 0); f.host.unmount();
+});
