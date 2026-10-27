@@ -85,6 +85,9 @@ export default function RecordScreen() {
 	const displayedRecording = useRef(null);
 	displayedRecording.current = { tripId, segmentId, status };
 	const pendingRecommendation = useRef(null);
+	const pendingLocalDeletion = useRef(null);
+	const localDeletionView = useRef(null);
+	localDeletionView.current = { tripId, status, isRestoring, pending };
 
 	const user = useAuthStore((s) => s.user);
 	const token = useAuthStore((s) => s.token);
@@ -105,6 +108,7 @@ export default function RecordScreen() {
 		pendingPoiRepair.current = null;
 		pendingPoi.current = null;
 		pendingRecommendation.current = null;
+		pendingLocalDeletion.current = null;
 		firstPoint.current = null;
 		lastPoint.current = null;
 		tripEndTime.current = null;
@@ -264,7 +268,7 @@ export default function RecordScreen() {
 			} finally { release(); }
 		};
 		sync();
-		return () => { cancelled = true; };
+		return () => { cancelled = true; pendingLocalDeletion.current?.cancel(); };
 	}, [user?._id, token, sessionEpoch, isSessionChanging]));
 
 	// This read is repeated after permission dialogs/confirmation and inside the
@@ -573,15 +577,43 @@ export default function RecordScreen() {
 		}
 	};
 
-	const handleDelete = async (tid) => {
+	const handleDelete = (tid) => {
 		if (isRestoring || status === "cleanup_required" || uploadRequest.current || lifecycleRequest.current || (tid === tripId && status !== "stopped")) return;
-		try {
-			await deleteTrip(tid, user?._id);
-			await refreshPending();
-			if (tid === tripId) resetState();
-		} catch (error) {
-			toast({ type: "warning", title: "Could not delete trip", msg: error.message });
-		}
+		if (pendingLocalDeletion.current) return;
+		const session = useAuthStore.getState();
+		const trip = pending.find(row => row.id === tid && row.status === "stopped");
+		const lifetime = recordingLifetime.current;
+		if (!trip || !lifetime || !session.token || session.user?._id !== user?._id || session.token !== token
+			|| session.sessionEpoch !== sessionEpoch || session.isSessionChanging) return;
+		const request = {};
+		pendingLocalDeletion.current = request;
+		let answered = false;
+		const clear = () => { if (pendingLocalDeletion.current === request) pendingLocalDeletion.current = null; };
+		const cancel = () => { if (!answered) { answered = true; clear(); } };
+		request.cancel = cancel;
+		Alert.alert("Delete local trip?",
+			`Permanently delete “${trip.title || "Recorded trip"}” from this device? This removes its recorded route, POIs and local recommendations. Any data that has not been uploaded will be lost permanently. This cannot be undone.`, [
+				{ text: "Cancel", style: "cancel", onPress: cancel },
+				{ text: "Delete", style: "destructive", onPress: async () => {
+					if (answered || pendingLocalDeletion.current !== request) return;
+					answered = true;
+					try {
+						// A native dialog can outlive the selection or session that opened it.
+						const current = useAuthStore.getState();
+						const view = localDeletionView.current;
+						if (recordingLifetime.current !== lifetime || current.user?._id !== session.user._id
+							|| current.token !== session.token || current.sessionEpoch !== session.sessionEpoch || current.isSessionChanging
+							|| view.tripId !== tripId || view.status !== status || view.isRestoring
+							|| uploadRequest.current || lifecycleRequest.current
+							|| !view.pending.some(row => row.id === tid && row.status === "stopped")) return;
+						await deleteTrip(tid, session.user._id);
+						await refreshPending();
+						if (tid === tripId) resetState();
+					} catch (error) {
+						toast({ type: "warning", title: "Could not delete trip", msg: error.message });
+					} finally { clear(); }
+				} },
+			], { cancelable: true, onDismiss: cancel });
 	};
 
 	const handleEditDetails = async (tid = tripId) => {
