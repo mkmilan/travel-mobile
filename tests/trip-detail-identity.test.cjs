@@ -304,3 +304,26 @@ test('old shared Like failure cannot undo a newer same-value detail Like or fres
     assert.equal(f.social.getState().trips['trip-a'].likesCount, 1); assert.equal(f.alerts.length, 0); f.host.unmount();
   }
 });
+
+test('trip map receives current saved recommendations across close/reopen, refresh and trip switches', async () => {
+  const f = await app();
+  const openMap = () => nodes(f.render(), 'TouchableOpacity').find(n => nodes(n, 'TripMapThumbnail').length).props.onPress();
+  openMap();
+  let modal = nodes(f.render(), 'MapModal')[0];
+  assert.equal(modal.props.visible, true);
+  assert.deepEqual(modal.props.recommendations.map(r => r.name), ['trip-a place']);
+  const oldKey = modal.props.key;
+  modal.props.onClose(); assert.equal(nodes(f.render(), 'MapModal')[0].props.visible, false);
+  openMap(); assert.deepEqual(nodes(f.render(), 'MapModal')[0].props.recommendations.map(r => r.name), ['trip-a place']);
+  const pending = deferred();
+  f.handler(() => pending.promise); f.route.id = 'trip-b';
+  assert.equal(nodes(f.render(), 'MapModal').length, 0, 'old pins disappear before new trip read completes');
+  pending.resolve(reply({...f.trip('trip-b'), recommendations: []})); await tick(); openMap();
+  modal = nodes(f.render(), 'MapModal')[0];
+  assert.equal(modal.props.visible, true); assert.equal(modal.props.recommendations.length, 0);
+  assert.notEqual(modal.props.key, oldKey);
+  f.handler(async () => reply({...f.trip('trip-b'), recommendations: [{_id: 'fresh', name: 'Refreshed place', location: {coordinates: [0, 0]}}]}));
+  f.host.blur(); f.host.focus(); await tick();
+  assert.deepEqual(nodes(f.render(), 'MapModal')[0].props.recommendations.map(r => r.name), ['Refreshed place']);
+  assert.equal(mutations(f).length, 0); f.host.unmount();
+});

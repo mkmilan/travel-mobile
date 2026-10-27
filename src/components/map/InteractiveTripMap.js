@@ -10,10 +10,11 @@ import MapView, { Marker, Polyline } from "react-native-maps";
 
 /** Normalise any point to { lat, lon } and discard invalid values */
 function sanitize(raw = []) {
-	return raw
+	return (Array.isArray(raw) ? raw : [])
 		.map((p) => ({
-			lat: p.lat ?? p.latitude,
-			lon: p.lon ?? p.longitude,
+			...p,
+			lat: p?.lat ?? p?.latitude,
+			lon: p?.lon ?? p?.longitude,
 		}))
 		.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180);
 }
@@ -70,7 +71,7 @@ function getFitRegion(points, pad = 1.35) {
  * Props
  *  • routeCoords      [{ lat, lon } | { latitude, longitude }]
  *  • pois             [{ lat, lon, note, _id }]
- *  • recommendationMarkers  [{ lat, lon, _id }] (independent of POI visibility)
+ *  • recommendationMarkers  [{ lat, lon, _id, name }] (independent of POI visibility)
  *  • style            ViewStyle (optional)
  */
 export default function InteractiveTripMap({ routeCoords = [], pois = [], recommendationMarkers = [], style }) {
@@ -78,7 +79,7 @@ export default function InteractiveTripMap({ routeCoords = [], pois = [], recomm
 	const cleanPois = useMemo(() => sanitize(ENABLE_POI_UI ? pois : []), [pois]);
 	const cleanRecommendations = useMemo(() => sanitize(recommendationMarkers), [recommendationMarkers]);
 
-	const initialRegion = useMemo(() => getFitRegion(cleanRoute), [cleanRoute]);
+	const initialRegion = useMemo(() => getFitRegion(cleanRoute.length ? cleanRoute : cleanRecommendations), [cleanRoute, cleanRecommendations]);
 
 	return (
 		<View style={[styles.wrapper, style]}>
@@ -103,10 +104,19 @@ export default function InteractiveTripMap({ routeCoords = [], pois = [], recomm
 				)}
 
 				{/* POIs are gated independently of recommendation locations. */}
-				{[...cleanPois, ...cleanRecommendations].map((p) => (
+				{cleanPois.map((p, index) => (
 					<Marker
-						key={p._id ?? `${p.lat}-${p.lon}`}
+						key={`poi-${p._id ?? index}-${index}`}
 						coordinate={{ latitude: p.lat, longitude: p.lon }}
+						pinColor={theme.colors.warning}
+						tracksViewChanges={false}
+					/>
+				))}
+				{cleanRecommendations.map((p, index) => (
+					<Marker
+						key={`recommendation-${p._id ?? index}-${index}`}
+						coordinate={{ latitude: p.lat, longitude: p.lon }}
+						title={typeof p.name === "string" && p.name.trim() ? p.name.trim() : "Recommendation"}
 						pinColor={theme.colors.warning}
 						tracksViewChanges={false}
 					/>

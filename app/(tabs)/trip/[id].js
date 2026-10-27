@@ -952,10 +952,12 @@ export default function TripDetailScreen() {
 				onSubmit={handleAddCommentSubmit}
 			/>
 			<MapModal
+				key={screenContext.current.key}
 				visible={isMapModalVisible}
 				onClose={() => { if (isCurrentTrip()) setMapModalVisible(false); }}
 				routeCoords={mapCoords}
 				pois={pois}
+				recommendations={recommendations}
 			/>
 		</ScrollView>
 	);

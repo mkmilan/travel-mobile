@@ -4,12 +4,15 @@ import InteractiveTripMap from "../map/InteractiveTripMap";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
 
-export default function MapModal({ visible, onClose, routeCoords = [], pois = [] }) {
+export default function MapModal({ visible, onClose, routeCoords = [], pois = [], recommendations = [] }) {
+	const recommendationMarkers = (Array.isArray(recommendations) ? recommendations : [])
+		.filter((rec) => Array.isArray(rec?.location?.coordinates) && rec.location.coordinates.length === 2)
+		.map((rec) => ({ _id: rec._id, name: rec.name, lat: rec.location.coordinates[1], lon: rec.location.coordinates[0] }));
 	return (
 		<BottomModal visible={visible} onClose={onClose} style={styles.modal}>
 			<ModalHeader title="Route Map" onClose={onClose} />
 			<View style={styles.mapContainer}>
-				<InteractiveTripMap routeCoords={routeCoords} pois={pois} style={{ flex: 1 }} />
+				<InteractiveTripMap routeCoords={routeCoords} pois={pois} recommendationMarkers={recommendationMarkers} style={{ flex: 1 }} />
 			</View>
 		</BottomModal>
 	);
