@@ -413,3 +413,18 @@ test('revoked access during pending Like does not leave recovery disabled or app
   assert.equal(f.alerts.length,0);
   f.host.unmount();
 });
+
+for (const completesFirst of [false,true]) test(`detail GET started before Like cannot undo it (${completesFirst?'confirmed':'pending'})`,async()=>{
+ const f=await app(),read=deferred(),write=deferred();
+ f.handler((url,options)=>options.method==='GET'?read.promise:write.promise);
+ f.host.blur();f.host.focus();
+ const liking=like(f.render()).props.onPress();await tick();
+ if(completesFirst){write.resolve(reply({}));await liking;}
+ read.resolve(reply(f.trip('trip-a')));await tick();
+ assert.equal(f.social.getState().trips['trip-a'].isLikedByCurrentUser,true);
+ assert.equal(f.social.getState().trips['trip-a'].likesCount,1);
+ if(!completesFirst){write.resolve(reply({}));await liking;}
+ f.handler(f.defaultHandler);f.host.blur();f.host.focus();await tick();
+ assert.equal(f.social.getState().trips['trip-a'].isLikedByCurrentUser,false,'later authoritative reload still applies');
+ f.host.unmount();
+});

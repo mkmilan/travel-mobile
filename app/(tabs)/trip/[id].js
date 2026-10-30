@@ -336,6 +336,9 @@ export default function TripDetailScreen() {
 		}
 
 		if (likeRequest.current?.context === context) return;
+		// Reads begun before this action cannot undo its optimistic state or
+		// confirmed result. Keep the independent rollback revision unchanged.
+		tripMutationRevision.current += 1;
 		const operation = { context, revision: likeRevision.current };
 		likeRequest.current = operation;
 		setLikePending(true);
@@ -358,6 +361,7 @@ export default function TripDetailScreen() {
 			} else {
 				await unlikeTrip(context.tripId);
 			}
+			if (isCurrent()) tripMutationRevision.current += 1;
 			// Optionally, the API for like/unlike could return the updated trip/likesCount
 			// For now, useFocusEffect will eventually sync.
 		} catch (err) {
