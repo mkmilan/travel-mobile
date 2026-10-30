@@ -399,3 +399,17 @@ for (const action of ['trip photo', 'place photo', 'place']) test(`late detail G
   assert.equal(nodes(f.render(), 'TripRecommendationCard').length,0);
   f.host.unmount();
 });
+
+test('revoked access during pending Like does not leave recovery disabled or apply old response', async () => {
+  const f = await app(), pending = deferred();
+  f.handler((url, options) => options.method !== 'GET' ? pending.promise : reply({message:'Revoked'},403));
+  const liking = like(f.render()).props.onPress(); await tick();
+  assert.equal(like(f.render()).props.disabled, true);
+  f.host.blur(); f.host.focus(); await tick(); assert.equal(like(f.render()), undefined);
+  f.handler(f.defaultHandler); f.host.blur(); f.host.focus(); await tick();
+  assert.equal(like(f.render()).props.disabled, false);
+  pending.resolve(reply({message:'Old failure'},503)); await liking;
+  assert.equal(like(f.render()).props.disabled, false);
+  assert.equal(f.alerts.length,0);
+  f.host.unmount();
+});

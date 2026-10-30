@@ -276,6 +276,13 @@ export default function TripDetailScreen() {
 					deletionController.current = null;
 					likersRequest.current = null;
 					likeRequest.current = null;
+					setLikePending(false);
+					setCommentsLoading(false);
+					setCommentsError("");
+					setIsCommentsSectionVisible(false);
+					setIsCommentListExpanded(false);
+					setLikersLoading(false);
+					setLikersError("");
 					recommendationContext.current = null;
 					setTrip(null);
 					setComments([]);
