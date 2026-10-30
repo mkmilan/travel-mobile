@@ -65,14 +65,15 @@ function handlers(dependencies,first,last,expression) {
 }
 test('metadata handler refuses changed owner/token and preserves cancelled draft on upload review',async()=>{
   let writes=0;const session={user:{_id:'owner'},token:'token'};
-  const draft={tripId:'trip',userId:'owner',token:'token',endTime:end,startName:'A',endName:'B'};
-  const deps={metadataDraft:{current:draft},useAuthStore:{getState:()=>session},finishTrip:async()=>writes++,toast(){},refreshPending:async()=>{}};
+  const lifetime={};
+  const draft={lifetime,tripId:'trip',userId:'owner',token:'token',endTime:end,startName:'A',endName:'B'};
+  const deps={recordingLifetime:{current:lifetime},metadataDraft:{current:draft},useAuthStore:{getState:()=>session},finishTrip:async()=>writes++,toast(){},refreshPending:async()=>{}};
   const save=handlers(deps,'const handleSaveMeta = ','\n\tconst handleUpload','handleSaveMeta');
   await save({title:'Public',mode:'car',visibility:'public'});assert.equal(writes,1);
   session.token='different';await assert.rejects(save({}),/Account changed/);assert.equal(writes,1);
   session.token='token';session.user={_id:'other'};await assert.rejects(save({}),/Account changed/);assert.equal(writes,1);
   session.user={_id:'owner'};let reopened=0,opened=0;
-  const edit=handlers({...deps,user:session.user,tripId:'trip',getLocalTrip:async()=>({status:'stopped'}),sheetRef:{current:{reopen:()=>reopened++,open:()=>opened++}}},'const handleEditDetails = ','\n\tconst handleStop','handleEditDetails');
+  const edit=handlers({...deps,isRestoring:false,lifecycleRequest:{current:false},uploadRequest:{current:false},status:'stopped',token:session.token,sessionEpoch:session.sessionEpoch,metadataEditRequest:{current:0},user:session.user,tripId:'trip',getLocalTrip:async()=>({status:'stopped'}),sheetRef:{current:{reopen:()=>reopened++,open:()=>opened++}}},'const handleEditDetails = ','\n\tconst handleStop','handleEditDetails');
   await edit();assert.equal(reopened,1);assert.equal(opened,0);
 });
 

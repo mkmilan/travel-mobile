@@ -18,10 +18,10 @@ const flatten = styles => Object.assign({}, ...[styles].flat(Infinity).filter(Bo
 // reviewed optional endpoint persistence (recording-name-persistence.test.cjs), and
 // cross-frame ownership/focus/awaited-control safety (recording-cross-frame.test.cjs), and
 // explicit local-only delete confirmation (local-trip-delete-confirmation.test.cjs).
-// Updated only user-facing recommendation wording to place/places; lifecycle is unchanged.
+// Includes guarded pending-trip metadata repair (recording-metadata-repair.test.cjs).
 test('recording logic matches reviewed lifecycle and terminal-deletion-response baseline', () => {
   const source=read(file),logic=source.slice(source.indexOf('//5000,'),source.indexOf('// ─────── UI'));
-  assert.equal(createHash('sha256').update(logic).digest('hex'),'36003a9c5c72ea2530290a2730b5b7ba6a67153060949dea3200bf81930f7db8');
+  assert.equal(createHash('sha256').update(logic).digest('hex'),'8c8feaadbccc55d138f11264f3ebbe4fcef1ef7b63cdffd4828b104e3ebcc9dd');
 });
 
 test('all recording states have clear labeled controls and a single scrolling surface', () => {
@@ -45,7 +45,7 @@ test('all recording states have clear labeled controls and a single scrolling su
   assert.equal(nodes(screen('cleanup_required',true).render(),'TouchableOpacity').find(n=>n.props.accessibilityLabel==='Retry Stop').props.disabled,true);
 });
 
-test('multiple local rows keep their individual callbacks and older rows gain no edit control', () => {
+test('multiple local rows keep their individual callbacks and stopped older rows expose their own edit callback', () => {
   const f=screen('stopped');
   f.setState(3,[{id:'first',status:'stopped'},{id:'second',status:'paused'}]);
   const tree=f.render();
@@ -53,8 +53,7 @@ test('multiple local rows keep their individual callbacks and older rows gain no
   const rows=list.props.data.map(item=>list.props.renderItem({item}));
   assert.equal(rows.length,2);
   for(const row of rows) {
-    for(const action of ['onUpload','onDelete','onRecover'])assert.equal(typeof row.props[action],'function');
-    assert.equal(row.props.onEdit,undefined);
+    for(const action of ['onUpload','onEdit','onDelete','onRecover'])assert.equal(typeof row.props[action],'function');
   }
   assert.match(texts(tree),/Trips on this device/);
   assert.match(texts(tree),/New trip/);
@@ -63,9 +62,9 @@ test('multiple local rows keep their individual callbacks and older rows gain no
 
 test('pending row upload/delete/recovery guards remain visible and single-trip while uploading', () => {
   for(const unfinished of [true,false]) for(const active of [true,false]) for(const uploading of [null,'this','other']) {
-    const onUpload=()=>{},onDelete=()=>{},onRecover=()=>{};
+    const onUpload=()=>{},onDelete=()=>{},onRecover=()=>{},onEdit=()=>{};
     const tree=fixture(file,'PendingRow',{item:{id:'this',title:'A saved trip',status:unfinished?'paused':'stopped',start_time:0,pointsCount:12},
-      isActive:active,canRecover:true,isUploading:!!uploading,uploadingTripId:uploading,onUpload,onDelete,onRecover},dependencies).render();
+      isActive:active,canRecover:true,isUploading:!!uploading,uploadingTripId:uploading,onUpload,onEdit,onDelete,onRecover},dependencies).render();
     const buttons=nodes(tree,'TouchableOpacity'),get=label=>buttons.find(n=>n.props.accessibilityLabel===label);
     assert.equal(!!get('Recover recording'),unfinished&&!active&&!uploading);
     assert.equal(get('Delete local trip').props.disabled,!!uploading||active||unfinished);
@@ -73,7 +72,8 @@ test('pending row upload/delete/recovery guards remain visible and single-trip w
     else assert.equal(get('Upload trip').props.disabled,uploading==='other'||active||unfinished);
     for(const b of buttons)assert.ok(flatten(b.props.style).minHeight>=48);
     assert.match(texts(tree),/A saved trip/);
-    assert.doesNotMatch(texts(tree),/Edit/);
+    assert.equal(!!get('Edit trip details'),!unfinished);
+    if(!unfinished) {assert.equal(get('Edit trip details').props.disabled,!!uploading||active);assert.equal(get('Edit trip details').props.onPress,uploading||active?null:onEdit);}
   }
 });
 

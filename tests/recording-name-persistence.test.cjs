@@ -25,7 +25,7 @@ function screen(f,id,overrides={}) {
     showOwnedCleanupError:async()=>{},acquireRecordingTransition:async()=>()=>{},readControlledRecording:async()=>({}),getActiveTrip:async()=>({}),
     stopAbandonedRecording:async()=>{events.push('collector-stopped','marker-cleared');return 'stopped';},status:'paused',user:session.user,
     useAuthStore:{getState:()=>session},stopRequest:{current:null},lifecycleRequest:{current:false},
-    uploadRequest:{current:false},isRestoring:false,metadataDraft:{current:null},tripEndTime:{current:null},
+    uploadRequest:{current:false},isRestoring:false,metadataEditRequest:{current:0},metadataDraft:{current:null},tripEndTime:{current:null},
     pendingNames:{current:null},firstPoint:{current:null},lastPoint:{current:null},TASK_NAME:'synthetic',
     Alert:{alert:(_,__,buttons)=>{confirm=buttons.find(b=>b.text==='Stop').onPress;}},
     stopLocationWatcher:async()=>events.push('watcher-stopped'),
@@ -134,7 +134,7 @@ test('session change during lookup or DAO await suppresses optional persistence 
 test('a manual draft opened during naming remains intact and is not reopened or replaced',async()=>{
   const f=await sqliteFixture();try {
     const id=await newTrip(f),manual={tripId:id,userId:owner,token:'synthetic',startName:'Manual start',endName:'Manual finish',endTime:'2026-01-02'};
-    const s=screen(f,id,{getTripLocationNames:async()=>{s.ctx.metadataDraft.current=manual;return labels;}});
+    const s=screen(f,id,{getTripLocationNames:async()=>{Object.assign(manual,{lifetime:s.ctx.recordingLifetime.current,sessionEpoch:s.session.sessionEpoch});s.ctx.metadataDraft.current=manual;return labels;}});
     await s.stop();assert.equal(s.ctx.metadataDraft.current,manual);assert.equal(s.opened.length,0);
     await s.handleSaveMeta(details);const row=await f.dao.getLocalTrip(id,owner);
     assert.equal(row.start_name,'Manual start');assert.equal(row.end_name,'Manual finish');
@@ -157,6 +157,7 @@ test('Save merges endpoint names atomically even if optional names settle after 
   const f=await sqliteFixture();try {
     const id=await newTrip(f);await f.dao.stopTrip(id,'2026-01-02',owner);
     const finish=load('src/db/tripDao.js','finishTrip',{
+      ...load('src/utils/tripMetadata.js','({validateTripMetadata})'),
       getActiveTrip:async()=>({}),openDatabase:async()=>({...f.db,runAsync:async(sql,args)=>{
         await nameDao(f).rememberTripLocationNames(id,labels,owner);return f.db.runAsync(sql,args);
       }}),

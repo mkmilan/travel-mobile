@@ -2,6 +2,7 @@ import uuid from "react-native-uuid";
 import { openDatabase } from "./openDatabase";
 import { getActiveTrip } from "../utils/activeTrip";
 import { validatePoiNote } from "../utils/poiNote";
+import { validateTripMetadata } from "../utils/tripMetadata";
 
 /**
  * Creates the standardized payload structure for backend API
@@ -81,6 +82,7 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId, 
 	// Freeze the first request before network dispatch. Retries across restarts
 	// must use the same identity AND contents, even after ambiguous responses.
 	if (reliableUpload && trip.upload_payload) return JSON.parse(trip.upload_payload);
+	validateTripMetadata({ title: trip.title || "", description: trip.description || "" });
 
 	// ---- points → segments --------------------------------------------------
 	const rows = await db.getAllAsync(`SELECT * FROM track_points WHERE trip_id = ? ORDER BY timestamp ASC`, [tripId]);
@@ -217,18 +219,21 @@ export const rememberTripLocationNames = async (tripId, names, userId, isCurrent
 export const finishTrip = async (
 	tripId,
 	{ endTime, title, description, startName, endName, defaultTransportMode, defaultTripVisibility },
-	userId
+	userId,
+	isCurrent = () => true
 ) => {
 	const db = await openDatabase();
 	const trip = await getOwnedTrip(db, tripId, userId);
 	await requireStoppedTrip(trip);
 	if (trip.upload_payload) throw new Error("Upload already started. Retry the saved upload, then edit the online trip.");
+	if (!isCurrent()) throw new Error("Account or trip changed. Reopen this trip's details.");
 	if (!TRIP_MODES.includes(defaultTransportMode) || !TRIP_VISIBILITIES.includes(defaultTripVisibility)) throw metadataRequired();
+	validateTripMetadata({ title, description });
 	// A details draft can open before optional endpoint naming settles. Keep its
 	// manual text, but do not replace subsequently resolved labels with Unknown.
 	// Read the fallback in UPDATE itself so an optional write after the row read wins.
 	const knownName = value => typeof value === "string" && value.trim() && value.trim().toLowerCase() !== "unknown" ? value : null;
-	await db.runAsync(
+	const result = await db.runAsync(
 		`UPDATE trips
        SET status = 'stopped',
            end_time = ?,
@@ -239,9 +244,10 @@ export const finishTrip = async (
            default_transport_mode = ?,
            default_trip_visibility = ?,
            metadata_confirmed = 1
-     WHERE id = ? AND user_id = ? AND status = 'stopped'`,
+     WHERE id = ? AND user_id = ? AND status = 'stopped' AND upload_payload IS NULL`,
 		[endTime, title, description, knownName(startName), startName, knownName(endName), endName, defaultTransportMode, defaultTripVisibility, tripId, userId]
 	);
+	if (result?.changes === 0) throw new Error("This trip changed while saving. Reopen its details or retry its saved upload.");
 };
 
 export const setTripRecordingStatus = async (tripId, status, userId) => {

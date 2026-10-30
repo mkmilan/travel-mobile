@@ -1,6 +1,7 @@
 import TransportIcon from "@/src/components/TransportIcon";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
+import { validateTripMetadata } from "@/src/utils/tripMetadata";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import RecordingFormModal from "./RecordingFormModal";
@@ -75,10 +76,11 @@ const TripSaveModal = forwardRef(({ onConfirm }, ref) => {
 		setSaving(true);
 		setError(null);
 		try {
+			validateTripMetadata({ title, description });
 			await onConfirm({ title, description, mode, visibility });
 			setVisible(false);
-		} catch {
-			setError("Could not save this trip. Your entries are still here; please try again.");
+		} catch (error) {
+			setError(error?.code === "TRIP_METADATA_INVALID" ? error.message : "Could not save this trip. Your entries are still here; please try again.");
 		} finally {
 			savingRef.current = false;
 			setSaving(false);

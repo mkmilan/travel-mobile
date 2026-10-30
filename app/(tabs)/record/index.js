@@ -88,6 +88,7 @@ export default function RecordScreen() {
 	const pendingLocalDeletion = useRef(null);
 	const localDeletionView = useRef(null);
 	localDeletionView.current = { tripId, status, isRestoring, pending };
+	const metadataEditRequest = useRef(0);
 
 	const user = useAuthStore((s) => s.user);
 	const token = useAuthStore((s) => s.token);
@@ -105,6 +106,7 @@ export default function RecordScreen() {
 			&& !useAuthStore.getState().isSessionChanging;
 		stopRequest.current = null;
 		metadataDraft.current = null;
+		metadataEditRequest.current++;
 		pendingPoiRepair.current = null;
 		pendingPoi.current = null;
 		pendingRecommendation.current = null;
@@ -616,21 +618,30 @@ export default function RecordScreen() {
 			], { cancelable: true, onDismiss: cancel });
 	};
 
-	const handleEditDetails = async (tid = tripId) => {
+	const handleEditDetails = async (tid = tripId, uploadReview = false) => {
+		if (isRestoring || lifecycleRequest.current || (uploadRequest.current && !uploadReview) || status === "cleanup_required") return;
 		const session = { ...useAuthStore.getState() };
-		if (!tid || !session.token || session.user?._id !== user?._id) return;
-		const isCurrent = () => useAuthStore.getState().user?._id === session.user._id
+		const lifetime = recordingLifetime.current;
+		if (!tid || !lifetime || !session.token || session.user?._id !== user?._id || session.token !== token || session.sessionEpoch !== sessionEpoch) return;
+		const request = ++metadataEditRequest.current;
+		const isCurrent = () => recordingLifetime.current === lifetime && metadataEditRequest.current === request
+			&& useAuthStore.getState().user?._id === session.user._id
 			&& useAuthStore.getState().token === session.token
-			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging;
-		const trip = await getLocalTrip(tid, session.user._id);
+			&& useAuthStore.getState().sessionEpoch === session.sessionEpoch && !useAuthStore.getState().isSessionChanging
+			&& !lifecycleRequest.current && (!uploadRequest.current || uploadReview);
 		if (!isCurrent()) return;
-		if (trip.status !== "stopped") throw new Error("Stop this recording before editing its details.");
+		const trip = await getLocalTrip(tid, session.user._id);
+		const active = await getActiveTrip();
+		if (!isCurrent()) return;
+		if (trip.status !== "stopped" || active.tripId === tid || active.cleanupId) throw new Error("Stop this recording before editing its details.");
+		if (trip.upload_payload) throw new Error("Upload already started. Retry the saved upload, then edit the online trip.");
 		const previous = metadataDraft.current;
-		if (previous?.tripId === tid && previous.userId === session.user._id && previous.token === session.token) {
+		if (previous?.tripId === tid && previous.userId === session.user._id && previous.token === session.token
+			&& previous.sessionEpoch === session.sessionEpoch && previous.lifetime === lifetime) {
 			sheetRef.current?.reopen();
 			return;
 		}
-		metadataDraft.current = { tripId: tid, userId: session.user._id, token: session.token,
+		metadataDraft.current = { tripId: tid, userId: session.user._id, token: session.token, sessionEpoch: session.sessionEpoch, lifetime,
 			endTime: trip.end_time, startName: trip.start_name || "Unknown", endName: trip.end_name || "Unknown" };
 		const defaults = tripMetadataDefaults(trip, session.user.settings || {});
 		sheetRef.current?.open(trip.title || "Recorded trip", defaults.mode, defaults.visibility, trip.description || "");
@@ -702,7 +713,7 @@ export default function RecordScreen() {
 						const trip = await getLocalTrip(tripId, operation.userId);
 						if (!isCurrent()) return;
 						if (metadataDraft.current !== previousDraft || displayedRecording.current.tripId !== tripId) return;
-						metadataDraft.current = { tripId, userId: operation.userId, token: operation.token,
+						metadataDraft.current = { tripId, userId: operation.userId, token: operation.token, sessionEpoch: operation.sessionEpoch, lifetime,
 							endTime: trip.end_time, startName: trip.start_name || startName, endName: trip.end_name || endName };
 						const defaults = tripMetadataDefaults(trip, useAuthStore.getState().user?.settings || {});
 						sheetRef.current?.open(trip.title || title, defaults.mode, defaults.visibility, trip.description || "");
@@ -723,8 +734,9 @@ export default function RecordScreen() {
 
 	const handleSaveMeta = async ({ title, mode, visibility, description }) => {
 		const draft = metadataDraft.current;
-		const isCurrent = () => draft && useAuthStore.getState().user?._id === draft.userId
-			&& useAuthStore.getState().token === draft.token;
+		const isCurrent = () => draft && metadataDraft.current === draft && !!draft.lifetime && recordingLifetime.current === draft.lifetime
+			&& useAuthStore.getState().user?._id === draft.userId && useAuthStore.getState().token === draft.token
+			&& useAuthStore.getState().sessionEpoch === draft.sessionEpoch && !useAuthStore.getState().isSessionChanging;
 		if (!isCurrent()) throw new Error("Account changed. Reopen this trip's details.");
 		await finishTrip(draft.tripId, {
 			endTime: draft.endTime,
@@ -733,7 +745,7 @@ export default function RecordScreen() {
 			endName: draft.endName,
 			defaultTransportMode: mode,
 			defaultTripVisibility: visibility,
-		}, draft.userId);
+		}, draft.userId, isCurrent);
 		if (!isCurrent()) return;
 		toast({ type: "success", title: "Trip details saved" });
 		await refreshPending();
@@ -778,11 +790,11 @@ export default function RecordScreen() {
 				try { await releaseRejectedTripUpload(tid, session.user._id, payload, err.data); } catch (_) { /* Keep the original draft if local storage fails. */ }
 				if (!isCurrent()) return;
 			}
-			if (["TRIP_METADATA_REQUIRED", "POI_NOTE_NEEDS_EDIT"].includes(err.code)) {
+			if (["TRIP_METADATA_REQUIRED", "TRIP_METADATA_INVALID", "POI_NOTE_NEEDS_EDIT"].includes(err.code)) {
 				try {
-					if (err.code === "TRIP_METADATA_REQUIRED") {
-						await handleEditDetails(tid);
-						if (isCurrent()) toast({ type: "info", title: "Review trip details before uploading" });
+					if (err.code !== "POI_NOTE_NEEDS_EDIT") {
+						await handleEditDetails(tid, true);
+						if (isCurrent()) toast({ type: "info", title: "Review trip details before uploading", msg: err.message });
 					} else {
 						const poi = await getPoiForEdit(tid, err.poiId, session.user._id);
 						if (!isCurrent()) return;
@@ -804,6 +816,7 @@ export default function RecordScreen() {
 	};
 
 	const resetState = () => {
+		metadataEditRequest.current++;
 		stopRequest.current = null;
 		setIsResolvingLocation(false);
 		setStatus("idle");
@@ -1033,6 +1046,7 @@ export default function RecordScreen() {
 						isUploading={isUploading}
 						uploadingTripId={uploadingTripId}
 						onUpload={() => handleUpload(item.id)}
+						onEdit={() => handleEditDetails(item.id).catch((error) => toast({ type: "danger", title: "Could not open trip details", msg: error.message }))}
 						onDelete={() => handleDelete(item.id)}
 						onRecover={() => handleRecover(item.id)}
 						isActive={isRestoring || status === "cleanup_required" || (item.id === tripId && ["recording", "paused"].includes(status))}
@@ -1054,7 +1068,7 @@ export default function RecordScreen() {
 	);
 }
 
-const PendingRow = ({ item, onUpload, onDelete, onRecover, isActive, canRecover, isUploading, uploadingTripId }) => {
+const PendingRow = ({ item, onUpload, onEdit, onDelete, onRecover, isActive, canRecover, isUploading, uploadingTripId }) => {
 	const isCurrentlyUploadingThisItem = isUploading && uploadingTripId === item.id;
 	const isAnotherItemUploading = isUploading && uploadingTripId !== null && uploadingTripId !== item.id;
 
@@ -1070,6 +1084,13 @@ const PendingRow = ({ item, onUpload, onDelete, onRecover, isActive, canRecover,
 			</Text>
 			<Text style={styles.pendingMeta}>{unfinished ? "Unfinished recording" : "Saved on this device"}</Text>
 			<View style={styles.pendingActions}>
+			{!unfinished && (
+				<TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit trip details" disabled={deleteButtonDisabled}
+					style={[styles.rowAction, deleteButtonDisabled && styles.disabled]} onPress={deleteButtonDisabled ? null : onEdit}>
+					<Ionicons name="create-outline" size={20} color={theme.colors.link} />
+					<Text style={{ color: theme.colors.link }}>Edit</Text>
+				</TouchableOpacity>
+			)}
 			{unfinished && !isActive && canRecover && !isUploading && (
 				<TouchableOpacity accessibilityRole="button" accessibilityLabel="Recover recording" onPress={onRecover} style={styles.rowAction}>
 					<Text style={{ color: theme.colors.link }}>Recover</Text>

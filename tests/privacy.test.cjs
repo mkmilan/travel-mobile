@@ -26,7 +26,7 @@ function fixture() {
     },
     runAsync: async (sql, params) => queries.push({sql, params})
   };
-  const dao = load('src/db/tripDao.js', ['getPendingTrips','buildTripJsonForUpload','deleteTrip','markTripUploaded','startTrip','ownsLocalTrip'], {getActiveTrip:async()=>({}),openDatabase: async()=>db, uuid:{v4:()=> 'new-id'}});
+  const dao = load('src/db/tripDao.js', ['getPendingTrips','buildTripJsonForUpload','deleteTrip','markTripUploaded','startTrip','ownsLocalTrip'], {...load('src/utils/tripMetadata.js',['validateTripMetadata']),getActiveTrip:async()=>({}),openDatabase: async()=>db, uuid:{v4:()=> 'new-id'}});
   return {dao, queries};
 }
 test('signed-out pending list does not read the database', async()=> {

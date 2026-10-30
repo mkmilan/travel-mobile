@@ -1,10 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {read,load,fixture,nodes,theme,native} = require('./helpers/component-fixture.cjs');
+const metadataTools = load('src/utils/tripMetadata.js', '({validateTripMetadata})');
 const noteTools = load('src/utils/poiNote.js', '({POI_NOTE_MAX_LENGTH,validatePoiNote,getPoiNote})');
 const tripTools = load('src/db/tripDao.js','({tripMetadataDefaults})');
 const deferred = () => {let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
-const tripForm = onConfirm => fixture('src/components/modals/TripSaveModal.js','TripSaveModal',{onConfirm},{...native,theme,TransportIcon:'TransportIcon',RecordingFormModal:'RecordingFormModal',useAuthStore:select=>select({user:{settings:{defaultTravelMode:'walking'}}})});
+const tripForm = onConfirm => fixture('src/components/modals/TripSaveModal.js','TripSaveModal',{onConfirm},{...native,...metadataTools,theme,TransportIcon:'TransportIcon',RecordingFormModal:'RecordingFormModal',useAuthStore:select=>select({user:{settings:{defaultTravelMode:'walking'}}})});
 const saveButton = tree => nodes(tree,'Pressable').find(node=>node.props.testID==='trip-save');
 
 test('recording presentation has sibling backdrop, safe-area footer and one keyboard layer, not a swipe responder',()=>{
@@ -58,15 +59,15 @@ test('screen saves selected transport key and DAO retains metadata in SQL and up
   // Exercise the actual caller function without running native recording/GPS effects.
   const source=read('app/(tabs)/record/index.js');
   const start=source.indexOf('const handleSaveMeta = '),end=source.indexOf('\n\tconst handleUpload',start);
-  let saved;
+  let saved;const lifetime={};
   const vm=require('node:vm');
   const handler=vm.runInNewContext(source.slice(start,end)+';handleSaveMeta',{
-    metadataDraft:{current:{tripId:'fixture-trip',userId:'owner',token:'token',endTime:'2026-01-01T00:00:00.000Z',startName:'A',endName:'B'}},useAuthStore:{getState:()=>({user:{_id:'owner'},token:'token'})},finishTrip:async(id,data)=>{saved={id,data};},setStatus(){},toast(){},refreshPending:async()=>{},
+    recordingLifetime:{current:lifetime},metadataDraft:{current:{lifetime,tripId:'fixture-trip',userId:'owner',token:'token',endTime:'2026-01-01T00:00:00.000Z',startName:'A',endName:'B'}},useAuthStore:{getState:()=>({user:{_id:'owner'},token:'token'})},finishTrip:async(id,data)=>{saved={id,data};},setStatus(){},toast(){},refreshPending:async()=>{},
   });
   await handler({title:'Title',mode:'walking',visibility:'private',description:'Description'});
   assert.equal(saved.data.endTime,'2026-01-01T00:00:00.000Z');assert.equal(saved.data.defaultTransportMode,'walking');assert.equal(saved.data.defaultTravelMode,undefined);
   let sql,params;
-  const dao=load('src/db/tripDao.js','({finishTrip,createTripPayload})',{getActiveTrip:async()=>({}),openDatabase:async()=>({getAllAsync:async()=>[{status:'stopped'}],runAsync:async(query,values)=>{sql=query;params=values;}})});
+  const dao=load('src/db/tripDao.js','({finishTrip,createTripPayload})',{...metadataTools,getActiveTrip:async()=>({}),openDatabase:async()=>({getAllAsync:async()=>[{status:'stopped'}],runAsync:async(query,values)=>{sql=query;params=values;}})});
   await dao.finishTrip(saved.id,saved.data,'owner');
   assert.match(sql,/UPDATE trips/); assert.equal(JSON.stringify(params.slice(1)),JSON.stringify(['Title','Description','A','A','B','B','walking','private','fixture-trip','owner']));
   const payload=dao.createTripPayload({title:params[1],description:params[2],start_name:params[3],end_name:params[5],default_transport_mode:params[7],default_trip_visibility:params[8]},[]);
@@ -133,9 +134,9 @@ test('Cancel returns to a stopped-screen action that reopens the same trip draft
   nodes(tree).find(node=>node.props.label==='bicycle').props.onPress();nodes(tree).find(node=>node.props.label==='private').props.onPress();
   tree=form.render();tree.props.onClose();assert.equal(form.render().props.visible,false);
   const screen=fixture('app/(tabs)/record/index.js','RecordScreen',{}, {
-    ...native,theme,useAuthStore:Object.assign(select=>select({user:{_id:'fixture'}}),{getState:()=>({user:{_id:'fixture'},token:'token'})}),getLocalTrip:async()=>({status:'stopped'}),...tripTools,RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',Ionicons:'Ionicons',StyleSheet:{create:styles=>styles,absoluteFillObject:{}},
+    ...native,theme,getActiveTrip:async()=>({}),useAuthStore:Object.assign(select=>select({user:{_id:'fixture'},token:'token'}),{getState:()=>({user:{_id:'fixture'},token:'token'})}),getLocalTrip:async()=>({status:'stopped'}),...tripTools,RecordingButton:'RecordingButton',TripSaveModal:'TripSaveModal',AddPoiModal:'AddPoiModal',AddRecommendationModal:'AddRecommendationModal',Ionicons:'Ionicons',StyleSheet:{create:styles=>styles,absoluteFillObject:{}},
   });
-  screen.setState(0,'stopped');screen.setState(1,'trip');screen.setState(19,{current:{tripId:'trip',userId:'fixture',token:'token'}});const screenTree=screen.render();
+  const lifetime={};screen.setState(0,'stopped');screen.setState(1,'trip');screen.setState(7,false);screen.setState(27,{current:lifetime});screen.setState(19,{current:{lifetime,tripId:'trip',userId:'fixture',token:'token'}});const screenTree=screen.render();
   nodes(screenTree,'TripSaveModal')[0].props.ref.current=form.ref.current;
   const edit=nodes(screenTree,'TouchableOpacity').find(node=>node.props.accessibilityLabel==='Edit trip details');
   assert.ok(edit);assert.equal(edit.props.disabled,false);await edit.props.onPress();
