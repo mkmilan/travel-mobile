@@ -32,7 +32,7 @@ export async function forgotPasswordRequest(email) {
 
 export async function resetPasswordRequest(token, password) {
 	return apiFetch(`/auth/resetpassword/${token}`, {
-		method: "POST",
+		method: "PUT",
 		csrf: true,
 		auth: false,
 		body: JSON.stringify({ password }),
