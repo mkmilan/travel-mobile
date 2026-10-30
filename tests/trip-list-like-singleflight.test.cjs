@@ -32,7 +32,7 @@ async function app(options = {}) {
     const host = hooksFixture(), trip = {_id: id, likesCount: 0, isLikedByCurrentUser: false};
     const useTripSocial = load('src/hooks/useTripSocial.js', 'useTripSocial', {React: {useEffect: host.hooks.useEffect}, useAuthStore, useTripSocialStore, getSocialSessionScope: social.getSocialSessionScope});
     const container = fixture('src/components/TripCardContainer.js', 'TripCardContainer', {trip, primeOnMount: false, onOpenSheet() {}}, {
-      useTripSocial, TripCard: 'TripCard', calcAvgSpeed: () => '', isoToDate: () => '', kmOrMiles: () => '', msToDuration: () => '', lineStringToCoords: () => [],
+      useTripSocial, TripCard: 'TripCard', useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed: () => '', isoToDate: () => '', kmOrMiles: () => '', msToDuration: () => '', lineStringToCoords: () => [],
     });
     const props = () => host.render(() => container.render()).props;
     const render = () => fixture('src/components/TripCard.js', 'TripCard', props(), {...native, theme, StyleSheet: {create: value => value}, Feather: 'Feather', UserHeader: 'UserHeader', TransportIcon: 'TransportIcon', TripMapThumbnail: 'TripMapThumbnail'}).render();

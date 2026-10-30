@@ -44,7 +44,7 @@ function setup(kind, options = {}) {
     const cardHost = hooksFixture(), props = list().props.renderItem({ item }).props;
     const useTripSocial = load('src/hooks/useTripSocial.js', 'useTripSocial', { React: { useEffect: cardHost.hooks.useEffect }, useAuthStore: auth.store, ...social });
     const component = fixture('src/components/TripCardContainer.js', 'TripCardContainer', props, {
-      useTripSocial, TripCard: 'TripCard', calcAvgSpeed: () => '', isoToDate: () => '', kmOrMiles: () => '', msToDuration: () => '', lineStringToCoords: () => [],
+      useTripSocial, TripCard: 'TripCard', useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed: () => '', isoToDate: () => '', kmOrMiles: () => '', msToDuration: () => '', lineStringToCoords: () => [],
     });
     return { render: () => cardHost.render(() => component.render()), unmount: () => cardHost.unmount() };
   }

@@ -126,7 +126,7 @@ test('profile name, bio and stat labels keep dark text on light surfaces even wi
   const tree = fixture('src/screens/profile/ProfileSummary.js', 'ProfileSummary', {
     displayedUser:{username:'Fixture name', bio:'Fixture bio'},
     stats:{totalTrips:1,totalDistance:1,followers:1,following:1,recommendationCount:1,poi:1}, colors, isSelf:false,
-  }, {...native,baseTheme:theme,StyleSheet:{create:x=>x},Feather:'Feather',Avatar:'Avatar',Link:'Link',profileDistance:String}).render();
+  }, {...native,baseTheme:theme,StyleSheet:{create:x=>x},Feather:'Feather',Avatar:'Avatar',Link:'Link',useViewerUnits: () => "metric", profileDistance:String}).render();
   const style = node => Object.assign({}, ...[node.props.style].flat(Infinity));
   for(const label of ['Fixture name','Fixture bio']) {
     assert.equal(style(nodes(tree,'Text').find(node=>node.children.join('') === label)).color, theme.colors.text);

@@ -1,3 +1,5 @@
+import { kmOrMiles } from "./format";
+
 export function profileStats(user) {
 	const number = (value) => Number.isFinite(value) && value >= 0 ? value : 0;
 	return {
@@ -8,8 +10,9 @@ export function profileStats(user) {
 }
 
 // Profile presentation only; do not round stored measurements or trip displays.
-export const profileDistance = (meters) => {
+export const profileDistance = (meters, units = "metric") => {
 	if (!Number.isFinite(meters) || meters < 0) return "–";
+	if (units === "imperial") return kmOrMiles(meters, units);
 	return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
 };
 

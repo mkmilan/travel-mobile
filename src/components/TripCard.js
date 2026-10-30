@@ -13,6 +13,7 @@ export default function TripCard({
 	distanceKm,
 	durationStr,
 	avgSpeed,
+	avgSpeedUnit = "km/h",
 	likes, // This is likesCount
 	comments, // This is commentsCount
 	coords,
@@ -128,7 +129,7 @@ export default function TripCard({
 					</View>
 					<IconStat iconName="map-pin" value={distanceKm} />
 					<IconStat iconName="clock" value={durationStr} />
-					<IconStat iconName="activity" value={avgSpeed} unit="km/h" />
+					<IconStat iconName="activity" value={avgSpeed} unit={avgSpeedUnit} />
 				</View>
 
 				{/* New Likers Section - Touchable */}

@@ -32,7 +32,7 @@ function detail(source) {
       return { remove: () => listeners.delete(callback) };
     } },
     getTripJsonById: async () => ({ _id: 'trip-a', user: { _id: 'owner' }, title: 'Trip', likes: [], comments: [], recommendations: [], photos: [] }),
-    calcAvgSpeed: () => 1, kmOrMiles: () => '1 km', msToDuration: () => '', lineStringToCoords: () => [], isoToDate: () => '', getPoiNote: () => '',
+    useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed: () => 1, kmOrMiles: () => '1 km', msToDuration: () => '', lineStringToCoords: () => [], isoToDate: () => '', getPoiNote: () => '',
     Alert: { alert: (...args) => alerts.push(args) },
     ENABLE_SAFE_TRIP_DELETE: true,
     createTripDeletion: options => ({ getState: () => ({}), run: async () => options.onComplete(null, { cleanupPending: false }) }),

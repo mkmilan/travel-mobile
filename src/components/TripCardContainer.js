@@ -1,6 +1,7 @@
+import useViewerUnits from "@/src/hooks/useViewerUnits";
 // components/TripCardContainer.js
 import useTripSocial from "@/src/hooks/useTripSocial";
-import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration } from "@/src/utils/format";
+import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration, speedUnit } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
 import TripCard from "./TripCard";
 
@@ -9,12 +10,13 @@ import TripCard from "./TripCard";
  * and the shared social-state actions.
  */
 export default function TripCardContainer({ trip, onOpenSheet, onPress, userNameOverride, user, canAct, primeOnMount = true }) {
+	const units = useViewerUnits();
 	const { likesCount, commentsCount, recommendationCount, isLiked, likePending, toggleLike } = useTripSocial(trip, primeOnMount);
 
 	/* ---- format everything exactly like the old page did ---- */
-	const distanceLabel = kmOrMiles(trip.distanceMeters);
+	const distanceLabel = kmOrMiles(trip.distanceMeters, units);
 	const durationLabel = msToDuration(trip.durationMillis);
-	const avgSpeedLabel = calcAvgSpeed(trip.distanceMeters, trip.durationMillis);
+	const avgSpeedLabel = calcAvgSpeed(trip.distanceMeters, trip.durationMillis, units);
 	const coords = lineStringToCoords(trip.simplifiedRoute);
 
 	const displayUser = userNameOverride || trip?.user?.username || "Unknown User";
@@ -32,6 +34,7 @@ export default function TripCardContainer({ trip, onOpenSheet, onPress, userName
 			distanceKm={distanceLabel}
 			durationStr={durationLabel}
 			avgSpeed={avgSpeedLabel}
+			avgSpeedUnit={speedUnit(units)}
 			travelMode={trip.defaultTravelMode}
 			coords={coords}
 			/* live counts */

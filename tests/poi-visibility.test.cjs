@@ -13,7 +13,7 @@ test('POI presentation defaults off without changing stored profile counters', (
   assert.equal(stats.poi,7);
   for (const enabled of [false,true]) {
     const tree=fixture('src/screens/profile/ProfileSummary.js','ProfileSummary',{displayedUser:{},stats,colors:{}},
-      {...native,ENABLE_POI_UI:enabled,baseTheme:theme,StyleSheet:style,Feather:'Feather',Avatar:'Avatar',Link:'Link',profileDistance}).render();
+      {...native,ENABLE_POI_UI:enabled,baseTheme:theme,StyleSheet:style,Feather:'Feather',Avatar:'Avatar',Link:'Link',useViewerUnits: () => "metric", profileDistance}).render();
     const cards=nodes(tree,'TouchableOpacity').filter(n=>n.props.accessibilityLabel && n.props.accessibilityLabel.includes(':'));
     assert.equal(cards.length,enabled?6:5);
     assert.equal(cards.some(n=>n.props.accessibilityLabel==='POIs: 7'),enabled);
@@ -46,7 +46,7 @@ test('trip details hide the entire POI section for empty and populated trips and
       ...native,...components,ENABLE_POI_UI:enabled,theme,StyleSheet:style,getPoiNote:p=>p.note,
       useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({push(){}}),useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>({id:'trip'}),
       useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),useCallback:f=>f,useFocusEffect(){},
-      calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
+      useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
     });
     screen.setState(0,{_id:'trip',user:session.user,pointsOfInterest:Array.from({length:count},(_,i)=>({_id:`p${i}`,note:'Saved'}))});screen.setState(1,false);
     const sections=nodes(screen.render(),'Section');
@@ -65,6 +65,7 @@ test('profile rejects stale POI actions and direct hidden list mounting performs
   overview.props.onStatPress('Distance');assert.equal(nodes(screen.render(),'ProfileStatModal')[0].props.stat,'Distance');
   let requests=0;const {createPagedList}=load('src/utils/pagedList.js','({createPagedList})');
   const direct=fixture('src/components/modals/ProfileStatModal.js','ProfileStatModal',{stat:'POIs',userId:'owner',stats:{}},{
+    useViewerUnits: () => "metric",
     useProfileContext:()=>({isCurrent:()=>true}),useMemo:f=>f(),useSyncExternalStore:(_s,get)=>get(),useRouter:()=>({}),useEffect:f=>f(),createPagedList,getUserPois:async()=>{requests++;return {data:[]};},
   });
   assert.equal(direct.render(),null);await new Promise(setImmediate);assert.equal(requests,0);

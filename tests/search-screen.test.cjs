@@ -349,7 +349,7 @@ test('shared trip container keeps authoritative counts, forwards search priming 
   const component = fixture('src/components/TripCardContainer.js', 'TripCardContainer', {
     trip, user: trip.user, primeOnMount: false, canAct: () => allowed, onOpenSheet() {}, onPress() {},
   }, {
-    TripCard: 'TripCard', calcAvgSpeed: () => '10', isoToDate: () => 'Today', kmOrMiles: () => '20', msToDuration: () => '2h', lineStringToCoords: () => [],
+    TripCard: 'TripCard', useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed: () => '10', isoToDate: () => 'Today', kmOrMiles: () => '20', msToDuration: () => '2h', lineStringToCoords: () => [],
     useTripSocial: (...args) => { hookCalls.push(args); return { likesCount: 4, commentsCount: 3, recommendationCount: 2, isLiked: true, toggleLike: () => likes++ }; },
   });
   const card = component.render();

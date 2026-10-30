@@ -1,3 +1,4 @@
+import useViewerUnits from "@/src/hooks/useViewerUnits";
 import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 import { profileDistance } from "@/src/utils/profileData";
 import Avatar from "@/src/components/ui/Avatar";
@@ -7,6 +8,7 @@ import { Link } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function ProfileSummary({ displayedUser, stats, colors, isSelf, onLogout, onStatPress, refreshError, onRefresh, onFollowToggle, followBusy, followError }) {
+	const units = useViewerUnits();
 	const statMeta = {
 		Trips: { icon: "map", color: "#4A90E2" },
 		Distance: { icon: "activity", color: "#50E3C2" },
@@ -46,7 +48,7 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 			<View style={styles.statsSection}>
 				{[
 					["Trips", stats.totalTrips],
-					["Distance", profileDistance(stats.totalDistance)],
+					["Distance", profileDistance(stats.totalDistance, units)],
 					["Followers", stats.followers],
 					["Following", stats.following],
 					["Recs", stats.recommendationCount],

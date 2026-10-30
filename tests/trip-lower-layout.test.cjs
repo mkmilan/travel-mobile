@@ -14,7 +14,7 @@ function screenFor(overrides={}, actor='owner', loadTrip=async()=>{throw Error('
     useAuthStore:Object.assign(()=>session,{getState:()=>session}),
     useRouter:()=>({push:path=>calls.navigation.push(path)}),useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>({id:'trip'}),
     useTripSocialStore:Object.assign(()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),{getState:()=>({trips:{}})}),useCallback:f=>f,useFocusEffect:fn=>{focus=fn;},
-    calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
+    useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
     getTripJsonById:()=>priming ? Promise.resolve(trip) : loadTrip(),
     getTripLikers:async id=>{calls.likers.push(id);return [{_id:'liker'}];},
     getTripComments:async id=>{calls.comments.push(id);return [{_id:'comment-a'},{_id:'comment-b'}];},

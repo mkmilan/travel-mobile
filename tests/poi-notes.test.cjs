@@ -67,7 +67,7 @@ test('actual trip detail renders and opens POI text for both API description and
     ...native,...components,theme,...noteTools,StyleSheet:{create:value=>value},
     useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({push(){}}),useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>({id:'trip-a'}),
     useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),useCallback:fn=>fn,useFocusEffect(){},
-    calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
+    useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],
     Alert:{alert:(...args)=>notices.push(args)},
   });
   screen.setState(0,{_id:'trip-a',user:{_id:'owner'},pointsOfInterest:[

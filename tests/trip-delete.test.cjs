@@ -97,7 +97,7 @@ function detailScreen(remove,enabled=true){
     ...native,...components,theme,StyleSheet:{create:x=>x},ENABLE_SAFE_TRIP_DELETE:enabled,createTripDeletion,
     useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({replace:path=>navigations.push(path),push(){}}),useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>route,
     useTripSocialStore:Object.assign(()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),{getState:()=>({invalidateDeletedTrip:id=>invalidations.push(id)})}),useCallback:f=>f,useFocusEffect:fn=>{focus=fn;},
-    calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],getTripJsonById:async()=>({_id:serverId,user:{_id:'owner'},recommendations:[]}),
+    useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',isoToDate:()=>'',lineStringToCoords:()=>[],getTripJsonById:async()=>({_id:serverId,user:{_id:'owner'},recommendations:[]}),
     Alert:{alert:(...args)=>alerts.push(args)},deleteServerTrip:remove,reconcileDeletedServerTrip:async(...args)=>reconciles.push(args),rememberPendingTripDeletion:async()=>{},settlePendingTripDeletion:async()=>{},
   });screen.setState(0,{_id:serverId,user:{_id:'owner'},recommendations:[]});screen.setState(1,false);
   const menu=()=>nodes(screen.render()).find(n=>n.type?.name==='DropdownMenu');

@@ -42,7 +42,7 @@ async function app() {
     useLocalSearchParams: () => route, useRouter: () => ({push: path => navigation.push(path), replace: path => navigation.push(path), canGoBack: () => true, back() {}}),
     useNavigation: () => ({getState: () => ({index: 2, routes: [{name: '(tabs)'}, {name: 'search/index'}, {name: '(tabs)'}]})}),
     BackHandler: {addEventListener: () => ({remove() {}})}, Alert: {alert: (...args) => alerts.push(args)},
-    calcAvgSpeed: () => 1, kmOrMiles: () => '1 km', msToDuration: () => '', lineStringToCoords: () => [], isoToDate: () => '', getPoiNote: () => '',
+    useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed: () => 1, kmOrMiles: () => '1 km', msToDuration: () => '', lineStringToCoords: () => [], isoToDate: () => '', getPoiNote: () => '',
   });
   await auth.getState().login(account);
   const render = () => host.render(() => screen.render());

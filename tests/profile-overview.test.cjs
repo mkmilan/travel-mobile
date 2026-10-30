@@ -12,7 +12,7 @@ test('profile maps the actual server counters and displays short distances in me
   assert.equal(profileDistance(stats.totalDistance),'3 m'); assert.equal(profileDistance(1250),'1.3 km'); assert.equal(profileDistance(0),'0 m');
   const pressed=[];
   const tree=fixture('src/screens/profile/ProfileSummary.js','ProfileSummary',{displayedUser:{_id:'one'},isSelf:true,stats,colors:{},onStatPress:value=>pressed.push(value)},
-    {ENABLE_POI_UI:true,...native,baseTheme:theme,StyleSheet:{create:x=>x},Feather:'Feather',Avatar:'Avatar',Link:'Link',profileDistance}).render();
+    {ENABLE_POI_UI:true,...native,baseTheme:theme,StyleSheet:{create:x=>x},Feather:'Feather',Avatar:'Avatar',Link:'Link',useViewerUnits: () => "metric", profileDistance}).render();
   const cards=nodes(tree,'TouchableOpacity').filter(node=>node.props.accessibilityLabel);
   assert.equal(cards.length,6); cards.forEach(card=>card.props.onPress());
   assert.deepEqual(pressed,['Trips','Distance','Followers','Following','Recs','POIs']);
@@ -85,7 +85,7 @@ test('POI API uses existing authenticated visibility endpoint, retaining page an
 test('POI list opens its parent trip only after closing; distance uses no POI request', () => {
   const {createPagedList}=load('src/utils/pagedList.js','({createPagedList})');let scope={isCurrent:()=>true};let list,memoDeps;const history=[];
   const props={stat:'POIs',userId:'one',stats:{totalTrips:1,totalDistance:3},onClose:()=>history.push('close')};
-  const screen=fixture('src/components/modals/ProfileStatModal.js','ProfileStatModal',props,{ENABLE_POI_UI:true,...native,theme,BottomModal:'BottomModal',ModalHeader:'ModalHeader',ProfileListStatus:'ProfileListStatus',profileDistance,useProfileContext:()=>scope,useRouter:()=>({push:path=>history.push(path)}),getUserPois:async()=>({data:[],totalPages:0}),createPagedList,useMemo:(create,deps)=>{if(!memoDeps||deps.some((value,i)=>value!==memoDeps[i])){list=create();memoDeps=deps;}return list;},useSyncExternalStore:(_subscribe,get)=>get()});
+  const screen=fixture('src/components/modals/ProfileStatModal.js','ProfileStatModal',props,{ENABLE_POI_UI:true,...native,theme,BottomModal:'BottomModal',ModalHeader:'ModalHeader',ProfileListStatus:'ProfileListStatus',useViewerUnits: () => "metric", profileDistance,useProfileContext:()=>scope,useRouter:()=>({push:path=>history.push(path)}),getUserPois:async()=>({data:[],totalPages:0}),createPagedList,useMemo:(create,deps)=>{if(!memoDeps||deps.some((value,i)=>value!==memoDeps[i])){list=create();memoDeps=deps;}return list;},useSyncExternalStore:(_subscribe,get)=>get()});
   const row=nodes(screen.render(),'FlatList')[0].props.renderItem({item:{_id:'poi',tripId:'trip',tripTitle:'Fixture',name:'Stop'}});row.props.onPress();assert.deepEqual(history,['close','/(tabs)/trip/trip']);
   scope.isCurrent=()=>false;row.props.onPress();assert.equal(history.length,2);
   props.stat='Distance';assert.equal(nodes(screen.render(),'FlatList').length,0);assert.equal(list.getSnapshot().loaded,true);

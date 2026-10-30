@@ -278,7 +278,7 @@ function tripDetailScreen(overrides={}) {
     ...defaults,...components,useAuthStore,useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>params,
     useTripSocialStore:()=>({setRecCount(){},setLikeState(){},setCommentCount(){}}),
     useCallback:fn=>fn,useFocusEffect:callback=>{focus=callback;},
-    calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',lineStringToCoords:()=>[],
+    useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed:()=>1,kmOrMiles:()=> '1 km',msToDuration:()=>'',lineStringToCoords:()=>[],
     addRecommendation:async()=>({_id:'saved'}),updateRecommendation:async()=>({_id:'saved'}),
     Alert:{alert(){}},...overrides,
     getTripJsonById:()=>priming || !overrides.getTripJsonById ? Promise.resolve({_id:params.id,user:{_id:'owner'},recommendations:[],likes:[],comments:[]}) : overrides.getTripJsonById(),

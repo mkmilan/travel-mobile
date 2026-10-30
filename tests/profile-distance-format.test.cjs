@@ -21,8 +21,8 @@ test('invalid profile measurements are not displayed as zero, NaN or Infinity', 
 });
 
 test('profile overview and distance sheet use the same complete label', () => {
-  assert.match(read('src/screens/profile/ProfileSummary.js'), /profileDistance\(stats\.totalDistance\)/);
-  assert.match(read('src/components/modals/ProfileStatModal.js'), /profileDistance\(stats\.totalDistance\)/);
+  assert.match(read('src/screens/profile/ProfileSummary.js'), /profileDistance\(stats\.totalDistance, units\)/);
+  assert.match(read('src/components/modals/ProfileStatModal.js'), /profileDistance\(stats\.totalDistance, units\)/);
   const stats = Object.freeze({totalDistance:2239});
   assert.equal(profileDistance(stats.totalDistance),'2.2 km');
   assert.equal(stats.totalDistance,2239);
@@ -32,6 +32,6 @@ test('existing trip formatter remains unchanged, including short-trip rounding',
   for (const [meters, expected] of [[543.413,'0.5 km'],[1638.779,'1.6 km'],[47.801,'0.0 km'],[8.89,'0.0 km']]) {
     assert.equal(kmOrMiles(meters), expected);
   }
-  assert.match(read('src/components/TripCardContainer.js'), /kmOrMiles\(trip\.distanceMeters\)/);
-  assert.match(read('app/(tabs)/trip/[id].js'), /const distance = kmOrMiles\(trip\.distanceMeters\)/);
+  assert.match(read('src/components/TripCardContainer.js'), /kmOrMiles\(trip\.distanceMeters, units\)/);
+  assert.match(read('app/(tabs)/trip/[id].js'), /const distance = kmOrMiles\(trip\.distanceMeters, units\)/);
 });

@@ -54,7 +54,7 @@ test('mutation invalidates an older profile GET and queues fresh status before d
 
 test('follow button appears only on other profiles; renders pending, unfollow, and visible errors',()=>{
   let presses=0;const props={displayedUser:{_id:'target',isFollowing:false},isSelf:false,stats:{},colors:{},onFollowToggle:()=>presses++};
-  const screen=fixture('src/screens/profile/ProfileSummary.js','ProfileSummary',props,{...native,baseTheme:theme,StyleSheet:{create:x=>x},Feather:'Feather',Avatar:'Avatar',Link:'Link',profileDistance:()=> '0 km'});
+  const screen=fixture('src/screens/profile/ProfileSummary.js','ProfileSummary',props,{...native,baseTheme:theme,StyleSheet:{create:x=>x},Feather:'Feather',Avatar:'Avatar',Link:'Link',useViewerUnits: () => "metric", profileDistance:()=> '0 km'});
   const getButton=tree=>nodes(tree,'TouchableOpacity').find(node=>node.props.accessibilityLabel==='Follow user'||node.props.accessibilityLabel==='Unfollow user');
   getButton(screen.render()).props.onPress();assert.equal(presses,1);props.followBusy=true;assert.equal(getButton(screen.render()).props.disabled,true);
   props.followBusy=false;props.displayedUser.isFollowing=true;props.followError='offline';const tree=screen.render();assert.equal(getButton(tree).props.accessibilityLabel,'Unfollow user');assert.ok(nodes(tree,'Text').find(node=>node.children.includes('offline')));

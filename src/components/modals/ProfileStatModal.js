@@ -1,3 +1,4 @@
+import useViewerUnits from "@/src/hooks/useViewerUnits";
 import { ENABLE_POI_UI } from "@/src/constants/featureFlags";
 import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -12,6 +13,7 @@ import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
 
 export default function ProfileStatModal({ stat, userId, stats, onClose }) {
+	const units = useViewerUnits();
 	const context = useProfileContext(`${userId}:${stat}`);
 	const list = useMemo(() => createPagedList((page) => {
 		if (!context.isCurrent()) throw new Error("Profile changed; request cancelled");
@@ -24,7 +26,7 @@ export default function ProfileStatModal({ stat, userId, stats, onClose }) {
 	return <BottomModal visible onClose={onClose}>
 		<ModalHeader title={stat} onClose={onClose} />
 		{stat === "Distance" ? <View style={{ padding: 24 }}>
-			<Text style={{ color: theme.colors.text, fontSize: 24 }}>{profileDistance(stats.totalDistance)}</Text>
+			<Text style={{ color: theme.colors.text, fontSize: 24 }}>{profileDistance(stats.totalDistance, units)}</Text>
 			<Text style={{ color: theme.colors.textMuted, marginTop: 12 }}>Total distance across {stats.totalTrips} visible trips.</Text>
 		</View> : <FlatList data={state.items} keyExtractor={(item) => `${item.tripId}:${item._id}`}
 			renderItem={({ item }) => <Pressable accessibilityRole="button" onPress={() => {

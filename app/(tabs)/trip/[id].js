@@ -1,3 +1,4 @@
+import useViewerUnits from "@/src/hooks/useViewerUnits";
 import { createTripDeletion } from "@/src/utils/tripDeletion";
 import { reconcileDeletedServerTrip, rememberPendingTripDeletion, settlePendingTripDeletion } from "@/src/db/tripDao";
 import { ENABLE_POI_UI, ENABLE_SAFE_TRIP_DELETE } from "@/src/constants/featureFlags";
@@ -34,7 +35,7 @@ import {
 import { useAuthStore } from "@/src/stores/auth";
 import { useTripSocialStore } from "@/src/stores/tripSocialStore";
 import { theme } from "@/src/theme";
-import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration } from "@/src/utils/format";
+import { calcAvgSpeed, isoToDate, kmOrMiles, msToDuration, speedUnit } from "@/src/utils/format";
 import { lineStringToCoords } from "@/src/utils/geo";
 import { getPoiNote } from "@/src/utils/poiNote";
 import { Feather } from "@expo/vector-icons";
@@ -83,6 +84,7 @@ export default function TripDetailScreen() {
 	const router = useRouter();
 	const rootNavigation = useNavigation("/");
 	const { id: tripId } = useLocalSearchParams();
+	const units = useViewerUnits();
 	const { user: currentUser, token, isAuthenticated, sessionEpoch, isSessionChanging } = useAuthStore();
 	const { setRecCount, setLikeState, setCommentCount } = useTripSocialStore();
 
@@ -695,11 +697,9 @@ export default function TripDetailScreen() {
 
 	// --- Derived Data for Display (now that trip is guaranteed to be non-null) ---
 	const tripUser = trip.user || {};
-	const distance = kmOrMiles(trip.distanceMeters);
+	const distance = kmOrMiles(trip.distanceMeters, units);
 	const duration = msToDuration(trip.durationMillis);
-	const avgSpeedDisplay = `${calcAvgSpeed(trip.distanceMeters, trip.durationMillis)} ${
-		kmOrMiles(1000).endsWith("km") ? "km/h" : "mph"
-	}`;
+	const avgSpeedDisplay = `${calcAvgSpeed(trip.distanceMeters, trip.durationMillis, units)} ${speedUnit(units)}`;
 	const mapCoords = lineStringToCoords(trip.simplifiedRoute);
 	const travelMode = trip.defaultTravelMode || "car";
 
