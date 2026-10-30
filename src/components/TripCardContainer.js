@@ -9,7 +9,7 @@ import TripCard from "./TripCard";
  * and the shared social-state actions.
  */
 export default function TripCardContainer({ trip, onOpenSheet, onPress, userNameOverride, user, canAct, primeOnMount = true }) {
-	const { likesCount, commentsCount, recommendationCount, isLiked, toggleLike } = useTripSocial(trip, primeOnMount);
+	const { likesCount, commentsCount, recommendationCount, isLiked, likePending, toggleLike } = useTripSocial(trip, primeOnMount);
 
 	/* ---- format everything exactly like the old page did ---- */
 	const distanceLabel = kmOrMiles(trip.distanceMeters);
@@ -39,6 +39,7 @@ export default function TripCardContainer({ trip, onOpenSheet, onPress, userName
 			comments={commentsCount}
 			recommendationsCount={recommendationCount}
 			isLikedByCurrentUser={isLiked}
+			likePending={likePending}
 			/* actions */
 			onLikePress={() => { if (!canAct || canAct()) return toggleLike(); }}
 			onOpenLikersModalPress={() => onOpenSheet("likers", trip)}

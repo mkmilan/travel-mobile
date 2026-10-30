@@ -21,6 +21,7 @@ export default function TripCard({
 	onPress,
 	tripId,
 	isLikedByCurrentUser = false,
+	likePending = false,
 	recommendationsCount = 0,
 	onLikePress = () => console.log("Like action pressed"), // For the like/unlike ACTION
 	onOpenLikersModalPress = () => console.log("Open likers modal pressed"), // To open the modal showing who liked
@@ -42,7 +43,7 @@ export default function TripCard({
 	// Handler for the heart icon (like/unlike ACTION)
 	const handleLikeAction = (event) => {
 		event.stopPropagation();
-		if (tripId) {
+		if (tripId && !likePending) {
 			onLikePress(tripId); // Parent handles API call and state update
 		}
 	};
@@ -147,7 +148,14 @@ export default function TripCard({
 
 				{/* Footer Actions */}
 				<View style={styles.footer}>
-					<TouchableOpacity onPress={handleLikeAction} style={styles.footerActionItem}>
+					<TouchableOpacity
+						onPress={handleLikeAction}
+						disabled={likePending}
+						accessibilityRole="button"
+						accessibilityLabel={isLikedByCurrentUser ? "Unlike trip" : "Like trip"}
+						accessibilityState={{ disabled: likePending, busy: likePending }}
+						style={[styles.footerActionItem, likePending && { opacity: 0.5 }]}
+					>
 						<Feather
 							name="heart"
 							size={18}

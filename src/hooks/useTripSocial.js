@@ -11,6 +11,8 @@ import { useAuthStore } from "@/src/stores/auth";
 export default function useTripSocial(trip, primeOnMount = true) {
 	useAuthStore(state => state.token);
 	useAuthStore(state => state.user?._id);
+	useAuthStore(state => state.sessionEpoch);
+	const isSessionChanging = useAuthStore(state => state.isSessionChanging);
 	const scope = getSocialSessionScope();
 	const { primeCounts, toggleLike, loadLikers, loadComments, addComment, loadRecommendations, ...data } =
 		useTripSocialStore();
@@ -34,6 +36,7 @@ export default function useTripSocial(trip, primeOnMount = true) {
 			commentsCount: 0,
 			recommendationCount: 0,
 			isLiked: false,
+			likePending: false,
 
 			toggleLike: noop,
 			loadLikers: noop,
@@ -59,9 +62,10 @@ export default function useTripSocial(trip, primeOnMount = true) {
 		commentsCount: state.commentsCount ?? trip.commentsCount,
 		recommendationCount: state.recommendationCount ?? trip.recommendationCount,
 		isLiked: state.isLikedByCurrentUser ?? trip.isLikedByCurrentUser,
+		likePending: !!state.likePending || !!isSessionChanging,
 
 		/* actions */
-		toggleLike: () => toggleLike(trip._id),
+		toggleLike: () => { if (scope === getSocialSessionScope()) return toggleLike(trip._id); },
 		loadLikers: () => loadLikers(trip._id),
 		loadComments: () => loadComments(trip._id),
 		addComment: (t) => addComment(trip._id, t),

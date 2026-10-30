@@ -270,7 +270,7 @@ test('unrelated comments and recommendations do not suppress a legitimate curren
   assert.equal(state.commentsCount, 4); assert.equal(state.recommendationCount, 2); assert.equal(f.alerts.length, 1); f.host.unmount();
 });
 
-test('shared Like rollback respects newer Like revisions and preserves unrelated data on a current failure', async () => {
+test('shared Like single-flight ignores pending taps and preserves unrelated data on rollback', async () => {
   for (const newerLikes of [false, true]) {
     const f = await app(), pending = deferred();
     f.handler((url, options) => options.method === 'POST' ? pending.promise : f.defaultHandler(url, options));
@@ -283,8 +283,9 @@ test('shared Like rollback respects newer Like revisions and preserves unrelated
     const revision = f.social.getState().trips['trip-a'].likeRevision;
     pending.resolve(reply({message: 'Old shared failure'}, 503)); await old;
     const state = f.social.getState().trips['trip-a'];
-    assert.equal(state.likeRevision, revision + (newerLikes ? 0 : 1));
-    assert.equal(state.isLikedByCurrentUser, newerLikes); assert.equal(state.likesCount, newerLikes ? 1 : 0);
+    assert.equal(state.likeRevision, revision + 1);
+    assert.equal(state.isLikedByCurrentUser, false); assert.equal(state.likesCount, 0);
+    assert.equal(state.likePending, false);
     assert.equal(state.commentsCount, 4); assert.equal(state.recommendationCount, 2); f.host.unmount();
   }
 });

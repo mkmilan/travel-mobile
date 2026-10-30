@@ -28,13 +28,14 @@ import { useAuthStore } from "@/src/stores/auth";
 
 let cacheGeneration = 0;
 const loadVersions = new Map();
+const likeRequests = new Map();
 let socialSession = null;
 // Cache entries carry an opaque identity, not credentials. Auth subscribers can
 // immediately reject old-session lists without waiting for a replacement GET.
 export const getSocialSessionScope = () => {
-	const { token, user } = useAuthStore.getState();
-	if (!socialSession || socialSession.token !== token || socialSession.userId !== user?._id) {
-		socialSession = { token, userId: user?._id, scope: {} };
+	const { token, user, sessionEpoch } = useAuthStore.getState();
+	if (!socialSession || socialSession.token !== token || socialSession.userId !== user?._id || socialSession.epoch !== sessionEpoch) {
+		socialSession = { token, userId: user?._id, epoch: sessionEpoch, scope: {} };
 	}
 	return socialSession.scope;
 };
@@ -61,14 +62,23 @@ export const useTripSocialStore = create((set, get) => ({
 	invalidateDeletedTrip: (tripId) => {
 		cacheGeneration++; // Also reject in-flight social responses for the deleted trip.
 		loadVersions.clear();
+		likeRequests.delete(tripId);
 		set(s => { const trips = { ...s.trips }; delete trips[tripId]; return { trips, deletedTripIds: { ...s.deletedTripIds, [tripId]: true }, deletionRevision: s.deletionRevision + 1 }; });
 	},
 	trips: {}, // { [tripId]: {likesCount, isLikedByCurrentUser, ...} }
 
 	/* -------- likes -------- */
 	toggleLike: async (tripId) => {
-		if (get().deletedTripIds[tripId]) return;
-		const isCurrentSession = captureSession();
+		const auth = useAuthStore.getState();
+		if (!auth.token || !auth.user?._id || auth.isSessionChanging || auth.isAuthenticated === false || get().deletedTripIds[tripId]) return;
+		const scope = getSocialSessionScope();
+		// One write per trip/session, shared across every mounted card. Ignore
+		// duplicate/stale presses even before React has rendered the disabled heart.
+		if (likeRequests.get(tripId)?.scope === scope) return;
+		const operation = { scope };
+		likeRequests.set(tripId, operation);
+		const isCurrent = () => likeRequests.get(tripId) === operation
+			&& scope === getSocialSessionScope() && !useAuthStore.getState().isSessionChanging;
 		const trip = scopedTrip(get(), tripId);
 		const liked = !trip.isLikedByCurrentUser;
 		const likeRevision = (trip.likeRevision || 0) + 1;
@@ -79,15 +89,16 @@ export const useTripSocialStore = create((set, get) => ({
 				[tripId]: {
 					...trip,
 					likeRevision,
+					likePending: true,
 					isLikedByCurrentUser: liked,
-					likesCount: (trip.likesCount || 0) + (liked ? 1 : -1),
+					likesCount: Math.max(0, (trip.likesCount || 0) + (liked ? 1 : -1)),
 				},
 			},
 		}));
 		try {
 			liked ? await likeTrip(tripId) : await unlikeTrip(tripId);
 		} catch (e) {
-			if (!isCurrentSession() || scopedTrip(get(), tripId).likeRevision !== likeRevision) return;
+			if (!isCurrent() || scopedTrip(get(), tripId).likeRevision !== likeRevision) return;
 			// Revert only this Like, retaining newer comments/recommendations. A
 			// later Like or accepted server snapshot owns its own revision.
 			set((s) => ({ trips: { ...s.trips, [tripId]: {
@@ -96,6 +107,16 @@ export const useTripSocialStore = create((set, get) => ({
 				isLikedByCurrentUser: trip.isLikedByCurrentUser,
 				likesCount: trip.likesCount,
 			} } }));
+		} finally {
+			// A failed write is never queued/replayed automatically: its outcome
+			// may be ambiguous. Release only our own lock so an explicit retry works.
+			if (likeRequests.get(tripId) === operation) {
+				const current = isCurrent();
+				likeRequests.delete(tripId);
+				if (current) set(s => ({ trips: { ...s.trips, [tripId]: {
+					...scopedTrip(s, tripId), likePending: false,
+				} } }));
+			}
 		}
 	},
 
@@ -209,6 +230,7 @@ export const useTripSocialStore = create((set, get) => ({
 	reset: () => {
 		cacheGeneration++;
 		loadVersions.clear();
+		likeRequests.clear();
 		set({ trips: {}, deletedTripIds: {} });
 	},
 }));
