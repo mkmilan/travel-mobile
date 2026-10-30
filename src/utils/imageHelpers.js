@@ -1,13 +1,15 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
+import uuid from "react-native-uuid";
 
 /**
  * Copy an image into FileSystem.cacheDirectory and shrink the longer edge to 1600 px.
  * Returns the new local `file://` URI (ready for <Image/>).
  */
 export async function copyAndResizeAsync(originalUri) {
-	// 1. Make sure we have a filename
-	const filename = originalUri.split("/").pop() || `img_${Date.now()}.jpg`;
+	// Each selection owns an immutable file. Reusing an original basename could
+	// overwrite the bytes of a pending upload and invalidate its retry identity.
+	const filename = `photo_${uuid.v4()}.jpg`;
 	const target = FileSystem.cacheDirectory + filename;
 
 	// 2. Resize (keeps aspect ratio)

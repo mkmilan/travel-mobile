@@ -48,10 +48,15 @@ async function editor() {
     requests.push({ url, options });
     if (url.endsWith('/csrf-token')) return response({ csrfToken: 'fixture-csrf' });
     if (options.method === 'GET') readCount++;
-    return reply(url, options);
+    const result = await reply(url, options);
+    if (options?.headers?.['X-Photo-Upload-Id'] && result.ok) {
+      const original = result.json; result.json = async () => ({...await original(), photoUploadProtocol:1, photoUploadId:options.headers['X-Photo-Upload-Id']});
+    }
+    return result;
   };
   const getCsrfToken = load('src/services/csrf.js', 'getCsrfToken', { Constants, fetch, console });
   const api = load('src/services/api.js', '({getTripJsonById,updateTripJson,uploadTripPhoto,deleteTripPhoto})', {
+    ...require('./helpers/photo-upload-identity.cjs'),
     Constants, Updates: {}, SecureStore, getCsrfToken, fetch, console,
     require: () => ({ useAuthStore }), createPhotoFormData: async (field, uri) => ({ field, uri }),
   });

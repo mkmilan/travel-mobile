@@ -37,11 +37,16 @@ async function fixture() {
   const Constants = { expoConfig: { extra: { API_URL: 'https://fixture.invalid/api', APP_ENV: 'test' } } };
   const fetch = async (url, options) => {
     requests.push({ url, options });
-    return url.endsWith('/csrf-token') ? csrf() : reply();
+    const result = await (url.endsWith('/csrf-token') ? csrf() : reply());
+    if (options?.headers?.['X-Photo-Upload-Id'] && result.ok) {
+      const original = result.json; result.json = async () => ({...await original(), photoIds:['fixture-photo'], photoUploadProtocol:1, photoUploadId:options.headers['X-Photo-Upload-Id']});
+    }
+    return result;
   };
   const console = { log() {}, warn() {}, error() {} };
   const getCsrfToken = load('src/services/csrf.js', 'getCsrfToken', { Constants, fetch, console });
   const api = load('src/services/api.js', '({apiFetch,uploadProfilePhoto,uploadTripPhoto,uploadRecommendationPhoto})', {
+    ...require('./helpers/photo-upload-identity.cjs'),
     Constants, Updates: {}, SecureStore, getCsrfToken, fetch, console,
     require: () => ({ useAuthStore }), createPhotoFormData: (...args) => photo(...args),
   });

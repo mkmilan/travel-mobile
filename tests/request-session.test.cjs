@@ -11,9 +11,14 @@ function apiFixture({csrf=async()=> 'fixture-csrf',photo=async()=>({fixture:'for
   const store={getState:()=>{storeReads++;return state;},subscribe:listener=>{listeners.add(listener);return ()=>listeners.delete(listener);}};
   const setSession=(next,{persist=true}={})=>{const previous=state;const changed=next.token!==previous.token||next.user?._id!==previous.user?._id;state={...next,sessionEpoch:previous.sessionEpoch+Number(changed),isSessionChanging:false,logout:async()=>logoutCount++};if(persist){token=next.token;user=next.user?JSON.stringify({...next.user,token}):null;}for(const listener of listeners)listener(state,previous);};
   const api=load('src/services/api.js','({apiFetch,uploadProfilePhoto,uploadTripPhoto,uploadRecommendationPhoto})',{
+    ...require('./helpers/photo-upload-identity.cjs'),
     Constants:{expoConfig:{extra:{API_URL:'https://fixture.invalid/api',APP_ENV:'test'}}},Updates:{},console:{log(){},warn(){},error(){}},
     require:()=>({useAuthStore:store}),SecureStore:{getItemAsync:key=>read?read(key,()=>key==='auth-token'?token:user):Promise.resolve(key==='auth-token'?token:user)},
-    getCsrfToken:csrf,createPhotoFormData:photo,fetch:async(url,options)=>{requests.push({url,options});return reply();},
+    getCsrfToken:csrf,createPhotoFormData:photo,fetch:async(url,options)=>{requests.push({url,options});const result = await reply();
+      if (options.headers['X-Photo-Upload-Id'] && result.ok) {
+        const original = result.json; result.json = async () => ({...await original(), photoIds:['fixture-photo'], photoUploadProtocol:1, photoUploadId:options.headers['X-Photo-Upload-Id']});
+      }
+      return result;},
   });
   return {api,requests,setSession,state:()=>state,storeReads:()=>storeReads,logoutCount:()=>logoutCount,
     setPersisted:(nextToken,nextUser)=>{token=nextToken;user=nextUser;}};

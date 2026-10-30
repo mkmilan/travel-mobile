@@ -1,6 +1,7 @@
 import { ENABLE_SAFE_TRIP_DELETE } from "../constants/featureFlags";
 import Constants from "expo-constants";
 import { createPhotoFormData } from "../utils/photoFormData";
+import { photoUploadId, assertPhotoUploadReceipt } from "../utils/photoUploadIdentity";
 import { createPhotoSource } from "../utils/photoSource";
 import * as SecureStore from "expo-secure-store";
 import * as Updates from "expo-updates";
@@ -425,27 +426,31 @@ export const uploadProfilePhoto = async (localUri) => {
 
 /* ───────────────── uploadTripPhoto ✅ ─────────────────
  *
- * POST /api/trips/:tripId/photos   (multer field name: photos)
+ * POST /api/trips/:tripId/photos/reliable (one photos field)
  * Returns  { photoIds: [ ... ] }
  */
 export const uploadTripPhoto = async (tripId, localUri) => {
 	const requestSession = captureRequestSession();
+	const uploadId = photoUploadId(requestSession.userId, "trip", tripId, localUri);
 	const csrfToken = await getCsrfToken();
 
 	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	const form = await createPhotoFormData("photos", localUri);
 
-	const res = await fetchForRequestSession(requestSession, `${API_URL}/trips/${tripId}/photos`, {
+	// A separate endpoint fails closed on an older server. Never retry against
+	// the legacy endpoint: it cannot recognize a previously completed request.
+	const res = await fetchForRequestSession(requestSession, `${API_URL}/trips/${tripId}/photos/reliable`, {
 		method: "POST",
-		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${requestSession.token}` },
+		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${requestSession.token}`, "X-Photo-Upload-Id": uploadId },
 		body: form,
 	});
 
 	const isJson = res.headers.get("content-type")?.includes("application/json");
 	const data = isJson ? await res.json() : await res.text();
+	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	if (!res.ok) throw new Error(isJson ? data.message : data);
 
-	return data; // { photoIds:[id] }
+	return assertPhotoUploadReceipt(data, uploadId);
 };
 
 /* ───────────────── deleteTripPhoto ✅ ───────────────── */
@@ -453,27 +458,31 @@ export const deleteTripPhoto = async (tripId, photoId) =>
 	apiFetch(`/trips/${tripId}/photos/${photoId}`, { method: "DELETE", csrf: true });
 
 /* ───────────────── uploadRecommendationPhoto ✅ ─────────────────
- * POST  /api/v2/recommendations/:recId/photos     (field name: photos)
+ * POST /api/v2/recommendations/:recId/photos/reliable (one photos field)
  * Returns { photoIds:[ ... ] }
  */
 export const uploadRecommendationPhoto = async (recId, localUri) => {
 	const requestSession = captureRequestSession();
+	const uploadId = photoUploadId(requestSession.userId, "recommendation", recId, localUri);
 	const csrfToken = await getCsrfToken();
 
 	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	const form = await createPhotoFormData("photos", localUri);
 
-	const res = await fetchForRequestSession(requestSession, `${API_URL}/v2/recommendations/${recId}/photos`, {
+	// A separate endpoint fails closed on an older server. Never retry against
+	// the legacy endpoint: it cannot recognize a previously completed request.
+	const res = await fetchForRequestSession(requestSession, `${API_URL}/v2/recommendations/${recId}/photos/reliable`, {
 		method: "POST",
-		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${requestSession.token}` },
+		headers: { "X-CSRF-Token": csrfToken, Authorization: `Bearer ${requestSession.token}`, "X-Photo-Upload-Id": uploadId },
 		body: form,
 	});
 
 	const isJson = res.headers.get("content-type")?.includes("application/json");
 	const data = isJson ? await res.json() : await res.text();
+	if (!isRequestSessionCurrent(requestSession)) throw new Error("Account changed; upload cancelled");
 	if (!res.ok) throw new Error(isJson ? data.message : data);
 
-	return data; // { photoIds:[id] }
+	return assertPhotoUploadReceipt(data, uploadId);
 };
 
 /* ───────────────── deleteRecommendationPhoto ✅ ───────────────── */
