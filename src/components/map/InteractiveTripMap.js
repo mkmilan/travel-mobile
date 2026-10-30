@@ -72,19 +72,24 @@ function getFitRegion(points, pad = 1.35) {
  *  • routeCoords      [{ lat, lon } | { latitude, longitude }]
  *  • pois             [{ lat, lon, note, _id }]
  *  • recommendationMarkers  [{ lat, lon, _id, name }] (independent of POI visibility)
+ *  • focusCoordinate  { lat, lon } (optional place-focused view; trip framing is unchanged)
  *  • style            ViewStyle (optional)
  */
-export default function InteractiveTripMap({ routeCoords = [], pois = [], recommendationMarkers = [], style }) {
+export default function InteractiveTripMap({ routeCoords = [], pois = [], recommendationMarkers = [], focusCoordinate, style }) {
 	const cleanRoute = useMemo(() => sanitize(routeCoords), [routeCoords]);
 	const cleanPois = useMemo(() => sanitize(ENABLE_POI_UI ? pois : []), [pois]);
 	const cleanRecommendations = useMemo(() => sanitize(recommendationMarkers), [recommendationMarkers]);
 
-	const initialRegion = useMemo(() => getFitRegion(cleanRoute.length ? cleanRoute : cleanRecommendations), [cleanRoute, cleanRecommendations]);
+	const cleanFocus = useMemo(() => sanitize([focusCoordinate]), [focusCoordinate]);
+	const initialRegion = useMemo(() => getFitRegion(cleanFocus.length ? cleanFocus : cleanRoute.length ? cleanRoute : cleanRecommendations), [cleanFocus, cleanRoute, cleanRecommendations]);
+	// initialRegion is only read on mount. Place changes must reset its camera,
+	// while ordinary trip maps retain their existing route-length key/controls.
+	const mapKey = cleanFocus.length ? `place-${cleanFocus[0].lat}-${cleanFocus[0].lon}` : cleanRoute.length;
 
 	return (
 		<View style={[styles.wrapper, style]}>
 			<MapView
-				key={cleanRoute.length} /* re-mount when route changes */
+				key={mapKey}
 				initialRegion={initialRegion}
 				style={StyleSheet.absoluteFill}
 				showsUserLocation={false}

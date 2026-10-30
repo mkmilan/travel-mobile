@@ -30,6 +30,7 @@ test('shared bottom modals keep backdrop separate and safe insets inside consume
 
 test('route-map modal fills remaining space below its header without overflowing the safe footer',()=>{
   const tree=fixture('src/components/modals/MapModal.js','MapModal',{visible:true,onClose(){},routeCoords:[],pois:[]},{...native,theme,StyleSheet:styles,BottomModal:'BottomModal',ModalHeader:'ModalHeader',InteractiveTripMap:'InteractiveTripMap'}).render();
+  const content=tree.children[0];tree.children=[content.type(content.props)];
   const map=nodes(tree,'View')[0];assert.equal(map.props.style.flex,1);assert.equal(map.props.style.height,undefined);
   assert.equal(tree.props.style.padding,0); // shared modal still preserves its inner bottom inset
 });

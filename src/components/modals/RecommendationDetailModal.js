@@ -4,13 +4,15 @@ import usePhotoManager from "@/src/hooks/usePhotoManager";
 import useProfileContext from "@/src/hooks/useProfileContext";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
+import { getPlaceCoordinate } from "@/src/utils/placeLocation";
 import { Feather, Ionicons } from "@expo/vector-icons"; // Added Ionicons
 import { useRouter } from "expo-router"; // Import useRouter
-import { forwardRef, useRef } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
 import Avatar from "../ui/Avatar";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
+import { MapModalContent } from "./MapModal";
 /* ------------------------------------------------------------------ */
 /* helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -60,6 +62,7 @@ const RecommendationDetailModal = forwardRef(
 		const closedContext = useRef(null);
 		const deleteOperation = useRef(null);
 		const failedPhoto = useRef(null);
+		const [mapContext, setMapContext] = useState(null);
 		const photoManager = usePhotoManager({ context: "recommendation",
 			id: isVisible ? recommendation?._id : null, initial: isVisible ? recommendation?.photos || [] : [] });
 		const isCurrentDetail = () => isVisible && closedContext.current !== detailContext && detailContext.isCurrent();
@@ -98,17 +101,15 @@ const RecommendationDetailModal = forwardRef(
 		const categoryLabel = primaryCategory ? primaryCategory.charAt(0).toUpperCase() + primaryCategory.slice(1) : "N/A";
 
 		/* marker for map */
-		const recPoi =
-			location?.coordinates?.length === 2
-				? [
-						{
-							_id,
-							lat: location.coordinates[1],
-							lon: location.coordinates[0],
-							note: name || "POI",
-						},
-				  ]
-				: [];
+		const placeCoordinate = getPlaceCoordinate(location);
+		const recPoi = placeCoordinate ? [{ _id, ...placeCoordinate, name }] : [];
+		const mapExpanded = !!placeCoordinate && mapContext === detailContext && isCurrentDetail();
+		const closeMap = () => {
+			if (isCurrentDetail()) setMapContext(null);
+		};
+		const openMap = () => {
+			if (placeCoordinate && isCurrentDetail() && !photoManager.isDeleting()) setMapContext(detailContext);
+		};
 
 		/* ---------------------------------------------------------------- */
 		/* handlers                                                         */
@@ -161,6 +162,14 @@ const RecommendationDetailModal = forwardRef(
 		/* ---------------------------------------------------------------- */
 		/* render                                                           */
 		/* ---------------------------------------------------------------- */
+		if (mapExpanded) {
+			return (
+				<BottomModal visible={isVisible} onClose={closeMap} style={{ padding: 0 }}>
+					<MapModalContent title={name || "Place map"} onClose={closeMap}
+						routeCoords={tripRouteCoordinates} recommendations={[recommendation]} focusCoordinate={placeCoordinate} />
+				</BottomModal>
+			);
+		}
 		return (
 			<BottomModal visible={isVisible} onClose={closeDetail}>
 				<ModalHeader title={name || "Recommendation"} onClose={closeDetail} />
@@ -223,14 +232,21 @@ const RecommendationDetailModal = forwardRef(
 						</View>
 					)}
 					{/* map ------------------------------------------------------- */}
-					{tripRouteCoordinates?.length > 0 && recPoi.length > 0 && (
+					{placeCoordinate && (
 						<View style={styles.section}>
-							{/* <Text style={styles.sectionTitle}>Location on Route</Text> */}
-							<InteractiveTripMap
-								routeCoords={tripRouteCoordinates}
-								recommendationMarkers={recPoi}
-								style={{ height: 220, marginBottom: theme.space.md }}
-							/>
+							<Pressable testID="place-map-preview" accessibilityRole="button"
+								accessibilityLabel={name ? `View larger map for ${name}` : "View larger place map"}
+								accessibilityHint="Opens an interactive map. Close returns to place details."
+								onPress={openMap} style={{ height: 220, marginBottom: theme.space.md }}>
+								<View style={{ flex: 1 }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+									<InteractiveTripMap
+										routeCoords={tripRouteCoordinates}
+										recommendationMarkers={recPoi}
+										focusCoordinate={placeCoordinate}
+										style={{ flex: 1 }}
+									/>
+								</View>
+							</Pressable>
 						</View>
 					)}
 					{/* Link to Associated Trip */}

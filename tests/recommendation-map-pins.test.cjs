@@ -10,6 +10,8 @@ function map(props = {}) {
   const modal = fixture('src/components/modals/MapModal.js', 'MapModal', props, {
     ...native, theme, StyleSheet: style, InteractiveTripMap: 'InteractiveTripMap', BottomModal: 'BottomModal', ModalHeader: 'ModalHeader',
   }).render();
+  const content = modal.children[0];
+  modal.children = [content.type(content.props)]; // Render the extracted shared content too.
   const mapProps = nodes(modal, 'InteractiveTripMap')[0].props;
   const tree = fixture('src/components/map/InteractiveTripMap.js', 'InteractiveTripMap', mapProps, {
     ...native, theme, StyleSheet: style, useMemo: f => f(), MapView: 'MapView', Marker: 'Marker', Polyline: 'Polyline',

@@ -4,16 +4,26 @@ import InteractiveTripMap from "../map/InteractiveTripMap";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
 
-export default function MapModal({ visible, onClose, routeCoords = [], pois = [], recommendations = [] }) {
+// Shared content can live inside an existing detail sheet without opening a
+// second native Modal. Its Close and Android Back then return to that detail.
+export function MapModalContent({ onClose, title = "Route Map", routeCoords = [], pois = [], recommendations = [], focusCoordinate }) {
 	const recommendationMarkers = (Array.isArray(recommendations) ? recommendations : [])
 		.filter((rec) => Array.isArray(rec?.location?.coordinates) && rec.location.coordinates.length === 2)
 		.map((rec) => ({ _id: rec._id, name: rec.name, lat: rec.location.coordinates[1], lon: rec.location.coordinates[0] }));
 	return (
-		<BottomModal visible={visible} onClose={onClose} style={styles.modal}>
-			<ModalHeader title="Route Map" onClose={onClose} />
+		<View style={{ flex: 1 }}>
+			<ModalHeader title={title} onClose={onClose} />
 			<View style={styles.mapContainer}>
-				<InteractiveTripMap routeCoords={routeCoords} pois={pois} recommendationMarkers={recommendationMarkers} style={{ flex: 1 }} />
+				<InteractiveTripMap routeCoords={routeCoords} pois={pois} recommendationMarkers={recommendationMarkers} focusCoordinate={focusCoordinate} style={{ flex: 1 }} />
 			</View>
+		</View>
+	);
+}
+
+export default function MapModal({ visible, onClose, ...mapProps }) {
+	return (
+		<BottomModal visible={visible} onClose={onClose} style={styles.modal}>
+			<MapModalContent {...mapProps} onClose={onClose} />
 		</BottomModal>
 	);
 }
