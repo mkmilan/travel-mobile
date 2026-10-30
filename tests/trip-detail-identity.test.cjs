@@ -374,3 +374,28 @@ for (const status of [0, 500, 503]) test(`transient ${status} refresh retains la
   assert.equal(nodes(f.render(), 'PhotoGallery').length, 1);
   f.host.unmount();
 });
+
+for (const action of ['trip photo', 'place photo', 'place']) test(`late detail GET cannot restore a deleted ${action}; later refresh is authoritative`, async () => {
+  const f = await app(), pending = deferred();
+  f.handler((url, options) => options.method === 'GET' ? pending.promise : reply({}));
+  f.host.blur(); f.host.focus();
+  if (action === 'trip photo') await nodes(f.render(), 'PhotoGallery')[0].props.onDelete('trip-a-photo');
+  if (action === 'place photo') nodes(f.render(), 'RecommendationDetailModal')[0].props.onPhotoDeleted('trip-a-rec', 'rec-photo');
+  if (action === 'place') {
+    nodes(f.render(), 'TripRecommendationCard')[0].props.onLongPress();
+    await f.alerts.at(-1)[2].find(b => b.text === 'Delete').onPress();
+  }
+  pending.resolve(reply(f.trip('trip-a'))); await tick();
+  const assertDeleted = () => {
+    const tree = f.render();
+    if (action === 'trip photo') assert.equal(nodes(tree, 'PhotoGallery').length, 0);
+    if (action === 'place photo') assert.deepEqual(nodes(tree, 'MapModal')[0].props.recommendations[0].photos, []);
+    if (action === 'place') assert.equal(nodes(tree, 'TripRecommendationCard').length, 0);
+  };
+  assertDeleted();
+  f.handler(async () => reply({...f.trip('trip-a'), title:'Fresh authoritative trip', photos:[], recommendations:[]}));
+  f.host.blur(); f.host.focus(); await tick();
+  assert.match(text(f.render()), /Fresh authoritative trip/);
+  assert.equal(nodes(f.render(), 'TripRecommendationCard').length,0);
+  f.host.unmount();
+});

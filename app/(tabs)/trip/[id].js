@@ -192,6 +192,7 @@ export default function TripDetailScreen() {
 	// or failed refreshes. The same request identity protects data, errors and
 	// loading settlement as well as thumbnail retries from overlapping reads.
 	const latestTripPhotoRequest = useRef(null);
+	const tripMutationRevision = useRef(0);
 	const tripPhotoRefreshIdentity = useRef(null);
 
 	const fetchTripDetails = async (isRefetch = false, context = renderContext) => {
@@ -204,7 +205,7 @@ export default function TripDetailScreen() {
 		}
 		// Focus callbacks retain their first render; carry loaded status through the
 		// current request rather than relying on their captured trip value.
-		const photoRequest = { context, commentsRevision: commentsData.current.revision, hasData: latestTripPhotoRequest.current?.context === context && latestTripPhotoRequest.current.hasData };
+		const photoRequest = { context, mutationRevision: tripMutationRevision.current, commentsRevision: commentsData.current.revision, hasData: latestTripPhotoRequest.current?.context === context && latestTripPhotoRequest.current.hasData };
 		latestTripPhotoRequest.current = photoRequest;
 		if (!isRefetch) {
 			// Only show main loading indicator on initial load
@@ -216,6 +217,9 @@ export default function TripDetailScreen() {
 			const data = await getTripJsonById(context.tripId);
 			if (!isCurrentContext(context) || latestTripPhotoRequest.current !== photoRequest) return;
 			if (data?._id !== context.tripId) throw new Error("The loaded trip did not match this page.");
+			// A response captured before a confirmed local mutation must not restore
+			// deleted photos/places. A later read remains authoritative.
+			if (photoRequest.mutationRevision !== tripMutationRevision.current) return;
 			errorContext.current = context;
 			setError(null); // A successful focus/retry also recovers an earlier initial-load error.
 			const likesArray = data.likes || [];
@@ -610,11 +614,13 @@ export default function TripDetailScreen() {
 			if (isEditMode) {
 				const updatedRecommendation = await updateRecommendation(recommendationData._id, recommendationData);
 				if (!isCurrent()) return;
+				tripMutationRevision.current += 1;
 				if (shouldRefreshImmediately) void refreshCallback();
 				return { ...updatedRecommendation, refreshCallback };
 			}
 			const newRecommendation = await addRecommendation({ ...recommendationData, tripId: context.tripId });
 			if (!isCurrent()) return;
+			tripMutationRevision.current += 1;
 			if (shouldRefreshImmediately) void refreshCallback();
 			setRecCount(context.tripId, (trip?.recommendations?.length || 0) + 1);
 			return { ...newRecommendation, refreshCallback };
@@ -654,6 +660,7 @@ export default function TripDetailScreen() {
 							await deleteRecommendation(recommendation._id);
 							if (!isCurrent()) return;
 
+							tripMutationRevision.current += 1;
 							// Update trip state immediately
 							setTrip((prevTrip) => {
 								if (!isCurrent() || prevTrip?._id !== context.tripId) return prevTrip;
@@ -750,6 +757,7 @@ export default function TripDetailScreen() {
 		try {
 			await deleteTripPhoto(context.tripId, photoId);
 			if (!isCurrent()) return;
+			tripMutationRevision.current += 1;
 			setTrip((t) => isCurrent() && t?._id === context.tripId ? { ...t, photos: (t.photos || []).filter((id) => id !== photoId) } : t);
 		} catch (e) {
 			if (isCurrent()) Alert.alert("Delete failed", e?.message || "Could not delete photo.");
@@ -759,6 +767,7 @@ export default function TripDetailScreen() {
 	// Apply only a confirmed photo deletion from the detail modal.
 	const handlePhotoDeleted = (recommendationId, photoId) => {
 		if (!isCurrentTrip()) return;
+		tripMutationRevision.current += 1;
 		// Keep the trip and its open recommendation in sync after confirmation.
 		setTrip((prevTrip) => {
 			if (!prevTrip) return prevTrip;

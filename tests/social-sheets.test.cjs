@@ -199,7 +199,7 @@ function tripDetailCallbacks(overrides={}) {
   const calls=[],requests=[];const record=name=>(...args)=>calls.push({name,args});
   const api=name=>(...args)=>{requests.push({name,args});return Promise.resolve(name==='trip'?{_id:'trip-a',likes:[],comments:[]}:{_id:'saved'});};
   const dependencies={
-    latestTripPhotoRequest:{current:overrides.trip === null ? null : {context,hasData:true}},tripPhotoRefreshIdentity:{current:null},tripDataContext:{current:context},errorContext:{current:context},likeRevision:{current:0},
+    tripMutationRevision:{current:0},latestTripPhotoRequest:{current:overrides.trip === null ? null : {context,hasData:true}},tripPhotoRefreshIdentity:{current:null},tripDataContext:{current:context},errorContext:{current:context},likeRevision:{current:0},
     commentsData:{current:{context,loaded:false,count:0,revision:0,ids:new Set(),changes:new Map()}},renderContext:context,screenContext,screenMounted,commentsRequest:{current:null},useAuthStore:{getState:()=>session},tripId:context.tripId,isAuthenticated:true,currentUser:session.user,trip:{_id:'trip-a',recommendations:[{_id:'existing'}],commentsCount:0},
     comments:[],commentsLoading:false,isCommentListExpanded:false,isCommentsSectionVisible:false,
     getTripJsonById:api('trip'),getTripComments:api('comments'),addRecommendation:api('create'),updateRecommendation:api('update'),
