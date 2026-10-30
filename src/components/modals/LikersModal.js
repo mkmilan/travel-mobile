@@ -1,35 +1,10 @@
 // filepath: /home/mkmilan/Documents/my/travel-2/mobile/src/components/LikersModal.js
 import { theme } from "@/src/theme";
-import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import BottomModal from "./BottomModal";
+import Avatar from "../ui/Avatar";
 import ModalHeader from "./ModalHeader";
-
-// Assuming you have or will create a ProfilePicture component
-// If not, you can use Image directly or the placeholder logic from TripDetailScreen
-const ProfilePicture = ({ uri, size = 40, style }) => {
-	if (uri) {
-		return <Image source={{ uri }} style={[{ width: size, height: size, borderRadius: size / 2 }, style]} />;
-	}
-	return (
-		<View
-			style={[
-				{
-					width: size,
-					height: size,
-					borderRadius: size / 2,
-					backgroundColor: theme.colors.inputBorder,
-					justifyContent: "center",
-					alignItems: "center",
-				},
-				style,
-			]}
-		>
-			<Feather name="user" size={size * 0.6} color={theme.colors.textMuted} />
-		</View>
-	);
-};
 
 export default function LikersModal({ isVisible, onClose, likers = [], isLoading, error }) {
 	const router = useRouter();
@@ -41,7 +16,7 @@ export default function LikersModal({ isVisible, onClose, likers = [], isLoading
 
 	const renderLikerItem = ({ item }) => (
 		<TouchableOpacity style={styles.likerItem} onPress={() => handleUserPress(item._id)}>
-			<ProfilePicture uri={item.profilePictureUrl} size={40} />
+			<Avatar user={item} size={40} />
 			<Text style={styles.likerUsername}>{item.username}</Text>
 		</TouchableOpacity>
 	);
