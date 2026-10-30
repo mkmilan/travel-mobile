@@ -346,3 +346,31 @@ test('saved-trip Add recommendation requests explicit route selection rather tha
   assert.equal(opened.length, 1, 'retained trip A action cannot open picker for trip B');
   assert.equal(mutations(f).length, 0); f.host.unmount();
 });
+
+for (const status of [403, 404, 410]) test(`authoritative ${status} refetch clears cached detail and rejects retained actions`, async () => {
+  const f = await app(), old = f.render();
+  const oldLike = like(old).props.onPress, oldGallery = nodes(old, 'PhotoGallery')[0];
+  const oldForm = nodes(old, 'AddCommentModal')[0], oldRecForm = nodes(old, 'AddRecommendationModal')[0];
+  f.handler(async () => reply({message: 'Trip unavailable'}, status));
+  f.host.blur(); f.host.focus(); await tick();
+  const denied = f.render();
+  assert.doesNotMatch(text(denied), /Original trip A/);
+  assert.match(text(denied), /Trip unavailable/);
+  for (const type of ['PhotoGallery', 'MapModal', 'RecommendationDetailModal', 'AddCommentModal', 'JourneyShareAction']) assert.equal(nodes(denied, type).length, 0);
+  await oldLike(); await oldGallery.props.onDelete('trip-a-photo');
+  await assert.rejects(oldForm.props.onSubmit('stale'), /trip or account changed/);
+  await assert.rejects(oldRecForm.props.onSubmit({name:'stale'}), /trip or account changed/);
+  assert.equal(mutations(f).length, 0);
+  f.handler(f.defaultHandler); f.host.blur(); f.host.focus(); await tick();
+  assert.match(text(f.render()), /Original trip A/, 'subsequent authorized response recovers');
+  f.host.unmount();
+});
+
+for (const status of [0, 500, 503]) test(`transient ${status} refresh retains last authorized detail`, async () => {
+  const f = await app();
+  f.handler(async () => { if (!status) throw Error('Offline'); return reply({message:'Temporary failure'},status); });
+  f.host.blur(); f.host.focus(); await tick();
+  assert.match(text(f.render()), /Original trip A/);
+  assert.equal(nodes(f.render(), 'PhotoGallery').length, 1);
+  f.host.unmount();
+});

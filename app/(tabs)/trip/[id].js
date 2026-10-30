@@ -260,7 +260,33 @@ export default function TripDetailScreen() {
 		} catch (err) {
 			if (isCurrentContext(context) && latestTripPhotoRequest.current === photoRequest) {
 				const message = err?.message || "Could not load trip details.";
-				if (isRefetch && photoRequest.hasData) setRefreshError({ context, message });
+				if ([403, 404, 410].includes(err?.status)) {
+					// An authoritative access/deletion response is not an offline failure.
+					// Invalidate refs immediately so retained callbacks and pending reads
+					// cannot continue using data that this account may no longer view.
+					tripDataContext.current = null;
+					photoRequest.hasData = false;
+					commentsRequest.current = null;
+					commentsData.current = { context, loaded: false, count: 0, revision: 0, ids: new Set(), changes: new Map() };
+					deletionActive.current = false;
+					deletionController.current = null;
+					likersRequest.current = null;
+					likeRequest.current = null;
+					recommendationContext.current = null;
+					setTrip(null);
+					setComments([]);
+					setLikers([]);
+					setSelectedRecommendation(null);
+					setIsRecDetailModalVisible(false);
+					setIsAddCommentModalVisible(false);
+					setIsLikersModalVisible(false);
+					setIsDropdownVisible(false);
+					setMapModalVisible(false);
+					addRecommendationModalRef.current?.close?.();
+					setRefreshError(null);
+					errorContext.current = context;
+					setError(message);
+				} else if (isRefetch && photoRequest.hasData) setRefreshError({ context, message });
 				else { errorContext.current = context; setError(message); }
 			}
 		} finally {
