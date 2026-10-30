@@ -1,3 +1,4 @@
+import JourneyShareAction from "@/src/components/sharing/JourneyShareAction";
 import TransportIcon from "@/src/components/TransportIcon";
 import TripMapThumbnail from "@/src/components/TripMapThumbnail";
 import { theme } from "@/src/theme";
@@ -28,7 +29,9 @@ export default function TripCard({
 	onOpenLikersModalPress = () => console.log("Open likers modal pressed"), // To open the modal showing who liked
 	onCommentPress = () => console.log("Comment pressed"),
 	onRecommendPress = () => console.log("Recommend pressed"),
-	onSharePress = () => console.log("Share pressed"),
+	shareTrip,
+	canShareAction,
+	shareOwnerId,
 }) {
 	let visibilityIconName = "eye";
 	let visibilityTooltip = "Public";
@@ -71,12 +74,6 @@ export default function TripCard({
 		}
 	};
 
-	const handleShare = (event) => {
-		event.stopPropagation();
-		if (tripId) {
-			onSharePress(tripId);
-		}
-	};
 
 	return (
 		<TouchableOpacity onPress={onPress} style={styles.card} activeOpacity={0.9}>
@@ -177,9 +174,7 @@ export default function TripCard({
 						{recommendationsCount > 0 && <Text style={styles.footerText}>{recommendationsCount}</Text>}
 					</TouchableOpacity>
 
-					<TouchableOpacity onPress={handleShare} style={styles.footerActionItem}>
-						<Feather name="share-2" size={18} color={theme.colors.text} />
-					</TouchableOpacity>
+					<JourneyShareAction trip={shareTrip} canAct={canShareAction} ownerIdHint={shareOwnerId} />
 				</View>
 			</View>
 		</TouchableOpacity>

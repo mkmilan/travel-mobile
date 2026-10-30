@@ -58,6 +58,7 @@ export default function MyTrips() {
 					<TripCardContainer
 						primeOnMount={false}
 						trip={item}
+						shareOwnerId={user?._id}
 						onOpenSheet={openSheet}
 						onPress={() => { refreshOnNextFocus(); router.push(`/trip/${item._id}`); }}
 						/* TripCard needs userName explicitly */

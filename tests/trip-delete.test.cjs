@@ -92,7 +92,7 @@ const {hooksFixture,authFixture}=require('./helpers/hooks-fixture.cjs');
 const {create}=require('zustand');
 function detailScreen(remove,enabled=true){
   let session={user:{_id:'owner'},token:'token',sessionEpoch:1,isAuthenticated:true};const route={id:serverId},alerts=[],navigations=[],invalidations=[],reconciles=[];let focus;
-  const components=Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(name=>[name,name]));
+  const components=Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','JourneyShareAction','Avatar','Feather'].map(name=>[name,name]));
   const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
     ...native,...components,theme,StyleSheet:{create:x=>x},ENABLE_SAFE_TRIP_DELETE:enabled,createTripDeletion,
     useAuthStore:Object.assign(()=>session,{getState:()=>session}),useRouter:()=>({replace:path=>navigations.push(path),push(){}}),useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>route,

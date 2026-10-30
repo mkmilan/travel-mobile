@@ -8,7 +8,7 @@ const tick = () => new Promise(setImmediate);
 const account = (id, units) => ({ _id: id, username: id, token: `token-${id}`, settings: { preferredUnits: units } });
 const names = list => Object.fromEntries(list.split(' ').map(name => [name, name]));
 const deps = { ...native, theme, baseTheme: theme, StyleSheet: { create: x => x },
-  ...names('Feather TransportIcon TripMapThumbnail UserHeader Avatar Link BottomModal ModalHeader ProfileListStatus RefreshControl PendingTripDeletions TripCardContainer CommentsSheet LikersSheet RecommendationsSheet RecommendationCard RecommendationDetailModal'),
+  ...names('JourneyShareAction Feather TransportIcon TripMapThumbnail UserHeader Avatar Link BottomModal ModalHeader ProfileListStatus RefreshControl PendingTripDeletions TripCardContainer CommentsSheet LikersSheet RecommendationsSheet RecommendationCard RecommendationDetailModal'),
 };
 
 function environment() {

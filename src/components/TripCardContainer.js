@@ -9,7 +9,7 @@ import TripCard from "./TripCard";
  * Wraps the dumb <TripCard/> with formatted numbers
  * and the shared social-state actions.
  */
-export default function TripCardContainer({ trip, onOpenSheet, onPress, userNameOverride, user, canAct, primeOnMount = true }) {
+export default function TripCardContainer({ trip, onOpenSheet, onPress, userNameOverride, user, canAct, shareOwnerId, primeOnMount = true }) {
 	const units = useViewerUnits();
 	const { likesCount, commentsCount, recommendationCount, isLiked, likePending, toggleLike } = useTripSocial(trip, primeOnMount);
 
@@ -48,7 +48,9 @@ export default function TripCardContainer({ trip, onOpenSheet, onPress, userName
 			onOpenLikersModalPress={() => onOpenSheet("likers", trip)}
 			onCommentPress={() => onOpenSheet("comments", trip)}
 			onRecommendPress={() => onOpenSheet("recs", trip)}
-			onSharePress={(id) => console.log("share trip id:", id)}
+			shareTrip={trip}
+			canShareAction={canAct}
+			shareOwnerId={shareOwnerId}
 			onPress={onPress}
 		/>
 	);

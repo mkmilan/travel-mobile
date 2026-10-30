@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {fixture,nodes,native,theme} = require('./helpers/component-fixture.cjs');
 const tick = () => new Promise(setImmediate);
-const components = Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(name=>[name,name]));
+const components = Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','JourneyShareAction','Avatar','Feather'].map(name=>[name,name]));
 function screenFor(overrides={}, actor='owner', loadTrip=async()=>{throw Error('Refresh permission denied');}) {
   let priming=false,focus;let session={user:{_id:actor},token:'fixture-session',sessionEpoch:1,isAuthenticated:true};
   const calls={alerts:[],likers:[],comments:[],likes:[],photos:[],deletes:[],navigation:[]};
@@ -77,14 +77,16 @@ test('social comments toggle retains counts, explicit list expansion and close/r
   social(tree,'message-circle').props.onPress();tree=screen.render();assert.ok(section(tree,'Comments'));assert.equal(nodes(tree,'CommentList').length,0);
 });
 
-test('heart and likers count keep separate actions; share remains a placeholder',async()=>{
+test('heart and likers count keep separate actions; owners receive the real image-sharing entry',async()=>{
   const screen=screenFor();let tree=screen.render();
   const heart=nodes(tree,'TouchableOpacity').find(n=>nodes(n,'Feather').some(icon=>icon.props.name==='heart'));
   const count=nodes(tree,'TouchableOpacity').find(n=>nodes(n,'Text').some(text=>text.children.includes(8)));
   assert.ok(heart);assert.ok(count);await heart.props.onPress();assert.deepEqual(screen.calls.likes,['trip']);
   count.props.onPress();await tick();tree=screen.render();assert.deepEqual(screen.calls.likers,['trip']);assert.equal(nodes(tree,'LikersModal')[0].props.isVisible,true);
   nodes(tree,'LikersModal')[0].props.onClose();assert.equal(nodes(screen.render(),'LikersModal')[0].props.isVisible,false);
-  social(tree,'share-2').props.onPress();assert.equal(screen.calls.alerts.at(-1)[1],'Share functionality to be implemented.');
+  const share = nodes(tree,'JourneyShareAction')[0];assert.equal(share.props.trip,screen.trip);assert.equal(share.props.showLabel,true);assert.equal(share.props.canAct(),true);assert.equal(screen.calls.alerts.length,0);
+  assert.equal(nodes(screenFor({},'other').render(),'JourneyShareAction').length,0);
+  screen.switchSession();assert.equal(share.props.canAct(),false);
 });
 
 test('gallery preserves owner delete wiring and deletion refreshes its actual IDs',async()=>{

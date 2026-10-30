@@ -20,7 +20,7 @@ function detail(source) {
 		? { index: 2, routes: [{ name: '(tabs)' }, { name: 'search/index' }, { name: '(tabs)' }] }
 		: { index: 0, routes: [{ name: '(tabs)' }] } };
   const session = { user: { _id: 'owner' }, token: 'session-a', sessionEpoch: 1, isAuthenticated: true, isSessionChanging: false };
-  const components = Object.fromEntries(['CommentList', 'TripRecommendationCard', 'TransportIcon', 'TripMapThumbnail', 'AddCommentModal', 'AddRecommendationModal', 'LikersModal', 'MapModal', 'RecommendationDetailModal', 'IconStatDisplay', 'PhotoGallery', 'Section', 'SocialButton', 'Avatar'].map(name => [name, name]));
+  const components = Object.fromEntries(['CommentList', 'TripRecommendationCard', 'TransportIcon', 'TripMapThumbnail', 'AddCommentModal', 'AddRecommendationModal', 'LikersModal', 'MapModal', 'RecommendationDetailModal', 'IconStatDisplay', 'PhotoGallery', 'Section', 'SocialButton','JourneyShareAction', 'Avatar'].map(name => [name, name]));
   const screen = fixture('app/(tabs)/trip/[id].js', 'TripDetailScreen', {}, {
     ...native, ...components, ...host.hooks, theme, StyleSheet: { create: value => value }, Feather: 'Feather',
     useAuthStore: Object.assign(() => session, { getState: () => session }),

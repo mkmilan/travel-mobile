@@ -40,7 +40,7 @@ test('recording screens hide POI creation but retain upload-only legacy repair, 
 });
 
 test('trip details hide the entire POI section for empty and populated trips and restore existing controls', () => {
-  const components=Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(n=>[n,n]));
+  const components=Object.fromEntries(['CommentList','TripRecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','JourneyShareAction','Avatar','Feather'].map(n=>[n,n]));
   for (const enabled of [false,true]) for (const count of [0,4]) {
     const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
       ...native,...components,ENABLE_POI_UI:enabled,theme,StyleSheet:style,getPoiNote:p=>p.note,

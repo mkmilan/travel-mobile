@@ -205,7 +205,7 @@ function tripDetailCallbacks(overrides={}) {
     getTripJsonById:api('trip'),getTripComments:api('comments'),addRecommendation:api('create'),updateRecommendation:api('update'),
     setCommentCount(){},setLikeState(){},setLoading:record('loading'),setError:record('error'),setRefreshError:record('refresh-error'),setTrip:record('trip'),setOptimisticLikesCount:record('likes-count'),setIsLikedByCurrentUser:record('liked'),setComments:record('comments'),setCommentsLoading:record('comments-loading'),setCommentsError:record('comments-error'),setRecCount:record('rec-count'),Alert:{alert:record('alert')},...overrides,
   };
-  const code=[section('isCurrentContext','\n\tuseEffect'),section('fetchTripDetails','\n\tuseEffect'),section('fetchCommentsData','\n\tconst handleToggleCommentsSection'),section('handleRecommendationSubmit','\n\tconst handleShare')].join('\n');
+  const code=[section('isCurrentContext','\n\tuseEffect'),section('fetchTripDetails','\n\tuseEffect'),section('fetchCommentsData','\n\tconst handleToggleCommentsSection'),section('handleRecommendationSubmit','\n\tconst handleViewRecommendationDetail')].join('\n');
   const methods=require('node:vm').runInNewContext(code+';({fetchTripDetails,fetchCommentsData,handleRecommendationSubmit})',dependencies);
   return {...methods,calls,requests,context,change(kind){if(kind==='trip')screenContext.current={...context,tripId:'trip-b',key:2};if(kind==='session')session.token='session-b';if(kind==='unmount')screenMounted.current=false;return screenContext.current;}};
 }
@@ -272,7 +272,7 @@ test('trip comments deduplicate per context but a prior context cannot block or 
 function tripDetailScreen(overrides={}) {
   const session={user:{_id:'owner'},token:'session-a',isAuthenticated:true};
   const useAuthStore=Object.assign(()=>session,{getState:()=>session});
-  const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton'].map(name=>[name,name]));
+  const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','JourneyShareAction'].map(name=>[name,name]));
   let focus,priming=false;const params={id:'trip-a'};
   const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
     ...defaults,...components,useAuthStore,useNavigation:()=>({getState:()=>({index:0,routes:[{name:'(tabs)'}]})}),useLocalSearchParams:()=>params,

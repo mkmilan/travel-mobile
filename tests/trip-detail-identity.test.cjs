@@ -35,7 +35,7 @@ async function app() {
   });
   socialStore = load('src/stores/tripSocialStore.js', 'useTripSocialStore', {...api, create, useAuthStore});
   const useTripSocialStore = Object.assign(select => select ? select(socialStore.getState()) : socialStore.getState(), socialStore);
-  const components = Object.fromEntries(['CommentList', 'TripRecommendationCard', 'TransportIcon', 'TripMapThumbnail', 'AddCommentModal', 'AddRecommendationModal', 'LikersModal', 'MapModal', 'RecommendationDetailModal', 'IconStatDisplay', 'PhotoGallery', 'Section', 'SocialButton', 'Avatar'].map(n => [n, n]));
+  const components = Object.fromEntries(['CommentList', 'TripRecommendationCard', 'TransportIcon', 'TripMapThumbnail', 'AddCommentModal', 'AddRecommendationModal', 'LikersModal', 'MapModal', 'RecommendationDetailModal', 'IconStatDisplay', 'PhotoGallery', 'Section', 'SocialButton', 'JourneyShareAction', 'Avatar'].map(n => [n, n]));
   const screen = fixture('app/(tabs)/trip/[id].js', 'TripDetailScreen', {}, {
     ...native, ...host.hooks, ...components, ...api, theme, useAuthStore, useTripSocialStore,
     StyleSheet: {create: v => v}, Feather: 'Feather', console: {log() {}, warn() {}, error() {}},

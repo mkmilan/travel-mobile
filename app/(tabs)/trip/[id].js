@@ -1,3 +1,4 @@
+import JourneyShareAction from "@/src/components/sharing/JourneyShareAction";
 import useViewerUnits from "@/src/hooks/useViewerUnits";
 import { createTripDeletion } from "@/src/utils/tripDeletion";
 import { reconcileDeletedServerTrip, rememberPendingTripDeletion, settlePendingTripDeletion } from "@/src/db/tripDao";
@@ -597,7 +598,6 @@ export default function TripDetailScreen() {
 		}
 	};
 
-	const handleShare = () => { if (isCurrentTrip()) Alert.alert("Share", "Share functionality to be implemented."); };
 
 	const handleViewRecommendationDetail = (rec) => {
 		if (!isCurrentTrip()) return;
@@ -852,7 +852,7 @@ export default function TripDetailScreen() {
 				<SocialButton iconName="message-circle" count={trip.commentsCount || 0} onPress={handleToggleCommentsSection} />
 				{/* <SocialButton iconName="star" countComponent={<SocialCount trip={trip} type="recs" />} /> */}
 				<SocialButton iconName="star" count={trip.recommendations?.length || 0} />
-				<SocialButton iconName="share-2" onPress={handleShare} />
+				{isOwner && <JourneyShareAction trip={trip} canAct={() => isCurrentTrip() && !currentDeletion?.pending} showLabel />}
 			</View>
 
 			{/* Comments Section */}

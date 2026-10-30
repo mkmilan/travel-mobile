@@ -61,7 +61,7 @@ test('POI display supports server description and legacy note, preserving the ex
 
 test('actual trip detail renders and opens POI text for both API description and legacy note',()=>{
   const session={user:{_id:'owner'},token:'session',isAuthenticated:true};const notices=[];
-  const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','Avatar','Feather'].map(name=>[name,name]));
+  const components=Object.fromEntries(['CommentList','RecommendationCard','TransportIcon','TripMapThumbnail','AddCommentModal','AddRecommendationModal','LikersModal','MapModal','RecommendationDetailModal','IconStatDisplay','PhotoGallery','Section','SocialButton','JourneyShareAction','Avatar','Feather'].map(name=>[name,name]));
   const screen=fixture('app/(tabs)/trip/[id].js','TripDetailScreen',{}, {
     ENABLE_POI_UI:true,
     ...native,...components,theme,...noteTools,StyleSheet:{create:value=>value},

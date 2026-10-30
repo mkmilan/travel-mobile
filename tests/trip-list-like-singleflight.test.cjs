@@ -35,7 +35,7 @@ async function app(options = {}) {
       useTripSocial, TripCard: 'TripCard', useViewerUnits: () => "metric", speedUnit: () => "km/h", calcAvgSpeed: () => '', isoToDate: () => '', kmOrMiles: () => '', msToDuration: () => '', lineStringToCoords: () => [],
     });
     const props = () => host.render(() => container.render()).props;
-    const render = () => fixture('src/components/TripCard.js', 'TripCard', props(), {...native, theme, StyleSheet: {create: value => value}, Feather: 'Feather', UserHeader: 'UserHeader', TransportIcon: 'TransportIcon', TripMapThumbnail: 'TripMapThumbnail'}).render();
+    const render = () => fixture('src/components/TripCard.js', 'TripCard', props(), {...native, theme, StyleSheet: {create: value => value}, Feather: 'Feather', JourneyShareAction: 'JourneyShareAction', UserHeader: 'UserHeader', TransportIcon: 'TransportIcon', TripMapThumbnail: 'TripMapThumbnail'}).render();
     const heart = () => nodes(render(), 'TouchableOpacity').find(node => node.props.accessibilityLabel?.endsWith(' trip'));
     return {props, heart, press: () => heart().props.onPress({stopPropagation() {}}), unmount: host.unmount};
   }
