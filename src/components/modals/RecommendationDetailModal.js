@@ -4,11 +4,11 @@ import usePhotoManager from "@/src/hooks/usePhotoManager";
 import useProfileContext from "@/src/hooks/useProfileContext";
 import { useAuthStore } from "@/src/stores/auth";
 import { theme } from "@/src/theme";
-import { getPlaceCoordinate } from "@/src/utils/placeLocation";
+import { getGoogleMapsDirectionsUrl, getPlaceCoordinate } from "@/src/utils/placeLocation";
 import { Feather, Ionicons } from "@expo/vector-icons"; // Added Ionicons
 import { useRouter } from "expo-router"; // Import useRouter
 import { forwardRef, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"; // Added Image
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Avatar from "../ui/Avatar";
 import BottomModal from "./BottomModal";
 import ModalHeader from "./ModalHeader";
@@ -63,6 +63,11 @@ const RecommendationDetailModal = forwardRef(
 		const deleteOperation = useRef(null);
 		const failedPhoto = useRef(null);
 		const [mapContext, setMapContext] = useState(null);
+		const [directionsState, setDirectionsState] = useState(null);
+		const directionsOperation = useRef(null);
+		const directionsDestination = useRef(null);
+		const directionsUrl = getGoogleMapsDirectionsUrl(recommendation?.location);
+		directionsDestination.current = directionsUrl;
 		const photoManager = usePhotoManager({ context: "recommendation",
 			id: isVisible ? recommendation?._id : null, initial: isVisible ? recommendation?.photos || [] : [] });
 		const isCurrentDetail = () => isVisible && closedContext.current !== detailContext && detailContext.isCurrent();
@@ -110,10 +115,37 @@ const RecommendationDetailModal = forwardRef(
 		const openMap = () => {
 			if (placeCoordinate && isCurrentDetail() && !photoManager.isDeleting()) setMapContext(detailContext);
 		};
+		const directionsStatus = directionsState?.context === detailContext && directionsState.url === directionsUrl ? directionsState : null;
+		const isCurrentDirections = () => isCurrentDetail() && directionsDestination.current === directionsUrl;
 
 		/* ---------------------------------------------------------------- */
 		/* handlers                                                         */
 		/* ---------------------------------------------------------------- */
+		const handleDirections = () => {
+			if (!directionsUrl || !isCurrentDirections()) return Promise.resolve(false);
+			if (directionsOperation.current?.context === detailContext && directionsOperation.current.url === directionsUrl) return directionsOperation.current.promise;
+			const operation = { context: detailContext, url: directionsUrl, promise: null };
+			directionsOperation.current = operation;
+			setDirectionsState({ context: detailContext, url: directionsUrl, pending: true, error: null });
+			operation.promise = (async () => {
+				let error = null;
+				try {
+					// A universal HTTPS URL opens Maps externally, with browser fallback
+					// when the app is unavailable. Do not use our in-app ExternalLink.
+					await Linking.openURL(directionsUrl);
+					return true;
+				} catch {
+					error = "Could not open Google Maps. Please try again.";
+					return false;
+				} finally {
+					if (directionsOperation.current === operation) {
+						directionsOperation.current = null;
+						if (isCurrentDirections()) setDirectionsState({ context: detailContext, url: directionsUrl, pending: false, error });
+					}
+				}
+			})();
+			return operation.promise;
+		};
 		const handleEdit = () => {
 			if (!isCurrentDetail() || photoManager.isDeleting()) return;
 			closeDetail();
@@ -247,6 +279,18 @@ const RecommendationDetailModal = forwardRef(
 									/>
 								</View>
 							</Pressable>
+						</View>
+					)}
+					{directionsUrl && (
+						<View>
+							<Pressable testID="place-directions" accessibilityRole="button"
+								accessibilityHint="Opens Google Maps or your browser to choose a route."
+								accessibilityState={{ disabled: !!directionsStatus?.pending, busy: !!directionsStatus?.pending }}
+								disabled={!!directionsStatus?.pending} onPress={handleDirections} style={[styles.tripLinkButton, { minHeight: 44 }]}>
+								<Ionicons name="navigate-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
+								<Text style={styles.tripLinkTextSmall}>Directions in Google Maps</Text>
+							</Pressable>
+							{directionsStatus?.error && <Text accessibilityRole="alert" style={{ color: theme.colors.error, marginBottom: theme.space.md }}>{directionsStatus.error}</Text>}
 						</View>
 					)}
 					{/* Link to Associated Trip */}

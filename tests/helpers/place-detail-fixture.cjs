@@ -1,11 +1,11 @@
 const {load, fixture, nodes, native, theme} = require('./component-fixture.cjs');
 const {hooksFixture, authFixture} = require('./hooks-fixture.cjs');
 const style = {create: value => value, absoluteFill: {position: 'absolute'}, absoluteFillObject: {position: 'absolute'}};
-const {getPlaceCoordinate} = load('src/utils/placeLocation.js', '({getPlaceCoordinate})');
+const {getPlaceCoordinate, getGoogleMapsDirectionsUrl} = load('src/utils/placeLocation.js', '({getPlaceCoordinate, getGoogleMapsDirectionsUrl})');
 const rec = (coordinates = [20, 10], id = 'place') => ({_id: id, name: 'Riverside cafe', location: {type: 'Point', coordinates}, photos: []});
 const defaults = {...native, theme, StyleSheet: style, Feather: 'Feather', Ionicons: 'Ionicons', Avatar: 'Avatar',
   BottomModal: 'BottomModal', ModalHeader: 'ModalHeader', InteractiveTripMap: 'InteractiveTripMap', MapModalContent: 'MapModalContent', PhotoGallery: 'PhotoGallery',
-  getPlaceCoordinate, useRouter: () => ({push(){}}), usePhotoManager: () => ({photos: [], isDeleting: () => false})};
+  getPlaceCoordinate, getGoogleMapsDirectionsUrl, useRouter: () => ({push(){}}), usePhotoManager: () => ({photos: [], isDeleting: () => false})};
 function detail(overrides = {}, dependencies = {}) {
   const host = hooksFixture(), auth = authFixture(); let closes = 0;
   const props = {isVisible: true, recommendation: rec(), tripRouteCoordinates: [], onClose: () => closes++, ...overrides};
@@ -28,4 +28,4 @@ function expanded(tree) {
   }).render();
   return {content, map, shell};
 }
-module.exports = {detail, rec, nativeMap, expanded, getPlaceCoordinate};
+module.exports = {detail, rec, nativeMap, expanded, getPlaceCoordinate, getGoogleMapsDirectionsUrl};
