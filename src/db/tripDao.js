@@ -124,6 +124,10 @@ export const buildTripJsonForUpload = async (tripId, userSettings = {}, userId, 
 
 	const payload = createTripPayload(trip, segments, pois, recommendations, userSettings);
 	if (!reliableUpload) return payload;
+	// The server cannot create a route with fewer than two recorded points.
+	// Reject before freezing: failed GPS/very short recordings must remain local
+	// and editable, rather than acquiring an immutable doomed upload snapshot.
+	if (rows.length < 2) throw Object.assign(new Error("This recording needs at least two GPS points to upload. It is still saved on this phone; no upload was started."), { code: "TRIP_ROUTE_TOO_SHORT" });
 	payload.uploadProtocol = 1;
 	payload.uploadId = trip.id;
 	payload.recommendations = payload.recommendations.map((rec, index) => ({ ...rec, uploadId: String(recommendations[index].id) }));

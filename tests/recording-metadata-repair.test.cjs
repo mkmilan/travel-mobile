@@ -163,3 +163,15 @@ for(const active of [{tripId:'target'},{cleanupId:'unfinished-cleanup'}])test('E
     assert.equal(h.form.render().props.visible,false);assert.match(h.notices.at(-1).msg,/Stop/);
   }finally{h.close();}
 });
+
+for(const count of [0,1])test(`upload screen explains ${count}-point route without network dispatch or frozen draft`,async()=>{
+ const h=await harness();try {
+  const rows=await h.db.db.getAllAsync('SELECT id FROM track_points WHERE trip_id=?',[h.id]);
+  for(const point of rows.slice(count))await h.db.db.runAsync('DELETE FROM track_points WHERE id=?',[point.id]);
+  const before=await h.data();await h.press('Upload trip');
+  assert.equal(h.requests.length,0);assert.equal(await h.data(),before);
+  assert.equal((await h.db.dao.getLocalTrip(h.id,'owner')).upload_payload,null);
+  assert.ok(h.notices.some(n=>JSON.stringify(n).includes('at least two GPS points')));
+  assert.equal(h.button('Edit trip details').props.disabled,false);
+ }finally{h.close();}
+});

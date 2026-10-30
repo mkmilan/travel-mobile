@@ -8,6 +8,7 @@ const metadata={endTime:'2026-01-01T01:00:00.000Z',title:'Synthetic repair',desc
 async function recording() {
  const f=await sqliteFixture();const id=await f.dao.startTrip('owner',{defaultTripVisibility:'private'});
  await f.dao.insertTrackPoint(id,'segment',{lat:1,lon:2,timestamp:metadata.endTime,speed:0,accuracy:4});
+ await f.dao.insertTrackPoint(id,'segment',{lat:1,lon:2.01,timestamp:metadata.endTime,speed:0,accuracy:4});
  await f.dao.stopTrip(id,metadata.endTime,'owner');await f.dao.finishTrip(id,metadata,'owner');return {...f,id};
 }
 function handler(start,end,name,dependencies) {

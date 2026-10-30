@@ -42,7 +42,7 @@ function screen(f,id,overrides={}) {
 }
 async function newTrip(f) {
   const id=await f.dao.startTrip(owner,{defaultTravelMode:'walking',defaultTripVisibility:'private'});
-  await f.dao.insertTrackPoint(id,'synthetic-segment',{lat:1,lon:2,timestamp:'2026-01-01T00:00:00Z',speed:0,accuracy:1});
+  for (const lon of [2,2.01]) await f.dao.insertTrackPoint(id,'synthetic-segment',{lat:1,lon,timestamp:'2026-01-01T00:00:00Z',speed:0,accuracy:1});
   return id;
 }
 async function assertUnconfirmed(f,id) {
@@ -51,7 +51,7 @@ async function assertUnconfirmed(f,id) {
   assert.equal(row.default_trip_visibility,'private');assert.equal(row.upload_payload,null);
   assert.equal(row.start_name,labels.startName);assert.equal(row.end_name,labels.endName);
   await assert.rejects(f.dao.buildTripJsonForUpload(id,{},owner,true),{code:'TRIP_METADATA_REQUIRED'});
-  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM track_points WHERE trip_id=?').get(id).n,1);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM track_points WHERE trip_id=?').get(id).n,2);
 }
 
 test('Stop -> Cancel -> New trip -> old pending Upload review -> Save retains names without confirming early',async()=>{
