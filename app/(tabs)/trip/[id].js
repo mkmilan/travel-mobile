@@ -116,10 +116,14 @@ export default function TripDetailScreen() {
 	const recommendationContext = useRef(null);
 	const screenMounted = useRef(true);
 	const commentsRequest = useRef(null);
+	const commentsData = useRef(null);
 	if (!screenContext.current || screenContext.current.tripId !== tripId || screenContext.current.userId !== currentUser?._id || screenContext.current.token !== token || screenContext.current.sessionEpoch !== sessionEpoch) {
 		screenContext.current = { tripId, userId: currentUser?._id, token, sessionEpoch, key: (screenContext.current?.key || 0) + 1 };
 	}
 	const renderContext = screenContext.current;
+	if (commentsData.current?.context !== renderContext || isSessionChanging) {
+		commentsData.current = { context: renderContext, loaded: false, count: 0, revision: 0, ids: new Set(), changes: new Map() };
+	}
 	// Hidden tab routes can be reused for another ID or login without unmounting.
 	// Gate data during render, before effects run, rather than showing the old trip.
 	const tripDataContext = useRef(renderContext);
@@ -197,7 +201,7 @@ export default function TripDetailScreen() {
 		}
 		// Focus callbacks retain their first render; carry loaded status through the
 		// current request rather than relying on their captured trip value.
-		const photoRequest = { context, hasData: latestTripPhotoRequest.current?.context === context && latestTripPhotoRequest.current.hasData };
+		const photoRequest = { context, commentsRevision: commentsData.current.revision, hasData: latestTripPhotoRequest.current?.context === context && latestTripPhotoRequest.current.hasData };
 		latestTripPhotoRequest.current = photoRequest;
 		if (!isRefetch) {
 			// Only show main loading indicator on initial load
@@ -214,6 +218,13 @@ export default function TripDetailScreen() {
 			const likesArray = data.likes || [];
 			// Get comment COUNT from initial trip load, but not the comment objects themselves for display
 			const initialCommentsArray = data.comments || [];
+			// A read started before a confirmed comment action cannot undo its count.
+			const collection = commentsData.current;
+			if (collection.revision === photoRequest.commentsRevision) {
+				if (collection.count !== initialCommentsArray.length) collection.loaded = false;
+				collection.count = initialCommentsArray.length;
+				collection.ids = new Set(initialCommentsArray.map(comment => typeof comment === "string" ? comment : comment?._id));
+			}
 
 			photoRequest.hasData = true;
 			tripPhotoRefreshIdentity.current = photoRequest;
@@ -222,7 +233,7 @@ export default function TripDetailScreen() {
 			setTrip({
 				...data,
 				likesCount: likesArray.length,
-				commentsCount: initialCommentsArray.length, // Store the count from the main trip object
+				commentsCount: collection.count,
 				// Do NOT store data.comments directly in trip state if they are not populated
 			});
 
@@ -348,28 +359,43 @@ export default function TripDetailScreen() {
 		setIsLikersModalVisible(true);
 	};
 
-	// fetchCommentsData can be used if you need to explicitly refresh comments
-	// or if they are not initially embedded in trip details.
+	// Full-list reads are single-flight per screen/session. Reconcile confirmed
+	// mutations newer than the read, but let subsequent snapshots be authoritative
+	// so a comment removed elsewhere is not retained indefinitely.
 	const fetchCommentsData = (context = renderContext) => {
 		if (!context.tripId || !isCurrentContext(context)) return Promise.resolve();
 		if (commentsRequest.current?.context === context) return commentsRequest.current.promise;
-		const operation = { context };
+		const operation = { context, revision: commentsData.current.revision };
 		commentsRequest.current = operation;
 		setCommentsLoading(true);
 		setCommentsError("");
 		operation.promise = (async () => {
 			try {
 				const populatedComments = await getTripComments(context.tripId);
-				if (!isCurrentContext(context)) return;
-				setComments(populatedComments || []);
-				if (trip && trip.commentsCount !== (populatedComments?.length || 0)) {
-					setTrip((prevTrip) => isCurrentContext(context) && prevTrip?._id === context.tripId
-						? { ...prevTrip, commentsCount: populatedComments?.length || 0 } : prevTrip);
+				if (!isCurrentContext(context) || commentsRequest.current !== operation) return;
+				const collection = commentsData.current;
+				const snapshot = populatedComments || [];
+				for (const [id, change] of collection.changes) {
+					if (change.revision <= operation.revision) collection.changes.delete(id);
 				}
+				const serverIds = new Set(snapshot.map(comment => comment._id));
+				const reconciled = snapshot.filter(comment => collection.changes.get(comment._id)?.comment !== null);
+				for (const [id, { comment }] of collection.changes) {
+					if (comment && !serverIds.has(id)) reconciled.unshift(comment);
+				}
+				collection.loaded = true;
+				collection.count = reconciled.length;
+				collection.ids = new Set(reconciled.map(comment => comment._id));
+				collection.revision += 1;
+				const count = collection.count;
+				setComments(reconciled);
+				setTrip((prevTrip) => isCurrentContext(context) && prevTrip?._id === context.tripId
+					? { ...prevTrip, commentsCount: count } : prevTrip);
+				setCommentCount(context.tripId, count);
 			} catch (err) {
-				if (isCurrentContext(context)) {
-					setCommentsError(err?.message || "Could not load comments.");
-					setComments([]);
+				if (isCurrentContext(context) && commentsRequest.current === operation) {
+					setCommentsError(`Could not load all comments. ${err?.message || "Please try again."}`);
+					// A refresh failure does not discard a successfully posted comment.
 				}
 			} finally {
 				if (commentsRequest.current === operation) {
@@ -385,10 +411,7 @@ export default function TripDetailScreen() {
 		if (!isCurrentTrip()) return;
 		const newVisibility = !isCommentsSectionVisible;
 		setIsCommentsSectionVisible(newVisibility);
-		// If comments were embedded, they are already in `comments` state.
-		// If section is opened, and comments were NOT embedded or need refresh:
 		if (newVisibility && (trip?.comments || []).length === 0 && (trip?.commentsCount || 0) > 0 && !commentsLoading) {
-			// This condition might be rare if comments are always embedded from your log
 			fetchCommentsData();
 		}
 		if (!newVisibility) {
@@ -400,9 +423,7 @@ export default function TripDetailScreen() {
 		if (!isCurrentTrip()) return;
 		const newExpandedState = !isCommentListExpanded;
 		setIsCommentListExpanded(newExpandedState);
-		// If expanding and comments were not fully loaded or need refresh
-		// (This might be redundant if comments are always fully embedded in `trip` state)
-		if (newExpandedState && comments.length !== (trip?.commentsCount || 0) && !commentsLoading) {
+		if (newExpandedState && (!commentsData.current.loaded || commentsError || comments.length !== (trip?.commentsCount || 0))) {
 			fetchCommentsData();
 		}
 	};
@@ -418,16 +439,29 @@ export default function TripDetailScreen() {
 		try {
 			const newComment = await addTripComment(context.tripId, text);
 			if (!isCurrent()) return;
-			setComments((prevComments) => isCurrent() ? [newComment, ...(prevComments || [])] : prevComments);
+			const collection = commentsData.current;
+			// A concurrent GET may already include this saved comment before its
+			// POST response arrives. Do not count that same record twice.
+			collection.revision += 1;
+			if (!collection.ids.has(newComment._id)) {
+				collection.changes.set(newComment._id, { comment: newComment, revision: collection.revision });
+				collection.ids.add(newComment._id);
+				collection.count += 1;
+			}
+			const count = collection.count;
+			setComments((prevComments) => isCurrent() ? [newComment, ...(prevComments || []).filter(comment => comment._id !== newComment._id)] : prevComments);
 			if (trip) {
 				setTrip((prevTrip) => isCurrent() && prevTrip?._id === context.tripId ? {
 					...prevTrip,
-					commentsCount: (prevTrip.commentsCount || 0) + 1,
+					commentsCount: count,
 				} : prevTrip);
-				setCommentCount(tripId, (trip?.commentsCount || 0) + 1);
+				setCommentCount(context.tripId, count);
 			}
 			if (!isCommentListExpanded) setIsCommentListExpanded(true);
 			if (!isCommentsSectionVisible) setIsCommentsSectionVisible(true);
+			// Posting succeeded: close the form without coupling its success to this
+			// read. Retry below only reloads comments; it never repeats the POST.
+			if (!collection.loaded || commentsError) fetchCommentsData(context);
 		} catch (err) {
 			if (isCurrent()) Alert.alert("Error", err?.message || "Could not post comment.");
 			throw err;
@@ -448,13 +482,19 @@ export default function TripDetailScreen() {
 					try {
 						await deleteTripComment(context.tripId, commentId);
 						if (!isCurrent()) return;
+						const collection = commentsData.current;
+						collection.revision += 1;
+						collection.changes.set(commentId, { comment: null, revision: collection.revision });
+						if (!collection.loaded || collection.ids.has(commentId)) collection.count = Math.max(0, collection.count - 1);
+						collection.ids.delete(commentId);
+						const count = collection.count;
 						setComments((prevComments) => isCurrent() ? (prevComments || []).filter((comment) => comment._id !== commentId) : prevComments);
 						if (trip && typeof trip.commentsCount === "number" && trip.commentsCount > 0) {
 							setTrip((prevTrip) => isCurrent() && prevTrip?._id === context.tripId ? {
 								...prevTrip,
-								commentsCount: Math.max(0, prevTrip.commentsCount - 1),
+								commentsCount: count,
 							} : prevTrip);
-							setCommentCount(tripId, Math.max(0, (trip?.commentsCount || 1) - 1));
+							setCommentCount(context.tripId, count);
 						}
 					} catch (err) {
 						if (isCurrent()) Alert.alert("Error", err?.message || "Could not delete comment.");
@@ -838,22 +878,24 @@ export default function TripDetailScreen() {
 						</TouchableOpacity>
 					)}
 
-					{
-						isCommentListExpanded &&
-							(commentsLoading ? (
-								<ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.space.md }} />
-							) : commentsError ? (
-								<Text style={styles.errorTextSmall}>{commentsError}</Text>
-							) : comments.length > 0 ? (
-								<CommentList
-									comments={comments}
-									currentUserId={currentUser?._id}
-									onDeleteComment={handleDeleteComment}
-								/>
-							) : (trip.commentsCount || 0) > 0 && !commentsLoading ? ( // If count > 0 but local comments array is empty after trying to load
-								<Text style={styles.emptySectionText}>No comments found, or an error occurred.</Text>
-							) : null) // If count is 0, CommentList will show "No comments yet..." if comments array is empty
-					}
+					{isCommentListExpanded && (
+						<View>
+							{commentsLoading && <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.space.md }} />}
+							{!!commentsError && (
+								<View>
+									<Text style={styles.errorTextSmall} accessibilityRole="alert">{commentsError}</Text>
+									<Pressable testID="trip-comments-retry" accessibilityRole="button" onPress={() => fetchCommentsData()}>
+										<Text style={styles.viewCommentsButtonText}>Retry loading comments</Text>
+									</Pressable>
+								</View>
+							)}
+							{comments.length > 0 ? (
+								<CommentList comments={comments} currentUserId={currentUser?._id} onDeleteComment={handleDeleteComment} />
+							) : !commentsLoading && !commentsError && (trip.commentsCount || 0) > 0 ? (
+								<Text style={styles.emptySectionText}>No comments found.</Text>
+							) : null}
+						</View>
+					)}
 				</Section>
 			)}
 			{ENABLE_POI_UI && <Section

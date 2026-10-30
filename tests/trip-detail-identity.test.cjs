@@ -222,7 +222,9 @@ for (const kind of ['comment', 'recommendation', 'photo']) {
 
 test('current comments, recommendation deletion, edit navigation and photo deletion still work', async () => {
   const f = await app();
-  f.handler((url, options) => url.endsWith('/comments') && options.method === 'POST' ? reply({_id: 'new-comment', text: 'New', user: {_id: 'owner'}}) : f.defaultHandler(url, options));
+  f.handler((url, options) => url.endsWith('/comments') ? reply(options.method === 'POST'
+    ? {_id: 'new-comment', text: 'New', user: {_id: 'owner'}}
+    : [{_id: 'new-comment', text: 'New', user: {_id: 'owner'}}, {_id: 'comment', text: 'Comment', user: {_id: 'owner'}}]) : f.defaultHandler(url, options));
   await nodes(f.render(), 'AddCommentModal')[0].props.onSubmit('New'); assert.equal(social(f.render(), 'message-circle').props.count, 2);
   nodes(f.render(), 'CommentList')[0].props.onDeleteComment('new-comment'); await f.alerts.at(-1)[2].find(button => button.style === 'destructive').onPress();
   assert.equal(social(f.render(), 'message-circle').props.count, 1);
