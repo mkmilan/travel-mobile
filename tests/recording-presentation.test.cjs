@@ -18,14 +18,15 @@ const flatten = styles => Object.assign({}, ...[styles].flat(Infinity).filter(Bo
 // reviewed optional endpoint persistence (recording-name-persistence.test.cjs), and
 // cross-frame ownership/focus/awaited-control safety (recording-cross-frame.test.cjs), and
 // explicit local-only delete confirmation (local-trip-delete-confirmation.test.cjs).
+// Updated only user-facing recommendation wording to place/places; lifecycle is unchanged.
 test('recording logic matches reviewed lifecycle and terminal-deletion-response baseline', () => {
   const source=read(file),logic=source.slice(source.indexOf('//5000,'),source.indexOf('// ─────── UI'));
-  assert.equal(createHash('sha256').update(logic).digest('hex'),'0bfe9c6fe0e5f31bf2e97830a7d9f51bb18b9f77ccf3b22193f036fed5a99a6c');
+  assert.equal(createHash('sha256').update(logic).digest('hex'),'36003a9c5c72ea2530290a2730b5b7ba6a67153060949dea3200bf81930f7db8');
 });
 
 test('all recording states have clear labeled controls and a single scrolling surface', () => {
-  const expected={idle:['Start recording'],recording:['Pause recording','Stop recording','Add recommendation'],
-    paused:['Resume recording','Stop recording','Add recommendation'],stopped:['Upload trip'],cleanup_required:[]};
+  const expected={idle:['Start recording'],recording:['Pause recording','Stop recording','Add a place'],
+    paused:['Resume recording','Stop recording','Add a place'],stopped:['Upload trip'],cleanup_required:[]};
   for(const [status,labels] of Object.entries(expected)) {
     const tree=screen(status).render();
     assert.deepEqual(nodes(tree,'RecordingButton').map(n=>n.props.label),labels);

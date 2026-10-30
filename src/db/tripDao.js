@@ -342,7 +342,7 @@ export const markTripUploaded = async (tripId, userId, result, sentPayload) => {
 		}
 		await db.runAsync(`UPDATE trips SET upload_server_id = ?, upload_result = ? WHERE id = ? AND user_id = ?`, [result.trip._id, JSON.stringify(result), tripId, userId]);
 		if (result.uploadComplete !== true || outcomes.some(item => item.status !== "created")) {
-			throw Object.assign(new Error("The trip is saved online, but some recommendations are not. Keep this recording and tap Upload again to retry only missing recommendations."), { code: "TRIP_UPLOAD_INCOMPLETE" });
+			throw Object.assign(new Error("The trip is saved online, but some places are not. Keep this recording and tap Upload again to retry only missing places."), { code: "TRIP_UPLOAD_INCOMPLETE" });
 		}
 	}
 	await db.runAsync(`UPDATE trips SET status = 'uploaded' WHERE id = ? AND user_id = ? AND status = 'stopped'`, [tripId, userId]);

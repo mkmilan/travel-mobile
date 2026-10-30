@@ -47,7 +47,7 @@ test('places expand/collapse without replacing records, and empty places retain 
   assert.equal(nodes(tree,'TripRecommendationCard').length,4);assert.equal(section(tree,'Places from this trip').props.isExpanded,true);
   section(tree,'Places from this trip').props.onSeeAll();assert.equal(nodes(screen.render(),'TripRecommendationCard').length,3);
   tree=screenFor({recommendations:[]}).render();assert.equal(nodes(tree,'TripRecommendationCard').length,0);
-  assert.ok(nodes(tree,'Text').some(n=>n.children.includes('No recommendations added.')));
+  assert.ok(nodes(tree,'Text').some(n=>n.children.includes('No places added.')));
   assert.equal(section(tree,'Places from this trip').props.onSeeAll,undefined);
 });
 
@@ -58,7 +58,7 @@ test('card press opens existing detail with same record; only owner receives lon
     card.props.onPress();tree=screen.render();const detail=nodes(tree,'RecommendationDetailModal')[0];
     assert.equal(detail.props.isVisible,true);assert.equal(detail.props.recommendation,card.props.rec);
     detail.props.onClose();assert.equal(nodes(screen.render(),'RecommendationDetailModal')[0].props.isVisible,false);
-    if(owner){card.props.onLongPress();const prompt=screen.calls.alerts.at(-1);assert.equal(prompt[0],'Delete Recommendation');
+    if(owner){card.props.onLongPress();const prompt=screen.calls.alerts.at(-1);assert.equal(prompt[0],'Delete place');
       await prompt[2].find(button=>button.text==='Delete').onPress();assert.deepEqual(screen.calls.deletes,['rec-0']);assert.equal(nodes(screen.render(),'TripRecommendationCard')[0].props.rec._id,'rec-1');}
   }
 });

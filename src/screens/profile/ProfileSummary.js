@@ -55,11 +55,12 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 					.filter(Boolean)
 					.map(([label, val]) => {
 						const meta = statMeta[label] || {};
+						const displayLabel = label === "Recs" ? "Places" : label;
 						return (
 							<TouchableOpacity
 								key={label}
 								accessibilityRole="button"
-								accessibilityLabel={`${label}: ${val}`}
+								accessibilityLabel={`${displayLabel}: ${val}`}
 								style={[styles.statItem, { backgroundColor: colors.inputBackground }]}
 								activeOpacity={0.7}
 								onPress={() => onStatPress?.(label)}
@@ -75,7 +76,7 @@ export default function ProfileSummary({ displayedUser, stats, colors, isSelf, o
 									<Feather name={meta.icon} size={20} color="#fff" />
 								</View>
 								<Text style={[styles.statValue, { color: colors.text }]}>{val}</Text>
-								<Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
+								<Text style={[styles.statLabel, { color: colors.textMuted }]}>{displayLabel}</Text>
 							</TouchableOpacity>
 						);
 					})}

@@ -592,7 +592,7 @@ export default function RecordScreen() {
 		const cancel = () => { if (!answered) { answered = true; clear(); } };
 		request.cancel = cancel;
 		Alert.alert("Delete local trip?",
-			`Permanently delete “${trip.title || "Recorded trip"}” from this device? This removes its recorded route, POIs and local recommendations. Any data that has not been uploaded will be lost permanently. This cannot be undone.`, [
+			`Permanently delete “${trip.title || "Recorded trip"}” from this device? This removes its recorded route, POIs and local places. Any data that has not been uploaded will be lost permanently. This cannot be undone.`, [
 				{ text: "Cancel", style: "cancel", onPress: cancel },
 				{ text: "Delete", style: "destructive", onPress: async () => {
 					if (answered || pendingLocalDeletion.current !== request) return;
@@ -868,31 +868,31 @@ export default function RecordScreen() {
 			&& useAuthStore.getState().user?._id === context.userId
 			&& useAuthStore.getState().token === context.token
 			&& useAuthStore.getState().sessionEpoch === context.sessionEpoch && !useAuthStore.getState().isSessionChanging;
-		if (!isCurrent()) throw new Error("The recording changed. Reopen Add recommendation on the current trip.");
+		if (!isCurrent()) throw new Error("The recording changed. Reopen Add a place on the current trip.");
 		if (!tripId || (status !== "recording" && status !== "paused")) {
 			console.warn("[RecordScreen] No active trip to add recommendation to", { tripId, status });
 			toast({
 				type: "error",
-				title: "No active trip to add recommendation to",
+				title: "No active trip to add a place to",
 			});
 			return;
 		}
 
 		try {
 			const trip = await getLocalTrip(context.tripId, context.userId);
-			if (!isCurrent() || !["recording", "paused"].includes(trip.status)) throw new Error("The recording changed. Reopen Add recommendation on the current trip.");
+			if (!isCurrent() || !["recording", "paused"].includes(trip.status)) throw new Error("The recording changed. Reopen Add a place on the current trip.");
 			const newRec = await addRecommendation(context.tripId, recommendationData);
 			if (!isCurrent()) return null;
 			toast({
 				type: "success",
-				title: "Recommendation saved",
+				title: "Place saved",
 				subtitle: "Added to current trip",
 			});
 			return newRec ? { _id: newRec } : null;
 		} catch (error) {
 			if (!isCurrent()) return null;
 			console.error("Failed to save recommendation:", error);
-			toast({ type: "error", title: "Failed to save recommendation" });
+			toast({ type: "error", title: "Failed to save the place" });
 		}
 	};
 
@@ -902,7 +902,7 @@ export default function RecordScreen() {
 		if (!tripId || (status !== "recording" && status !== "paused")) {
 			toast({
 				type: "error",
-				title: "No active trip to add recommendation to",
+				title: "No active trip to add a place to",
 			});
 			return;
 		}
@@ -1000,7 +1000,7 @@ export default function RecordScreen() {
 									label="Add POI" secondary
 									onPress={handleAddPoi}
 								/>}
-								<RecordingButton icon="star" label="Add recommendation" secondary onPress={handleOpenRecommendationModal} />
+								<RecordingButton icon="star" label="Add a place" secondary onPress={handleOpenRecommendationModal} />
 							</View>
 						</>
 					)}

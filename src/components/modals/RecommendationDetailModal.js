@@ -81,7 +81,7 @@ const RecommendationDetailModal = forwardRef(
 		if (!recommendation) {
 			return (
 				<BottomModal visible={isVisible} onClose={closeDetail}>
-					<ModalHeader title="Recommendation" onClose={closeDetail} />
+					<ModalHeader title="Place" onClose={closeDetail} />
 				</BottomModal>
 			);
 		}
@@ -204,7 +204,7 @@ const RecommendationDetailModal = forwardRef(
 		}
 		return (
 			<BottomModal visible={isVisible} onClose={closeDetail}>
-				<ModalHeader title={name || "Recommendation"} onClose={closeDetail} />
+				<ModalHeader title={name || "Place"} onClose={closeDetail} />
 
 				<ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: theme.space.lg }}>
 					{/* header row ------------------------------------------------ */}

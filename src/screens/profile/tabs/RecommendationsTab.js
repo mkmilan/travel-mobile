@@ -107,8 +107,8 @@ export default function RecommendationsTab({ userId, isSelf }) {
 		if (!isSelf) return; // Only own recommendations can be deleted
 
 		Alert.alert(
-			"Delete Recommendation",
-			`Are you sure you want to delete "${recommendation.name || "this recommendation"}"?`,
+			"Delete place",
+			`Are you sure you want to delete "${recommendation.name || "this place"}"?`,
 			[
 				{ text: "Cancel", style: "cancel" },
 				{
@@ -123,10 +123,10 @@ export default function RecommendationsTab({ userId, isSelf }) {
 							// A pre-delete request may still be settling; replace it with fresh data.
 							await onRefresh();
 
-							Alert.alert("Success", "Recommendation deleted successfully");
+							Alert.alert("Success", "Place deleted successfully");
 						} catch (error) {
 							console.error("Failed to delete recommendation:", error);
-							Alert.alert("Error", "Failed to delete recommendation");
+							Alert.alert("Error", "Failed to delete the place");
 						}
 					},
 				},
@@ -220,7 +220,7 @@ export default function RecommendationsTab({ userId, isSelf }) {
 				onEndReached={loadMore}
 				ListFooterComponent={items.length > 0 ? (loading ? <ActivityIndicator style={{ margin: 16 }} /> : error ? <ProfileListStatus error={error} onRetry={onRefresh} /> : null) : null}
 				refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-				ListEmptyComponent={<ProfileListStatus loading={initialLoading || loading} error={error} onRetry={onRefresh} emptyMessage="No recommendations yet." />}
+				ListEmptyComponent={<ProfileListStatus loading={initialLoading || loading} error={error} onRetry={onRefresh} emptyMessage="No places yet." />}
 			/>
 
 			{/* ---------- detail modal ---------- */}

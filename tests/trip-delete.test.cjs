@@ -104,7 +104,7 @@ function detailScreen(remove,enabled=true){
   return {...screen,alerts,navigations,invalidations,reconciles,route,open:()=>menu().props.onDelete(),logout:()=>{session={...session,sessionEpoch:2};},blur:()=>focus()(),focus:()=>focus()};
 }
 test('actual detail confirmation names irreversible associated content; Cancel/gated/stale confirmations send nothing',async()=>{
-  let calls=0;const f=detailScreen(async()=>{calls++;return receipt;});f.open();const prompt=f.alerts[0];assert.match(prompt[0],/Permanently/);assert.match(prompt[1],/recommendations.*comments and likes.*photos/);assert.match(prompt[1],/cannot be undone/);assert.equal(prompt[2].find(b=>b.text==='Cancel').style,'cancel');assert.equal(calls,0);
+  let calls=0;const f=detailScreen(async()=>{calls++;return receipt;});f.open();const prompt=f.alerts[0];assert.match(prompt[0],/Permanently/);assert.match(prompt[1],/places.*comments and likes.*photos/);assert.match(prompt[1],/cannot be undone/);assert.equal(prompt[2].find(b=>b.text==='Cancel').style,'cancel');assert.equal(calls,0);
   const confirm=prompt[2].find(b=>b.style==='destructive').onPress;f.logout();await confirm();assert.equal(calls,0);
   const gated=detailScreen(async()=>{calls++;return receipt;},false);gated.open();assert.equal(gated.alerts[0][0],'Deletion unavailable');assert.equal(calls,0);
 });

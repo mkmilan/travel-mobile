@@ -441,7 +441,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 		const context = renderContext;
 		if (submitting.current || pickerSession.current || uploading || isDeleting() || draftContext.current !== context || !isCurrent(context)) return;
 		// Basic validation
-		if (!formData.name.trim()) return Alert.alert("Error", "Please enter a name for the recommendation");
+		if (!formData.name.trim()) return Alert.alert("Error", "Please enter a name for the place");
 		if (!formData.description.trim()) return Alert.alert("Error", "Please enter a description");
 		if (formData.rating === 0) return Alert.alert("Error", "Please provide a rating");
 		if (!formData.primaryCategory) return Alert.alert("Error", "Please select a category");
@@ -477,14 +477,14 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 			if (existingId) {
 				savedRecommendation = await onSubmit({ ...buildPayload(serverPhotoIds), _id: existingId }, true);
 				if (!isCurrent(context)) return;
-				if (!savedRecommendation) throw new Error("The recommendation update was not confirmed. Please try again.");
+				if (!savedRecommendation) throw new Error("The place update was not confirmed. Please try again.");
 				if (createdRecommendation.current) {
 					createdRecommendation.current = { ...createdRecommendation.current, ...savedRecommendation, _id: existingId };
 				}
 			} else {
 				savedRecommendation = await onSubmit(buildPayload([]), false, false);
 				if (!isCurrent(context)) return;
-				if (!savedRecommendation?._id) throw new Error("Failed to create recommendation");
+				if (!savedRecommendation?._id) throw new Error("Failed to create the place");
 				createdRecommendation.current = savedRecommendation;
 			}
 
@@ -493,15 +493,15 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 			}
 			if (!isCurrent(context)) return;
 			refreshSource(savedRecommendation);
-			Alert.alert("Success", isEditMode ? "Recommendation updated!" : "Recommendation saved!");
+			Alert.alert("Success", isEditMode ? "Place updated!" : "Place saved!");
 			setVisible(false);
 			return savedRecommendation;
 		} catch (err) {
 			if (!isCurrent(context)) return;
 			console.error("Error saving recommendation:", err);
 			if (createdRecommendation.current) refreshSource(createdRecommendation.current);
-			const prefix = createdRecommendation.current ? "The recommendation already exists. " : "";
-			setSaveError(prefix + (err?.message || "Could not save recommendation. Please try again."));
+			const prefix = createdRecommendation.current ? "The place already exists. " : "";
+			setSaveError(prefix + (err?.message || "Could not save the place. Please try again."));
 		} finally {
 			if (submitting.current === operation) {
 				submitting.current = null;
@@ -543,7 +543,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 	return (
 		<BottomModal visible={visible && draftContext.current === renderContext} onClose={handleClose}>
 			<ModalHeader
-				title={isEditMode ? "Edit Recommendation" : "Add Recommendation"}
+				title={isEditMode ? "Edit place" : "Add a place"}
 				onClose={handleClose}
 			/>
 			<View style={{ flex: 1 }} pointerEvents={saving ? "none" : "auto"}>
@@ -558,7 +558,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 							editable={!saving}
 							value={formData.name}
 							onChangeText={(v) => updateField("name", v)}
-							placeholder="Enter recommendation name…"
+							placeholder="Enter place name…"
 							placeholderTextColor={theme.colors.textMuted}
 							style={styles.input}
 							maxLength={120}
@@ -632,7 +632,7 @@ const AddRecommendationModal = forwardRef(({ onSubmit, disablePhotos = false }, 
 					{saveError ? <Text accessibilityRole="alert" style={{ color: theme.colors.error }}>{saveError}</Text> : null}
 					<Pressable testID="recommendation-save" onPress={handleSubmit} disabled={saving || uploading || deleting} style={[styles.button, { backgroundColor: theme.colors.primary, opacity: saving ? 0.5 : 1 }]}>
 						{saving && <ActivityIndicator color="#fff" />}
-						<Text style={styles.buttonText}>{isEditMode ? "Update Recommendation" : "Save Recommendation"}</Text>
+						<Text style={styles.buttonText}>{isEditMode ? "Update place" : "Save place"}</Text>
 					</Pressable>
 				</ScrollView>
 			</View>

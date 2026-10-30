@@ -121,7 +121,7 @@ export default function InteractiveTripMap({ routeCoords = [], pois = [], recomm
 					<Marker
 						key={`recommendation-${p._id ?? index}-${index}`}
 						coordinate={{ latitude: p.lat, longitude: p.lon }}
-						title={typeof p.name === "string" && p.name.trim() ? p.name.trim() : "Recommendation"}
+						title={typeof p.name === "string" && p.name.trim() ? p.name.trim() : "Place"}
 						pinColor={theme.colors.warning}
 						tracksViewChanges={false}
 					/>

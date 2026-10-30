@@ -27,12 +27,12 @@ export default function RecommendationsSheet({ trip, visible, onClose, userId, p
 
 	return (
 		<>
-			<BaseSheet title="Recommendations" visible={visible} onClose={closeAll}>
+			<BaseSheet title="Places" visible={visible} onClose={closeAll}>
 				{loader.error ? <ProfileListStatus error={loader.error} onRetry={loader.retry} /> : null}
 				{list === undefined ? (
 					loader.loading ? <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} /> : null
 				) : list.length === 0 ? (
-					<Text style={{ textAlign: "center", marginTop: 40 }}>No recommendations.</Text>
+					<Text style={{ textAlign: "center", marginTop: 40 }}>No places.</Text>
 				) : (
 					<FlatList
 						data={list}

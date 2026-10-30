@@ -170,3 +170,20 @@ test('failed save preserves the confirmed point for retry and double taps remain
   fail = false; await button(f.render(), 'save').props.onPress(); assert.equal(f.requests.length, 2); assert.equal(f.requests[1][0].longitude, 6);
   assert.equal(f.render().props.visible, false); f.host.unmount();
 });
+
+test('create/edit forms use place labels without renaming user content or payload fields', () => {
+  const f = form();
+  let tree = f.open();
+  assert.equal(nodes(tree, 'ModalHeader')[0].props.title, 'Add a place');
+  assert.equal(nodes(tree, 'TextInput')[0].props.placeholder, 'Enter place name…');
+  assert.ok(text(tree).includes('Save place'));
+  tree.props.onClose();
+  const existing = {_id: 'rec', name: 'My recommendation', description: 'Recommendation is my own text',
+    rating: 4, primaryCategory: 'CAFE', attributeTags: [], location: {type: 'Point', coordinates: [0, 0]}};
+  f.component.ref.current.openEdit(existing); tree = f.render();
+  assert.equal(nodes(tree, 'ModalHeader')[0].props.title, 'Edit place');
+  assert.ok(text(tree).includes('Update place'));
+  assert.equal(nodes(tree, 'TextInput')[0].props.value, existing.name);
+  assert.equal(nodes(tree, 'TextInput')[1].props.value, existing.description);
+  tree.props.onClose(); f.host.unmount();
+});

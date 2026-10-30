@@ -64,7 +64,7 @@ export default function ProfileTabsLayout({
 
 				<TopTabs.Screen
 					name="Recs"
-					options={{ tabBarIcon: ({ color }) => <Feather name="star" size={22} color={color} /> }}
+					options={{ title: "Places", tabBarIcon: ({ color }) => <Feather name="star" size={22} color={color} /> }}
 				>
 					{/* <TopTabs.Screen name="Recs" options={{ title: "Recs" }}> */}
 					{() => <RecommendationsTab key={summaryData.stats.recommendationCount} userId={userId} isSelf={isSelf} />}

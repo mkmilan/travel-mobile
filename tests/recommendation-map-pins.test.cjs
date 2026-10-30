@@ -45,7 +45,7 @@ test('zero and geographic boundaries are valid; missing titles get a safe fallba
   const recommendations = [rec([0, 0], ''), rec([180, 90], null), rec([-180, -90], 17), rec([0, 12], '   '), rec([23, 0], 'Equator')];
   const {markers} = map({recommendations});
   assert.equal(markers.length, 5);
-  assert.deepEqual(markers.map(p => p.props.title), ['Recommendation', 'Recommendation', 'Recommendation', 'Recommendation', 'Equator']);
+  assert.deepEqual(markers.map(p => p.props.title), ['Place', 'Place', 'Place', 'Place', 'Equator']);
   assert.deepEqual(plain(markers[0].props.coordinate), {latitude: 0, longitude: 0});
 });
 

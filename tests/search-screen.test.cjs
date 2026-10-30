@@ -61,7 +61,7 @@ function searchScreen(search = async () => reply()) {
     setQuery(value) { input().props.onChangeText(value); return render(); },
     select(type) { tabs()[['trips', 'recommendations', 'users'].indexOf(type)].props.onPress(); return render(); },
     setCategory(category) {
-      find('Choose recommendation category').props.onPress();
+      find('Choose place category').props.onPress();
       nodes(render(), 'Pressable').find(node => node.props.accessibilityRole === 'radio' && node.props.key === category).props.onPress();
       return render();
     },
@@ -74,7 +74,7 @@ function searchScreen(search = async () => reply()) {
 test('search defaults to Trips with one accessible input, existing theme and no blank/category-only request', async () => {
   const screen = searchScreen();
   assert.equal(nodes(screen.render(), 'TextInput').length, 1);
-  assert.deepEqual(screen.tabs().map(textOf), ['Trips', 'Recommendations', 'People']);
+  assert.deepEqual(screen.tabs().map(textOf), ['Trips', 'Places', 'People']);
   assert.equal(screen.tabs()[0].props.accessibilityState.selected, true);
   assert.equal(flattenStyle(screen.tabs()[0].props.style).backgroundColor, theme.colors.primary);
   assert.ok(screen.tabs().every(tab => flattenStyle(tab.props.style).minHeight >= 44));
@@ -137,13 +137,14 @@ test('tabs retain query, fetch only selected type and hide old cards and sheets 
   screen.select('users'); await screen.advance(); assert.equal(screen.requests.length, 2);
   screen.select('recommendations'); await screen.advance();
   assert.deepEqual(screen.requests.map(args => args[1]), ['trips', 'users', 'recommendations']);
+  assert.equal(screen.input().props.accessibilityLabel, 'Search places');
   assert.equal(screen.input().props.value, 'camp');
 });
 
 test('category chooser uses enum-friendly labels, one filter and retains selection across tabs', async () => {
   const screen = searchScreen();
   screen.render(); screen.setQuery('camp'); screen.select('recommendations');
-  screen.find('Choose recommendation category').props.onPress();
+  screen.find('Choose place category').props.onPress();
   assert.equal(nodes(screen.render(), 'BottomModal')[0].props.visible, true);
   const choices = nodes(screen.render(), 'Pressable').filter(node => node.props.accessibilityRole === 'radio');
   assert.deepEqual(choices.map(textOf), ['All categories', ...Array.from(categories.RECOMMENDATION_CATEGORIES, option => option.label)]);
@@ -151,11 +152,11 @@ test('category chooser uses enum-friendly labels, one filter and retains selecti
   nodes(screen.render(), 'ModalHeader')[0].props.onClose();
   assert.equal(nodes(screen.render(), 'BottomModal')[0].props.visible, false);
   screen.setCategory('WILD_SPOT');
-  assert.equal(textOf(screen.find('Choose recommendation category')), 'Category: Wild Spot');
+  assert.equal(textOf(screen.find('Choose place category')), 'Category: Wild Spot');
   assert.equal(nodes(screen.render(), 'BottomModal')[0].props.visible, false);
   await screen.advance();
   assert.deepEqual(screen.requests, [['camp', 'recommendations', 1, 20, 'WILD_SPOT']]);
-  assert.equal(screen.list().props.ListEmptyComponent.props.emptyMessage, 'No recommendations found in this category.');
+  assert.equal(screen.list().props.ListEmptyComponent.props.emptyMessage, 'No places found in this category.');
   screen.select('trips'); await screen.advance(); assert.deepEqual(screen.requests.at(-1), ['camp', 'trips', 1, 20, '']);
   screen.select('recommendations'); await screen.advance(); assert.deepEqual(screen.requests.at(-1), ['camp', 'recommendations', 1, 20, 'WILD_SPOT']);
   screen.setCategory(''); await screen.advance(); assert.deepEqual(screen.requests.at(-1), ['camp', 'recommendations', 1, 20, '']);
@@ -267,7 +268,7 @@ test('back/refocus retains query, tab, category, stable list key and every loade
   const key = screen.list().props.key;
   screen.host.blur(); version = 2; screen.host.focus(); await tick();
   assert.equal(screen.input().props.value, 'camp'); assert.equal(screen.tabs()[1].props.accessibilityState.selected, true);
-  assert.equal(textOf(screen.find('Choose recommendation category')), 'Category: Campsite');
+  assert.equal(textOf(screen.find('Choose place category')), 'Category: Campsite');
   assert.equal(screen.list().props.key, key); assert.deepEqual(ids(screen.list()), ['page-1', 'page-2']);
   assert.equal(screen.list().props.data[0].name, 'version-2');
   assert.deepEqual(screen.requests.map(args => args[2]), [1, 2, 1, 2]);

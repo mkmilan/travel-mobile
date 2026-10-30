@@ -185,6 +185,9 @@ test('Gallery source links close viewer, preserve trip/Recs destinations and rev
     const screen=galleryFixture(async()=>{calls++;return [photo];});screen.render();screen.focus(true);await tick();screen.render();screen.effects();
     let tree=screen.render();nodes(tree,'FlatList')[0].props.renderItem({item:photo}).props.onPress();tree=screen.render();
     const viewer=nodes(tree,'ImageViewing')[0];assert.equal(viewer.props.visible,true);assert.equal(viewer.props.images[0].headers.Authorization,'Bearer fixture');
+    const sourceButton=nodes(viewer.props.FooterComponent(),'Pressable')[0];
+    assert.equal(sourceButton.props.accessibilityLabel,sourceType==='trip'?'Open trip':'Open place');
+    assert.equal(nodes(sourceButton,'Text')[0].children[0],sourceType==='trip'?'Open trip':'Open place');
     nodes(viewer.props.FooterComponent(),'Pressable')[0].props.onPress();nodes(viewer.props.FooterComponent(),'Pressable')[0].props.onPress();assert.equal(screen.navigation.length,1);assert.equal(nodes(screen.render(),'ImageViewing')[0].props.visible,false);
     assert.equal(screen.navigation[0].route,sourceType==='trip'?'(tabs)/trip/source':'Recs');if(sourceType==='recommendation')assert.equal(screen.navigation[0].params.openRecId,'source');
     screen.focus(false);screen.render();screen.effects();screen.focus(true);screen.render();screen.effects();await tick();assert.equal(calls,2);

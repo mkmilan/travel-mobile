@@ -23,10 +23,10 @@ export default function RecommendationSourceLoader({ recommendationId, userId, o
 				const rec = await getRecommendationByIdApi(recommendationId);
 				if (!current()) return;
 				const ownerId = typeof rec?.user === "string" ? rec.user : rec?.user?._id;
-				if (rec?._id !== recommendationId || ownerId !== userId) throw new Error("Recommendation unavailable");
+				if (rec?._id !== recommendationId || ownerId !== userId) throw new Error("Place unavailable");
 				callbacks.current.onFound(rec);
 			} catch (_) {
-				if (current()) setError("Could not open this recommendation. It may have been removed or made private, or the connection failed.");
+				if (current()) setError("Could not open this place. It may have been removed or made private, or the connection failed.");
 			}
 		})();
 		return () => { request.active = false; };
@@ -35,8 +35,8 @@ export default function RecommendationSourceLoader({ recommendationId, userId, o
 		<View style={{ padding: 16 }}>
 			{error ? <>
 				<Text accessibilityRole="alert">{error}</Text>
-				<Pressable accessibilityRole="button" onPress={() => { if (context.isCurrent()) setAttempt((value) => value + 1); }} style={{ minHeight: 48, justifyContent: "center" }}><Text>Retry opening recommendation</Text></Pressable>
-			</> : <><ActivityIndicator /><Text>Opening recommendation…</Text></>}
+				<Pressable accessibilityRole="button" onPress={() => { if (context.isCurrent()) setAttempt((value) => value + 1); }} style={{ minHeight: 48, justifyContent: "center" }}><Text>Retry opening place</Text></Pressable>
+			</> : <><ActivityIndicator /><Text>Opening place…</Text></>}
 			<Pressable accessibilityRole="button" onPress={() => { if (context.isCurrent()) { if (operation.current) operation.current.active = false; callbacks.current.onCancel(); } }} style={{ minHeight: 48, justifyContent: "center" }}><Text>Cancel</Text></Pressable>
 		</View>
 	);

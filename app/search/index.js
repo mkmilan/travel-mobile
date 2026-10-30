@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Keyboard, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-const TABS = [{ value: "trips", label: "Trips" }, { value: "recommendations", label: "Recommendations" }, { value: "users", label: "People" }];
+const TABS = [{ value: "trips", label: "Trips" }, { value: "recommendations", label: "Places" }, { value: "users", label: "People" }];
 
 export default function SearchScreen() {
 	const account = useProfileContext("search-form");
@@ -73,7 +73,7 @@ export default function SearchScreen() {
 						<Text style={[styles.tabText, type === tab.value && styles.selectedTabText]}>{tab.label}</Text>
 					</Pressable>)}
 				</View>
-				{type === "recommendations" && <Pressable accessibilityRole="button" accessibilityLabel="Choose recommendation category"
+				{type === "recommendations" && <Pressable accessibilityRole="button" accessibilityLabel="Choose place category"
 					onPress={() => { Keyboard.dismiss(); setCategoryPicker(identity); }} style={styles.categoryButton}>
 					<Text style={styles.link}>Category: {category ? getRecommendationCategoryLabel(category) : "All categories"}</Text>
 				</Pressable>}

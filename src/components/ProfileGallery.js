@@ -111,8 +111,8 @@ export default function ProfileGallery({ userId }) {
 					chosen && (
 						<BlurView intensity={50} tint="dark" style={{ padding: 16, alignItems: "center" }}>
 							<Text style={{ color: "#fff", textAlign: "center", marginBottom: 8 }}>{chosen.context}</Text>
-							<Pressable accessibilityRole="button" accessibilityLabel={chosen.sourceType === "trip" ? "Open trip" : "Open recommendation"} onPress={openSource} style={{ minHeight: 48, alignSelf: "stretch", alignItems: "center", justifyContent: "center", paddingHorizontal: 16, borderRadius: 8, backgroundColor: "#2463A8" }}>
-								<Text style={{ color: "#fff", fontWeight: "600", fontSize: 16 }}>{chosen.sourceType === "trip" ? "Open trip" : "Open recommendation"}</Text>
+							<Pressable accessibilityRole="button" accessibilityLabel={chosen.sourceType === "trip" ? "Open trip" : "Open place"} onPress={openSource} style={{ minHeight: 48, alignSelf: "stretch", alignItems: "center", justifyContent: "center", paddingHorizontal: 16, borderRadius: 8, backgroundColor: "#2463A8" }}>
+								<Text style={{ color: "#fff", fontWeight: "600", fontSize: 16 }}>{chosen.sourceType === "trip" ? "Open trip" : "Open place"}</Text>
 							</Pressable>
 						</BlurView>
 					)

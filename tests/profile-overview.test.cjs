@@ -17,6 +17,8 @@ test('profile maps the actual server counters and displays short distances in me
   assert.equal(cards.length,6); cards.forEach(card=>card.props.onPress());
   assert.deepEqual(pressed,['Trips','Distance','Followers','Following','Recs','POIs']);
   assert.equal(cards[1].props.accessibilityLabel,'Distance: 3 m');
+  assert.equal(cards[4].props.accessibilityLabel,'Places: 2');
+  assert.equal(nodes(cards[4],'Text').at(-1).children[0],'Places');
 });
 
 test('profile refresh is single flight, maps success, preserves confirmed counters on failure, and retry recovers', async () => {
@@ -60,6 +62,7 @@ test('ProfileScreen focus reloads instead of auth snapshot zeros; error offers r
 test('all six tile actions reach appropriate existing tabs or typed detail sheets, never generic user sheets', () => {
   const nav=[];const screen=fixture('src/screens/profile/ProfileTabsLayout.js','ProfileTabsLayout',
     {userId:'one',summaryData:{stats:{totalTrips:1,recommendationCount:1}}},{ENABLE_POI_UI:true,TopTabs:{Navigator:'Navigator',Screen:'Screen'},createMaterialTopTabNavigator:()=>({Navigator:'Navigator',Screen:'Screen'}),Feather:'Feather',useSafeAreaInsets:()=>({top:0}),OverviewTab:'OverviewTab',TripsTab:'TripsTab',RecommendationsTab:'RecommendationsTab',ProfileGallery:'ProfileGallery',UserListModal:'UserListModal',ProfileStatModal:'ProfileStatModal'});
+  assert.equal(nodes(screen.render(),'Screen').find(node=>node.props.name==='Recs').props.options.title,'Places');
   const overview=nodes(screen.render(),'Screen')[0].children[0]({navigation:{navigate:name=>nav.push(name)}});
   for(const label of ['Trips','Recs'])overview.props.onStatPress(label);
   assert.deepEqual(nav,['Trips','Recs']);assert.equal(nodes(screen.render(),'UserListModal').length,0);

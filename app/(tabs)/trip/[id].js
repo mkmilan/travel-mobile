@@ -65,7 +65,7 @@ const DropdownMenu = ({ isVisible, onClose, onEdit, onDelete, onAddRecommendatio
 
 					<Pressable style={styles.dropdownItem} onPress={onAddRecommendation}>
 						<Feather name="star" size={18} color={theme.colors.warning} />
-						<Text style={styles.dropdownItemText}>Add Recommendation</Text>
+						<Text style={styles.dropdownItemText}>Add a place</Text>
 					</Pressable>
 
 					<Pressable style={styles.dropdownItem} onPress={onDelete}>
@@ -502,7 +502,7 @@ export default function TripDetailScreen() {
 		if (!ENABLE_SAFE_TRIP_DELETE) { Alert.alert("Deletion unavailable", "Safe trip deletion is not available yet. Your trip has not been changed."); return; }
 		const action = getDeletionController();
 		if (action.getState().pending || action.getState().completed) return;
-		Alert.alert("Permanently delete trip?", "This permanently deletes this trip, its route, your associated recommendations, comments and likes, and your photos that are not used elsewhere. This cannot be undone. Unsynced and active recordings on this phone are kept.", [
+		Alert.alert("Permanently delete trip?", "This permanently deletes this trip, its route, your associated places, comments and likes, and your photos that are not used elsewhere. This cannot be undone. Unsynced and active recordings on this phone are kept.", [
 			{ text: "Cancel", style: "cancel" },
 			{ text: "Delete permanently", style: "destructive", onPress: () => action.run() },
 		]);
@@ -530,7 +530,7 @@ export default function TripDetailScreen() {
 		const context = renderContext;
 		const isCurrent = () => isCurrentTrip(context);
 		if (!context.tripId || !isAuthenticated || !isCurrent()) {
-			throw new Error("The trip or account changed. Reopen the recommendation form.");
+			throw new Error("The trip or account changed. Reopen the place form.");
 		}
 		// Refresh in the background: a full loading screen would unmount the
 		// submitting modal before its photo uploads can finish.
@@ -550,7 +550,7 @@ export default function TripDetailScreen() {
 			setRecCount(context.tripId, (trip?.recommendations?.length || 0) + 1);
 			return { ...newRecommendation, refreshCallback };
 		} catch (error) {
-			if (isCurrent()) Alert.alert("Error", isEditMode ? "Failed to update recommendation" : "Failed to add recommendation");
+			if (isCurrent()) Alert.alert("Error", isEditMode ? "Failed to update the place" : "Failed to add a place");
 			throw error;
 		}
 	};
@@ -573,8 +573,8 @@ export default function TripDetailScreen() {
 		if (!isOwner || !isCurrent()) return; // Only trip owner can delete recommendations
 
 		Alert.alert(
-			"Delete Recommendation",
-			`Are you sure you want to delete "${recommendation.name || "this recommendation"}"?`,
+			"Delete place",
+			`Are you sure you want to delete "${recommendation.name || "this place"}"?`,
 			[
 				{ text: "Cancel", style: "cancel" },
 				{
@@ -602,9 +602,9 @@ export default function TripDetailScreen() {
 							// Update store count
 							setRecCount(tripId, (trip?.recommendations?.length || 1) - 1);
 
-							Alert.alert("Success", "Recommendation deleted successfully");
+							Alert.alert("Success", "Place deleted successfully");
 						} catch (error) {
-							if (isCurrent()) Alert.alert("Error", "Failed to delete recommendation");
+							if (isCurrent()) Alert.alert("Error", "Failed to delete the place");
 						}
 					},
 				},
@@ -899,7 +899,7 @@ export default function TripDetailScreen() {
 						/>
 					))
 				) : (
-					<Text style={styles.emptySectionText}>No recommendations added.</Text>
+					<Text style={styles.emptySectionText}>No places added.</Text>
 				)}
 			</Section>
 
